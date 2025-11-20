@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+
+# Assets - шаблоны и конфиги
+assets/
+
 # Distribution / packaging
 .Python
 build/
