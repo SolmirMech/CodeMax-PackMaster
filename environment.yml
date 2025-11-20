@@ -1,0 +1,13 @@
+# Автоматически сгенерировано CodeMax Import Analyzer
+    name: codemax-project
+    channels:
+      - defaults
+      - conda-forge
+    dependencies:
+      - python=3.12
+      - pip
+  - openpyxl
+  - pywin32
+  - pip:
+    - Pillow
+    - PyMuPDF
