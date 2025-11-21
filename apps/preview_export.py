@@ -1,12 +1,18 @@
 # apps/preview_export.py
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, StringVar
 import win32print
 import win32ui
 from PIL import Image, ImageTk
+from core.printer_dia import SettingsDialog, CustomersEditorDialog, SpecialClientsEditorDialog
 from core.config_manager import ConfigManager
 from core.font_settings_dialog import FontSettingsDialog
 from core.excel_exporter import WeightOrdersExporter
+from core.shared_utils import (
+    mm_to_pixels,
+    get_default_printer,
+    create_printer_dc,
+)
 import os
 
 class PreviewExport:
@@ -16,6 +22,19 @@ class PreviewExport:
         self.parent = parent
         self.preview_module = preview_module  # ссылка на RollPreview
         self.config_manager = ConfigManager()
+        self.settings_file = "print_settings.json"
+        
+        self.manufacturer = self.config_manager.get_manufacturer()
+
+        self.default_settings = {
+            "printer": get_default_printer(),            
+        }
+        self.settings = self.default_settings.copy()
+        self.load_settings("weight_box_print")
+        
+        order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
+        self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
+        self.order_suffix = StringVar(value=order_settings.get("suffix", "/5"))        
         
         self.selected_preview = "roll"  # "roll" или "box"
         self.font_settings = None
@@ -114,29 +133,46 @@ class PreviewExport:
         copies_entry.pack(side=tk.LEFT)
         copies_entry.bind('<FocusIn>', lambda e: copies_entry.select_range(0, tk.END))
 
-        # Печать - строка 1
-        print_frame = ttk.Frame(control_frame)
-        print_frame.grid(row=1, column=0, sticky="w", pady=5)
+        # Основной фрейм настроек
+        settings_frame = ttk.Frame(control_frame)
+        settings_frame.grid(row=1, column=0, sticky="w", pady=5, padx=5)
+
+        # Печать - ряд 0
         ttk.Button(
-            print_frame, 
+            settings_frame, 
             text="🖨 Печать", 
             command=self.print_label
-        ).pack(fill=tk.X, padx=5)
-        
-        # Настройки печати - строка 2
-        settings_frame = ttk.Frame(control_frame)
-        settings_frame.grid(row=1, column=0, sticky="w", padx=(150, 5), pady=5)
+        ).grid(row=0, column=0, sticky="we", pady=5)
+
+        # Иконки настроек - ряд 1
+        ttk.Button(
+            settings_frame, 
+            text="🔤", 
+            command=self.open_font_settings
+        ).grid(row=1, column=0, sticky="w", pady=5)
+
         ttk.Button(
             settings_frame, 
             text="⚙", 
-            command=self.open_font_settings
-        ).pack(fill=tk.X, padx=5)
+            command=self.open_settings
+        ).grid(row=1, column=1, sticky="e", pady=5)
+
+        # Особые клиенты - ряд 2
+        ttk.Button(
+            settings_frame,
+            text="📝 Список особых клиентов",
+            command=self.open_special_clients_editor,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=5)
+
+        # Настройка колонок для растягивания
+        settings_frame.columnconfigure(0, weight=1)
+        settings_frame.columnconfigure(1, weight=1)
         
         # Excel экспорт на коробку - строка 3
-        self.create_excel_section(control_frame, row=3)
+        self.create_excel_section(control_frame, row=2)
         
         # Excel экспорт на поддон - строка 4
-        self.create_pallet_section(control_frame, row=4)
+        self.create_pallet_section(control_frame, row=3)
 
         # Статус экспорта - строка 5
         self.excel_status_label = ttk.Label(
@@ -146,7 +182,78 @@ class PreviewExport:
             wraplength=250,
             font=("Arial", 14)
         )
-        self.excel_status_label.grid(row=5, column=0, sticky="w", pady=5)
+        self.excel_status_label.grid(row=4, column=0, sticky="w", pady=5)
+        
+    def load_settings(self, settings_key):
+        """Загружает настройки печати из JSON-файла для конкретного ключа"""
+        try:
+            all_settings = self.config_manager.load_json_settings(self.settings_file)
+            if settings_key in all_settings:
+                self.settings = {**self.default_settings, **all_settings[settings_key]}
+        except Exception as e:
+            print(f"Ошибка загрузки настроек печати: {e}")
+            self.settings = self.default_settings.copy()
+
+    def save_settings(self):
+        """Сохраняет настройки для weight_box_print"""
+        try:
+            all_settings = self.config_manager.load_json_settings(self.settings_file)
+            all_settings["weight_box_print"] = self.settings
+
+            if self.config_manager.save_json_settings(self.settings_file, all_settings):
+                messagebox.showinfo("Сохранено", "Настройки печати сохранены!")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")
+
+    def update_printers(self):
+        """Обновляет принтер во всех секциях настроек печати"""
+        try:
+            # Получаем текущий принтер по умолчанию из системы
+            default_printer = get_default_printer()
+
+            if not default_printer:
+                messagebox.showerror(
+                    "Ошибка", "Не удалось определить принтер по умолчанию"
+                )
+                return False
+
+            # Используем метод из ConfigManager для обновления принтера
+            success = self.config_manager.update_printer_settings(default_printer)
+
+            if success:
+                messagebox.showinfo(
+                    "Успех", f"Принтер обновлен на '{default_printer}' во всех секциях"
+                )
+
+                # Обновляем текущие настройки
+                self.load_settings("obc_labels")
+            else:
+                messagebox.showerror(
+                    "Ошибка", f"Не удалось обновить принтер на '{default_printer}'"
+                )
+
+            return success
+
+        except Exception as e:
+            messagebox.showerror(
+                "Ошибка", f"Ошибка при обновлении принтеров:\n{str(e)}"
+            )
+            return False            
+        
+    def open_settings(self):
+        """Открывает единое окно настроек со всеми разделами"""
+        dialog = SettingsDialog(self.parent, self)
+        dialog.show()
+        
+    def open_customers_editor(self):
+        """Открывает отдельное окно для редактирования списка клиентов"""
+        dialog = CustomersEditorDialog(self.parent, self)
+        dialog.show()
+        
+    def open_special_clients_editor(self):
+        """Открывает окно редактирования списка особых заказчиков"""
+        dialog = SpecialClientsEditorDialog(self.parent, self)
+        dialog.show()        
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""
