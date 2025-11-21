@@ -50,7 +50,7 @@ class RollPreview:
         self.roll_canvas_frame = ttk.Frame(roll_frame, relief="solid", borderwidth=2)
         self.roll_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=416, height=520, bg="white")
+        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=420, height=420, bg="white")
         self.roll_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.roll_canvas.bind("<Button-1>", lambda e: self.roll_canvas.focus_set())
         
@@ -139,6 +139,8 @@ class RollPreview:
             self.connected_roll_module.sleeve_diameter_var,
             self.connected_roll_module.show_manufacturer_var,
             self.connected_roll_module.date_emission_var,
+            self.connected_roll_module.cutter_var,
+            self.connected_roll_module.roll_length,
         ]
         
         # Устанавливаем отслеживание для каждой переменной
@@ -189,7 +191,8 @@ class RollPreview:
                 "box_net": roll_module.total_net_var.get(),
                 "winding_scheme": roll_module.winding_scheme_var.get(),
                 "sleeve_diameter": roll_module.sleeve_diameter_var.get(),
-                "date_emission": roll_module.date_emission_var.get(),
+                "cutter": roll_module.cutter_var.get(),
+                "roll_length": roll_module.roll_length.get(),
             }
             
             # Обновляем предпросмотр
@@ -384,6 +387,8 @@ class RollPreview:
         # Получаем данные изготовителя
         manufacturer_data = self._get_manufacturer_data(order_full)
         
+        show_manufacturer = not data.get('show_manufacturer', False)
+        
         # Карта для ролика
         data_map = {
             # Основные поля
@@ -404,7 +409,13 @@ class RollPreview:
             # Технические параметры
             "$sx": data.get('winding_scheme', '7'),
             "dia": data.get('sleeve_diameter', '76'),
-            "$emission": data.get('date_emission', ''),
+            
+            # Специфичные для 2 цеха параметры
+            "$cutter": data.get('cutter', ''),
+            "$rll_length": data.get('roll_length', ''),
+            "$tu_number": manufacturer_data['tu_number'],
+            "$printhouse": manufacturer_data['name'] if show_manufacturer else "",
+            "$printaddress": manufacturer_data['address'] if show_manufacturer else "",            
         }
         
         return data_map
@@ -416,21 +427,9 @@ class RollPreview:
         
         data = self.current_data or {}
         
-        # Получаем данные изготовителя (уже есть в data_map, но нужно tu_number)
-        order_prefix = data.get('order_prefix', '')
-        order_number = data.get('order_number', '') 
-        order_suffix = data.get('order_suffix', '')
-        order_full = f"{order_prefix}{order_number}{order_suffix}"
-        manufacturer_data = self._get_manufacturer_data(order_full)
-        
-        show_manufacturer = not data.get('show_manufacturer', False)
-        
         # Добавляем специфичные для коробки поля
         data_map.update({
             "$total": data.get('total_quantity', ''),
-            "$tu_number": manufacturer_data['tu_number'],
-            "$printhouse": manufacturer_data['name'] if show_manufacturer else "",
-            "$printaddress": manufacturer_data['address'] if show_manufacturer else "",
             "$box_brut": data.get('box_brut', ''),
             "$box_net": data.get('box_net', ''),
         })

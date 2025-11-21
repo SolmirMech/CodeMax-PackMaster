@@ -42,6 +42,8 @@ class RollLabelPrinter:
         self.box_editor_window = None  # Ссылка на окно редактора коробок
         self.detail_num_search_var = StringVar(value="")  # Поиск по цифрам кода
         self.date_emission_var = StringVar(value="") # Дата эмиссии кодов
+        self.cutter_var = StringVar(value="")
+        self.roll_length = StringVar(value="")
         
         self.create_ui()
         self.load_box_sizes()       
@@ -179,7 +181,7 @@ class RollLabelPrinter:
         ttk.Label(data_frame, text="Поиск вида:").grid(
             row=7, column=1, padx=(145, 0), sticky="w", pady=5
         )
-        self.detail_num_search_var = StringVar()
+        
         detail_num_entry = ttk.Entry(data_frame, textvariable=self.detail_num_search_var, width=10)
         detail_num_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
         
@@ -261,6 +263,50 @@ class RollLabelPrinter:
                            
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
+        
+        # Создаем поле ввода резчиков
+        self.cutter_entry = ttk.Entry(data_frame, textvariable=self.cutter_var, width=15)
+        default_cutter = self.config_manager.get_default_cutter()
+        self.cutter_var.set(default_cutter)
+        self.cutter_entry.grid(row=11, column=0, padx=(110, 5), pady=5, sticky="w")
+        
+        # Создаем меню-кнопку для резчиков
+        self.cutter_menubutton = ttk.Menubutton(
+            data_frame, 
+            text="👤",
+            width=3
+        )
+        self.cutter_menubutton.grid(row=11, column=0, sticky="w", padx=5, pady=5)
+        
+        # Создаем меню
+        self.cutter_menubutton.menu = tk.Menu(self.cutter_menubutton, tearoff=0)
+        self.cutter_menubutton["menu"] = self.cutter_menubutton.menu
+        
+        # Заполняем меню резчиками
+        self.update_cutters_menu()
+        
+        roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
+        roll_length_entry.grid(row=11, column=1, padx=(110, 0), pady=5, sticky="w")        
+        
+    def update_cutters_menu(self):
+        """Обновляет меню резчиков"""
+        # Очищаем текущее меню
+        self.cutter_menubutton.menu.delete(0, tk.END)
+        
+        # Получаем список резчиков
+        cutters = self.config_manager.get_cutters()
+        
+        # Заполняем меню заново
+        for cutter in cutters:
+            self.cutter_menubutton.menu.add_command(
+                label=cutter,
+                command=lambda c=cutter: self.set_cutter(c)
+            )
+
+    def set_cutter(self, name):
+        """Заполнить поле резчика"""
+        self.cutter_entry.delete(0, tk.END)
+        self.cutter_entry.insert(0, name)            
         
     def check_manufacturer_visibility(self, customer_name):
         """Проверяет нужно ли показывать производителя для заказчика"""

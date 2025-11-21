@@ -592,8 +592,8 @@ class PreviewExport:
             printer_dpi_y = hdc.GetDeviceCaps(90)
 
             # Размер бумаги 90×72мм для ролика, для коробки может отличаться
-            paper_width_mm = 90
-            paper_height_mm = 72
+            paper_width_mm = 80
+            paper_height_mm = 58
 
             paper_width_pixels = int(paper_width_mm / 25.4 * printer_dpi_x)
             paper_height_pixels = int(paper_height_mm / 25.4 * printer_dpi_y)

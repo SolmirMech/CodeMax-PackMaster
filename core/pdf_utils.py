@@ -22,7 +22,6 @@ class PDFTemplateFiller:
         "date": "other",             # $date - дата изготовления (группа "other" для ролика)
         "product": "product",        # $product - изделие
         "packer": "other",           # $packer - упаковщик (группа "other" для ролика)
-        "emission": "other",           # $emission - дата эмиссии (группа "other")
         
         # КОРОБКА - отдельные настройки
         "printhouse": "manufacturer",    # $printhouse - изготовитель
@@ -45,6 +44,8 @@ class PDFTemplateFiller:
         "netto": "other",                # $netto - в коробке в группе "other"
         "box_brut": "other",
         "box_net": "other",
+        "cutter": "other",
+        "rll_length": "other",
     }    
     
     def __init__(self, template_path: str):
@@ -151,7 +152,7 @@ class PDFTemplateFiller:
             "$customer", "$product", "$onum", "$date", "$packer",
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
-            "$box_brut", "$box_net", "$emission"
+            "$box_brut", "$box_net", "$cutter", "$rll_length"
         ]
         
         # Очищаем области пустых плейсхолдеров
@@ -306,19 +307,19 @@ class PDFTemplateFiller:
             # Добавляем единицы измерения (только для определенных полей)
             display_text = text
             if field_type == 'brutto' and text:
-                display_text = f"Брутто {text} кг"
+                display_text = f"{text} кг"
             elif field_type == 'netto' and text:
-                display_text = f"Нетто {text} кг" 
+                display_text = f"{text} кг" 
             elif field_type == 'dia' and text:
-                display_text = f"{text} мм"
+                display_text = f"{text}"
             elif field_type == 'tr' and text:
                 display_text = f"{text} шт"
             elif field_type == 'box_brut' and text:
                 display_text = f"Брутто {text} кг"
             elif field_type == 'box_net' and text:
                 display_text = f"Нетто {text} кг"
-            elif field_type == 'emission' and text:
-                display_text = f"{text}"
+            elif field_type == 'rll_length' and text:
+                display_text = f"{text} м"
             
             bbox = draw.textbbox((0, 0), display_text, font=font)
             text_width = bbox[2] - bbox[0]
