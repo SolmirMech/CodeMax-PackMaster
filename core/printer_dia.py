@@ -53,7 +53,6 @@ class SettingsDialog:
         print_frame.pack(fill=tk.X, pady=(0, 10))
 
         # Выбор принтера
-        ttk.Label(print_frame, text="Принтер:").grid(row=0, column=0, sticky="w", pady=2)
         printers = win32print.EnumPrinters(2)
         self.printer_var = tk.StringVar(value=self.main_app.settings["printer"])
         printer_combo = ttk.Combobox(
@@ -62,7 +61,7 @@ class SettingsDialog:
             values=[p[2] for p in printers],
             width=25,
         )
-        printer_combo.grid(row=0, column=1, padx=5, pady=2, sticky="w")
+        printer_combo.grid(row=0, column=0, padx=5, pady=5, sticky="w")
 
         self.settings_vars = {}
             
@@ -70,10 +69,10 @@ class SettingsDialog:
         update_printers_btn = ttk.Button(
             print_frame, text="🔄 Обновить принтеры", command=self.main_app.update_printers
         )
-        update_printers_btn.grid(row=0, column=3, padx=10, pady=2, sticky="w")
+        update_printers_btn.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         
-        cutters_label = ttk.Label(print_frame, text="Список резчиков:")
-        cutters_label.grid(row=1, column=3, sticky="nw", padx=10, pady=(10, 2))
+        cutters_label = ttk.Label(print_frame, text="Резчики:")
+        cutters_label.grid(row=0, column=2, sticky="w", padx=10, pady=(10, 2))
 
         # Загружаем текущий список резчиков
         current_cutters = self.main_app.config_manager.get_cutters()
@@ -83,13 +82,33 @@ class SettingsDialog:
         for i, cutter in enumerate(current_cutters):
             entry = ttk.Entry(print_frame, width=20)
             entry.insert(0, cutter)
-            entry.grid(row=2+i, column=3, padx=10, pady=2, sticky="w")
+            entry.grid(row=1+i, column=2, padx=10, pady=2, sticky="w")
             self.cutter_entries.append(entry)
 
         # Добавляем пустое поле для нового резчика
         new_entry = ttk.Entry(print_frame, width=20)
-        new_entry.grid(row=2+len(current_cutters), column=3, padx=10, pady=2, sticky="w")
-        self.cutter_entries.append(new_entry)
+        new_entry.grid(row=1+len(current_cutters), column=2, padx=10, pady=2, sticky="w")
+        self.cutter_entries.append(new_entry)     
+
+        # Список упаковщиков
+        packers_label = ttk.Label(print_frame, text="Упаковщики:")
+        packers_label.grid(row=0, column=3, sticky="w", padx=10, pady=(10, 2))
+
+        # Загружаем текущий список упаковщиков
+        current_packers = self.main_app.config_manager.get_packers()
+        self.packer_entries = []
+
+        # Создаем поля ввода для каждого упаковщика
+        for i, packer in enumerate(current_packers):
+            entry = ttk.Entry(print_frame, width=20)
+            entry.insert(0, packer)
+            entry.grid(row=1+i, column=3, padx=10, pady=2, sticky="w")
+            self.packer_entries.append(entry)
+
+        # Добавляем пустое поле для нового упаковщика
+        new_packer_entry = ttk.Entry(print_frame, width=20)
+        new_packer_entry.grid(row=1+len(current_packers), column=3, padx=10, pady=2, sticky="w")
+        self.packer_entries.append(new_packer_entry)
 
         # 2. РАЗДЕЛ: Производитель
         manufacturer_frame = ttk.LabelFrame(left_frame, text="Производитель", padding=10)
@@ -171,6 +190,21 @@ class SettingsDialog:
                 if cutter_name:  # Добавляем только непустые имена
                     new_cutters.append(cutter_name)
             shared_settings["cutters"] = new_cutters
+            
+            # 5. Сохраняем список упаковщиков (из отдельных полей)
+            new_packers = []
+            for entry in self.packer_entries:
+                packer_name = entry.get().strip()
+                if packer_name:  # Добавляем только непустые имена
+                    new_packers.append(packer_name)
+            shared_settings["packers"] = new_packers
+
+            # Сохраняем упаковщиков через config_manager
+            self.main_app.config_manager.save_packers(new_packers)
+
+            # Обновляем меню упаковщиков в интерфейсе
+            if hasattr(self.main_app, 'update_packers_menu'):
+                self.main_app.update_packers_menu()
 
             # Сохраняем все изменения в shared_utils.json
             self.main_app.config_manager.save_json_settings("shared_utils.json", shared_settings)

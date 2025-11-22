@@ -341,18 +341,18 @@ class OrderDataProcessor:
                     tree = ET.parse(file_path)
                     root = tree.getroot()
                     
-                    # НОВЫЙ ПОДМЕТОД: проверяем формат 5208.xml (данные в атрибутах)
+                    # данные в атрибутах
                     if self._is_attributes_format(root):
                         parsed_item = self._parse_attributes_xml_format(root)
                         if parsed_item:
                             product_data.append(parsed_item)
                         continue  # переходим к следующему файлу
                     
-                    # СТАРАЯ ЛОГИКА для обычных XML (формат Ф5208)
+                    # для обычных XML
                     customer = ""
                     winding_scheme = ""
                     sleeve_diameter = ""
-                    date_emission = ""  # ДОБАВЛЕНО: дата эмиссии
+                    date_emission = ""   # дата эмиссии
                     
                     # Ищем заказчика в теге <customer>
                     customer_elem = root.find('.//customer')
@@ -369,10 +369,23 @@ class OrderDataProcessor:
                     if sleeve_diameter_elem is not None and sleeve_diameter_elem.text:
                         sleeve_diameter = sleeve_diameter_elem.text.strip().replace(' мм', '')
                     
-                    # ДОБАВЛЕНО: Ищем дату эмиссии в теге <date_emission>
+                    # Ищем дату эмиссии в теге <date_emission>
                     date_emission_elem = root.find('.//date_emission')
                     if date_emission_elem is not None and date_emission_elem.text:
                         date_emission = date_emission_elem.text.strip()
+                    
+                    # Ищем sheet_name для извлечения номера тиража
+                    sheet_name_elem = root.find('.//sheet_name')
+                    sheet_name = sheet_name_elem.text if sheet_name_elem is not None else ""
+                    
+                    # Извлекаем номер из sheet_name (например "I-55876" -> "55876")
+                    sheet_number = ""
+                    if sheet_name:
+                        # Ищем паттерн "буква-цифры" в sheet_name
+                        import re
+                        match = re.search(r'[A-Za-zА-Яа-я]-?(\d+)', sheet_name)
+                        if match:
+                            sheet_number = match.group(1)
                     
                     # Парсим данные из объектов
                     for obj_elem in root.findall('.//object'):
@@ -401,10 +414,11 @@ class OrderDataProcessor:
                             product_dict = {
                                 'name': name,
                                 'detail_num': detail_num,
+                                'sheet_number': sheet_number,  # номер тиража
                                 'customer': customer,
                                 'winding_scheme': winding_scheme,
                                 'sleeve_diameter': sleeve_diameter,
-                                'date_emission': date_emission,  # ДОБАВЛЕНО
+                                'date_emission': date_emission,
                                 'manufacturer': "",
                                 'gtin': gtin if gtin_elem is not None and gtin_elem.text else '',
                                 'tirazh': ''
@@ -472,7 +486,7 @@ class OrderDataProcessor:
             return None
 
     def get_product_name(self):
-        """Получает данные продукта из XML файлов с поддержкой поиска по detail_num"""
+        """Получает данные продукта из XML файлов с поддержкой поиска по detail_num и номеру тиража"""
         # Показываем статус папки
         if self.folder_path.get():
             folder_name = os.path.basename(self.folder_path.get())
@@ -516,14 +530,22 @@ class OrderDataProcessor:
         
         if search_digits:
             found_products = []
-            full_detail_num = ""
+            found_by = ""  # Для отображения по чему нашли
             
-            # Ищем продукты, где detail_num содержит введенные цифры
+            # Ищем продукты по двум критериям:
+            # 1. По detail_num (конкретный вид) - "Инд-044833"
+            # 2. По sheet_number (весь тираж) - "55876" из "I-55876"
             for product in self.parsed_data:
                 detail_num = product.get('detail_num', '')
-                if search_digits in detail_num:
+                sheet_number = product.get('sheet_number', '')
+                
+                # Если введенные цифры есть в detail_num ИЛИ в sheet_number
+                if search_digits in detail_num or search_digits in sheet_number:
                     found_products.append(product)
-                    full_detail_num = detail_num  # Сохраняем полный номер для статуса
+                    if search_digits in detail_num:
+                        found_by = f"вид {detail_num}"
+                    elif search_digits in sheet_number:
+                        found_by = f"тираж I-{sheet_number}"
             
             if found_products:
                 if len(found_products) == 1:
@@ -531,18 +553,18 @@ class OrderDataProcessor:
                     selected_data = found_products[0]
                     self.selected_name.set(selected_data['name'])
                     self.send_to_roll_module(selected_data)
-                    self.parse_status.config(text=f"Найден: {full_detail_num}", foreground="green")
+                    self.parse_status.config(text=f"Найден {found_by}", foreground="green")
                 else:
                     # Если несколько - показываем выбор
                     names_list = [item['name'] for item in found_products]
                     self.name_combobox['values'] = names_list
-                    self.parse_status.config(text=f"Найдено {len(found_products)} вариантов для кода {search_digits}", foreground="orange")
+                    self.parse_status.config(text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", foreground="orange")
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
-                self.parse_status.config(text="Выберите название из списка", foreground="orange")
+                self.parse_status.config(text=f"Выберите название из списка. Всего: {len(names_list)} видов", foreground="orange")
         
         else:
             # Если поиск по коду не выполняется - старая логика
@@ -556,8 +578,8 @@ class OrderDataProcessor:
                 # Если несколько - показываем выбор
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
-                self.parse_status.config(text="Выберите название из списка", foreground="orange")
-
+                self.parse_status.config(text=f"Выберите название из списка. Всего: {len(names_list)} видов", foreground="orange")
+            
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""
         selected_name = self.selected_name.get()

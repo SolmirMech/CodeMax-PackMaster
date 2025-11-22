@@ -13,7 +13,6 @@ class RollLabelPrinter:
         self.parent = parent
         self.config_manager = ConfigManager()
 
-        self.packers_window = None
         self.order_data_module = None
         self.preview_module = None
         self.weight_orders_window = None
@@ -185,13 +184,13 @@ class RollLabelPrinter:
         detail_num_entry = ttk.Entry(data_frame, textvariable=self.detail_num_search_var, width=10)
         detail_num_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
         
-        # Кнопка редактирования списка упаковщиков
-        edit_packers_btn = ttk.Button(
-            data_frame,
-            text="📝 Список",
-            command=self.edit_packers_list
-        )
-        edit_packers_btn.grid(row=8, column=1, padx=(115, 0), sticky="w", pady=5)        
+        entry_fields = [
+            entry_number,
+            detail_num_entry
+        ]
+        
+        for entry in entry_fields:
+            entry.bind("<Return>", lambda e: self.order_data_module.get_product_name())
 
         # Дата/Упаковщик
         ttk.Label(data_frame, text="Упаковщик/ Дата:").grid(
@@ -213,16 +212,17 @@ class RollLabelPrinter:
         self.packer_menubutton.grid(row=8, column=0, padx=(190, 0), pady=5, sticky="w")
         # Заполняем меню упаковщиками
         self.update_packers_menu()
-        # Дата
-        date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=15)
-        date_entry.grid(row=8, column=1, padx=5, pady=5, sticky="w")
-        # Упаковщик - СКРЫТО
+
+        # Упаковщик
         packers = self.config_manager.get_packers()
         default_packer = packers[0] if packers else ""
         self.packer_var = StringVar(value=default_packer)
-        packer_entry = ttk.Entry(data_frame, textvariable=self.packer_var, width=25)
-        packer_entry.grid(row=8, column=1, padx=(115, 0), pady=5, sticky="w")
-        packer_entry.grid_remove()
+        packer_entry = ttk.Entry(data_frame, textvariable=self.packer_var, width=15)
+        packer_entry.grid(row=8, column=1, padx=5, pady=5, sticky="w")
+        
+        # Дата
+        date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
+        date_entry.grid(row=8, column=1, padx=(115, 0), pady=5, sticky="w")        
 
         # Вес коробки брутто/нетто - СКРЫТО
         # ttk.Label(data_frame, text="Вес коробки брутто/нетто, кг:").grid(
@@ -264,19 +264,13 @@ class RollLabelPrinter:
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
         
-        # Создаем поле ввода резчиков
-        self.cutter_entry = ttk.Entry(data_frame, textvariable=self.cutter_var, width=15)
-        default_cutter = self.config_manager.get_default_cutter()
-        self.cutter_var.set(default_cutter)
-        self.cutter_entry.grid(row=11, column=0, padx=(110, 5), pady=5, sticky="w")
-        
         # Создаем меню-кнопку для резчиков
         self.cutter_menubutton = ttk.Menubutton(
             data_frame, 
             text="👤",
             width=3
         )
-        self.cutter_menubutton.grid(row=11, column=0, sticky="w", padx=5, pady=5)
+        self.cutter_menubutton.grid(row=11, column=0, sticky="w", pady=5)
         
         # Создаем меню
         self.cutter_menubutton.menu = tk.Menu(self.cutter_menubutton, tearoff=0)
@@ -285,8 +279,17 @@ class RollLabelPrinter:
         # Заполняем меню резчиками
         self.update_cutters_menu()
         
+        # Создаем поле ввода резчиков
+        self.cutter_entry = ttk.Entry(data_frame, textvariable=self.cutter_var, width=15)
+        default_cutter = self.config_manager.get_default_cutter()
+        self.cutter_var.set(default_cutter)
+        self.cutter_entry.grid(row=11, column=0, padx=(80, 5), pady=5, sticky="w")
+        
+        ttk.Label(data_frame, text="Длина ролика, м").grid(
+            row=11, column=1, sticky="w", pady=5
+        )              
         roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=11, column=1, padx=(110, 0), pady=5, sticky="w")        
+        roll_length_entry.grid(row=11, column=1, padx=(165, 0), pady=5, sticky="w")      
         
     def update_cutters_menu(self):
         """Обновляет меню резчиков"""
@@ -724,90 +727,3 @@ class RollLabelPrinter:
         except Exception as e:
             print(f"Ошибка вставки: {e}")
 
-    def edit_packers_list(self):
-        """Открывает окно редактирования списка упаковщиков"""
-        if hasattr(self, 'packers_window') and self.packers_window and self.packers_window.winfo_exists():
-            self.packers_window.lift()
-            return
-
-        self.packers_window = tk.Toplevel(self.parent)
-        self.packers_window.title("Редактирование списка")
-        self.packers_window.geometry("320x400")
-        self.packers_window.grab_set()
-
-        # Центрирование окна
-        self.packers_window.update_idletasks()
-        width = self.packers_window.winfo_width()
-        height = self.packers_window.winfo_height()
-        x = (self.packers_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.packers_window.winfo_screenheight() // 2) - (height // 2)
-        self.packers_window.geometry(f"+{x}+{y}")
-
-        self.packers_window.bind("<Escape>", lambda e: self.packers_window.destroy())
-
-        frame = ttk.Frame(self.packers_window, padding=15)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        # Заголовок
-        ttk.Label(frame, text="Список упаковщиков:", font=("Arial", 10, "bold")).pack(
-            pady=(0, 10)
-        )
-
-        # Фрейм для полей ввода
-        input_frame = ttk.Frame(frame)
-        input_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Загружаем текущий список упаковщиков
-        current_packers = self.config_manager.get_packers()
-        self.packer_entries = []
-
-        # Создаем поля ввода для каждого упаковщика
-        for packer in current_packers:
-            entry = ttk.Entry(input_frame, width=25)
-            entry.insert(0, packer)
-            entry.pack(pady=2, fill=tk.X)
-            self.packer_entries.append(entry)
-
-        # Добавляем пустое поле для нового упаковщика
-        new_entry = ttk.Entry(input_frame, width=25)
-        new_entry.pack(pady=2, fill=tk.X)
-        self.packer_entries.append(new_entry)
-
-        # Кнопки управления
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(pady=10)
-
-        ttk.Button(button_frame, text="💾 Сохранить", command=self.save_packers).pack(
-            side=tk.LEFT, padx=5
-        )
-
-        # Привязка Enter к сохранению
-        self.packers_window.bind("<Return>", lambda e: self.save_packers())
-
-    def save_packers(self):
-        """Сохраняет измененный список упаковщиков"""
-        try:
-            # Собираем все непустые значения
-            new_packers = []
-            for entry in self.packer_entries:
-                packer_name = entry.get().strip()
-                if packer_name:
-                    new_packers.append(packer_name)
-
-            if not new_packers:
-                messagebox.showwarning("Предупреждение", "Список упаковщиков не может быть пустым")
-                return
-
-            # Сохраняем через config_manager
-            if self.config_manager.save_packers(new_packers):
-                messagebox.showinfo("Сохранено", "Список упаковщиков успешно обновлен!")
-                # Обновляем меню упаковщиков
-                self.update_packers_menu()
-                if self.packers_window:
-                    self.packers_window.destroy()
-                    self.packers_window = None
-            else:
-                messagebox.showerror("Ошибка", "Не удалось сохранить список упаковщиков")
-
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка при сохранении: {str(e)}")
