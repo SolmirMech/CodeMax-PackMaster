@@ -27,7 +27,9 @@ class PreviewExport:
         self.manufacturer = self.config_manager.get_manufacturer()
 
         self.default_settings = {
-            "printer": get_default_printer(),            
+            "printer": get_default_printer(),
+            "paper_width_mm": 80,
+            "paper_height_mm": 58           
         }
         self.settings = self.default_settings.copy()
         self.load_settings("weight_box_print")
@@ -59,7 +61,6 @@ class PreviewExport:
         self.load_box_sizes()
         self.parent.after(100, self.on_box_selected)
         self.load_pallet_sizes()
-        self.update_printers()
 
     def load_box_sizes(self):
         """Загружает список коробок из shared_utils.json (ПЕРЕНЕСЕНО ИЗ ROLL_PREVIEW)"""
@@ -157,13 +158,6 @@ class PreviewExport:
             command=self.open_settings
         ).grid(row=1, column=1, sticky="e", pady=5)
 
-        # Особые клиенты - ряд 2
-        ttk.Button(
-            settings_frame,
-            text="📝 Список особых клиентов",
-            command=self.open_special_clients_editor,
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=5)
-
         # Настройка колонок для растягивания
         settings_frame.columnconfigure(0, weight=1)
         settings_frame.columnconfigure(1, weight=1)
@@ -184,6 +178,13 @@ class PreviewExport:
         )
         self.excel_status_label.grid(row=4, column=0, sticky="w", pady=5)
         
+        self.parent.bind("<Visibility>", lambda e: self.update_comboboxes())
+        
+    def update_comboboxes(self):
+        """Обновляет все комбобоксы"""
+        self.load_box_sizes()
+        self.load_pallet_sizes()
+        
     def load_settings(self, settings_key):
         """Загружает настройки печати из JSON-файла для конкретного ключа"""
         try:
@@ -203,56 +204,11 @@ class PreviewExport:
             if self.config_manager.save_json_settings(self.settings_file, all_settings):
                 messagebox.showinfo("Сохранено", "Настройки печати сохранены!")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")
-
-    def update_printers(self):
-        """Обновляет принтер во всех секциях настроек печати"""
-        try:
-            # Получаем текущий принтер по умолчанию из системы
-            default_printer = get_default_printer()
-
-            if not default_printer:
-                messagebox.showerror(
-                    "Ошибка", "Не удалось определить принтер по умолчанию"
-                )
-                return False
-
-            # Используем метод из ConfigManager для обновления принтера
-            success = self.config_manager.update_printer_settings(default_printer)
-
-            if success:
-                messagebox.showinfo(
-                    "Успех", f"Принтер обновлен на '{default_printer}' во всех секциях"
-                )
-
-                # Обновляем текущие настройки
-                self.load_settings("obc_labels")
-            else:
-                messagebox.showerror(
-                    "Ошибка", f"Не удалось обновить принтер на '{default_printer}'"
-                )
-
-            return success
-
-        except Exception as e:
-            messagebox.showerror(
-                "Ошибка", f"Ошибка при обновлении принтеров:\n{str(e)}"
-            )
-            return False            
+            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")            
         
     def open_settings(self):
         """Открывает единое окно настроек со всеми разделами"""
         dialog = SettingsDialog(self.parent, self)
-        dialog.show()
-        
-    def open_customers_editor(self):
-        """Открывает отдельное окно для редактирования списка клиентов"""
-        dialog = CustomersEditorDialog(self.parent, self)
-        dialog.show()
-        
-    def open_special_clients_editor(self):
-        """Открывает окно редактирования списка особых заказчиков"""
-        dialog = SpecialClientsEditorDialog(self.parent, self)
         dialog.show()        
         
     def update_preview_displays(self):
@@ -301,10 +257,6 @@ class PreviewExport:
                 self.excel_status_label.config(text="Ошибка очистки коробки", foreground="red")
         except Exception as e:
             self.excel_status_label.config(text=f"Ошибка очистки: {str(e)}", foreground="red")
-
-    def open_box_editor(self):
-        """Открывает редактор коробок через подключенный модуль ролика"""
-        self.call_roll_module_method('open_box_editor')
 
     def export_pallet_to_excel(self):
         """Экспортирует данные поддона в Excel"""
@@ -501,21 +453,14 @@ class PreviewExport:
         self.box_weight_entry = ttk.Entry(box_frame, textvariable=self.box_weight_var, width=8)
         self.box_weight_entry.grid(row=0, column=1, padx=(13, 0), pady=5, sticky="w")
         
-        # Кнопка редактирования коробок - строка 1
-        ttk.Button(
-            box_frame,
-            text="📝 Коробки",
-            command=self.open_box_editor
-        ).grid(row=1, column=0, padx=(0, 5), pady=10, sticky="w")
-        
         # Кнопки управления Excel - строка 2
         ttk.Button(box_frame, text="🎯 В Excel", 
                   command=self.export_to_excel
-        ).grid(row=2, column=0, padx=(0, 5), pady=10, sticky="w")
+        ).grid(row=1, column=0, padx=(0, 5), pady=10, sticky="w")
         
         # Меню для очистки - строка 2, колонка 1
         excel_menu = ttk.Menubutton(box_frame, text="🧹", width=3)
-        excel_menu.grid(row=2, column=1, padx=(13, 0), pady=10, sticky="w")
+        excel_menu.grid(row=1, column=1, padx=(13, 0), pady=10, sticky="w")
         
         excel_menu.menu = tk.Menu(excel_menu, tearoff=0)
         excel_menu["menu"] = excel_menu.menu
@@ -666,7 +611,7 @@ class PreviewExport:
             print(f"Ошибка поиска принтера: {e}")
             return None
             
-    def update_printers(self):
+    def update_local_printer(self):
         """Обновляет список принтеров в настройках"""
         try:
             printers = win32print.EnumPrinters(2)
@@ -698,9 +643,9 @@ class PreviewExport:
             printer_dpi_x = hdc.GetDeviceCaps(88)
             printer_dpi_y = hdc.GetDeviceCaps(90)
 
-            # Размер бумаги 90×72мм для ролика, для коробки может отличаться
-            paper_width_mm = 80
-            paper_height_mm = 58
+            # Размер этикетки (пдф-формы)
+            paper_width_mm = self.settings.get("paper_width_mm", 80)
+            paper_height_mm = self.settings.get("paper_height_mm", 58)
 
             paper_width_pixels = int(paper_width_mm / 25.4 * printer_dpi_x)
             paper_height_pixels = int(paper_height_mm / 25.4 * printer_dpi_y)
@@ -742,7 +687,7 @@ class PreviewExport:
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
-        self.connected_roll_module = roll_module
+        self.connected_roll_module = roll_module      
 
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов в preview_module"""
