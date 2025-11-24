@@ -28,6 +28,7 @@ class OrderDataProcessor:
         self.preview_module = None
         
         self.load_initial_settings()
+        self.detail_num_search = StringVar(value="")
         self.create_ui()
         
     def load_initial_settings(self):
@@ -48,6 +49,14 @@ class OrderDataProcessor:
         # Верхняя часть: Парсинг XML
         xml_frame = ttk.LabelFrame(main_container, text="Получение названия из xml", padding=5)
         xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
+        
+        ttk.Label(xml_frame, text="Поиск вида:").grid(
+            row=0, column=0, sticky="w", pady=5
+        )
+        
+        detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=10)
+        detail_num_entry.grid(row=0, column=0, padx=(130, 0), pady=5, sticky="w")
+        detail_num_entry.bind("<Return>", lambda e: self.get_product_name())
 
         # Строка статуса парсинга
         self.parse_status = ttk.Label(xml_frame, text="", foreground="black", font=("Arial", 14))
@@ -194,6 +203,7 @@ class OrderDataProcessor:
     def export_current_type_to_excel(self):
         """Экспортирует текущий вид продукции в лист много видов"""
         try:
+            self.multitype_status_label.config(text="", foreground="black")
             # Получаем данные паллеты из модуля предпросмотра
             pallet_data = self.get_pallet_data()
             
@@ -257,35 +267,44 @@ class OrderDataProcessor:
             
             if result['success']:
                 self.multitype_status_label.config(
-                    text="Вид отправлен в лист 'Много видов'", 
+                    text="✅ Вид отправлен в лист 'Много видов'", 
                     foreground="green"
                 )
+                # Очищаем статус
+                self.parent.after(9000, lambda: self.multitype_status_label.config(text=""))
             else:
-                self.multitype_status_label.config(
-                    text="Ошибка при экспорте вида", 
-                    foreground="red"
-                )
-                
+                # Обработка ошибок из экспортера
+                error_msg = result.get('error', '')
+                self._handle_export_error(error_msg)
+                    
         except Exception as e:
+            # Обработка исключений при экспорте
+            self._handle_export_error(str(e))
+            
+    def _handle_export_error(self, error_msg):
+        """Обрабатывает ошибки экспорта"""
+        # Проверяем разные варианты ошибок открытого файла
+        if any(word in error_msg.lower() for word in ['permission', 'доступ', 'открыт', 'open', 'denied']):
             self.multitype_status_label.config(
-                text=f"Ошибка экспорта вида: {str(e)}", 
+                text="Внимание, закройте файл Excel перед экспортом!", 
+                foreground="red"
+            )
+        else:
+            self.multitype_status_label.config(
+                text=f"❌ Ошибка: {error_msg}", 
                 foreground="red"
             )
         
     def reset_status_messages(self):
         """Сбрасывает статусные сообщения к изначальному состоянию"""
-        # Сбрасываем статус парсинга XML
         if self.folder_path.get():
             folder_name = os.path.basename(self.folder_path.get())
             self.parse_status.config(text=f"Папка: {folder_name}", foreground="blue")
         else:
             self.parse_status.config(text="Папка не выбрана", foreground="red")
         
-        # Сбрасываем статус очистки много-видового листа
-        self.multitype_status_label.config(
-            text="Внимание, закройте файл Excel перед экспортом!", 
-            foreground="red"
-        )
+        # Очищаем статус много видов вместо постоянного предупреждения
+        self.multitype_status_label.config(text="", foreground="black")
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
@@ -490,11 +509,8 @@ class OrderDataProcessor:
         if not self.parsed_data:
             self.parse_status.config(text="Данные не найдены", foreground="red")
             return
-
-        # Поиск по detail_num если поле заполнено в roll_module
-        search_digits = ""
-        if self.roll_module and hasattr(self.roll_module, 'detail_num_search_var'):
-            search_digits = self.roll_module.detail_num_search_var.get().strip()
+        # Ищем конкретный вид или тираж
+        search_digits = self.detail_num_search.get().strip()
         
         if search_digits:
             found_products = []

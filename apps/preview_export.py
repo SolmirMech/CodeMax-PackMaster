@@ -84,7 +84,7 @@ class PreviewExport:
             return []
     
     def on_box_selected(self, event=None):
-        """Обрабатывает выбор коробки (ПЕРЕНЕСЕНО ИЗ ROLL_PREVIEW)"""
+        """Обрабатывает выбор коробки"""
         selected_size = self.box_size_var.get()
         if selected_size:
             try:
@@ -180,7 +180,7 @@ class PreviewExport:
         # Статус экспорта - строка 5
         self.excel_status_label = ttk.Label(
             control_frame,
-            text="Внимание, закройте файл Excel перед экспортом!",
+            text="",
             foreground="red",
             wraplength=250,
             font=("Arial", 14)
