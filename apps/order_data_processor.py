@@ -49,26 +49,6 @@ class OrderDataProcessor:
         xml_frame = ttk.LabelFrame(main_container, text="Получение названия из xml", padding=5)
         xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
 
-        # Меню настроек
-        settings_menu = ttk.Menubutton(xml_frame, text="📂 Настройки папок", direction="below")
-        settings_menu.grid(row=0, column=0, sticky="w", pady=(0, 15))
-        
-        settings_menu.menu = tk.Menu(settings_menu, tearoff=0)
-        settings_menu["menu"] = settings_menu.menu
-        
-        settings_menu.menu.add_command(
-            label="Выбрать папку для импорта XML", 
-            command=self.add_folder
-        )
-        settings_menu.menu.add_command(
-            label="Выбрать папку для экспорта в Excel", 
-            command=self.select_excel_folder
-        )
-
-        # Кнопка получения названия
-        get_name_btn = ttk.Button(xml_frame, text="⚡ Получить название", command=self.get_product_name)
-        get_name_btn.grid(row=0, column=0, sticky="w", padx=(240, 10), pady=(0, 15))
-
         # Строка статуса парсинга
         self.parse_status = ttk.Label(xml_frame, text="", foreground="black", font=("Arial", 14))
         self.parse_status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
@@ -309,19 +289,7 @@ class OrderDataProcessor:
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
-        self.roll_module = roll_module
-        
-    def add_folder(self):
-        """Добавляет папку для поиска XML файлов"""
-        folder = filedialog.askdirectory(title="Выберите папку с XML файлами")
-        if folder:
-            self.folder_path.set(folder)
-            # Обновляем статус
-            self.parse_status.config(text=f"Папка выбрана: {os.path.basename(folder)}", foreground="green")
-            # Сохраняем в настройки
-            current_settings = self.config_manager.load_json_settings("shared_utils.json")
-            current_settings["weight_data_base"] = folder
-            self.config_manager.save_json_settings("shared_utils.json", current_settings)
+        self.roll_module = roll_module       
         
     def parse_xml_for_product_names(self, order_number):
         """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
@@ -635,39 +603,7 @@ class OrderDataProcessor:
                     self.roll_module.product_text.insert("1.0", product_data['name'])
                     print(f"Отправлено только название: {product_data['name']}")
                 except:
-                    print("Критическая ошибка при отправке данных")
-            
-    def select_excel_folder(self):
-        """Выбирает папку для Excel файла и копирует шаблон из assets"""        
-        # Выбираем папку
-        folder_path = filedialog.askdirectory(title="Выберите папку для файла Excel")
-        if not folder_path:
-            return
-        
-        try:
-            # Используем config_manager для получения пути к файлу
-            assets_file = self.config_manager.get_asset_path("weight_orders.xlsx")
-            
-            # Проверяем существование файла
-            if not os.path.exists(assets_file):
-                messagebox.showerror("Ошибка", 
-                    f"Файл weight_orders.xlsx не найден по пути:\n{assets_file}")
-                return
-            
-            # Путь к целевому файлу
-            target_file = os.path.join(folder_path, "weight_orders.xlsx")
-            
-            # Копируем файл (перезаписываем если существует)
-            shutil.copy2(assets_file, target_file)
-            
-            # Сохраняем путь к папке
-            self.excel_folder_path = folder_path
-            self.save_excel_folder_path()
-            
-            messagebox.showinfo("Успех", f"Файл Excel скопирован в папку:\n{folder_path}")
-            
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось скопировать файл:\n{str(e)}")
+                    print("Критическая ошибка при отправке данных")           
         
     def load_excel_folder_path(self):
         """Загружает путь к папке с Excel файлом из настроек"""
@@ -687,12 +623,3 @@ class OrderDataProcessor:
             print(f"Ошибка загрузки пути к папке Excel: {e}")
             self.excel_folder_path = ""
             self.excel_file_path = ""
-
-    def save_excel_folder_path(self):
-        """Сохраняет путь к папке с Excel файлом в настройки"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            settings["weight_orders_xlsx"] = self.excel_folder_path
-            self.config_manager.save_json_settings("shared_utils.json", settings)
-        except Exception as e:
-            print(f"Ошибка сохранения пути к папке Excel: {e}")

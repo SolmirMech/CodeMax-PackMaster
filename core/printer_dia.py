@@ -1,7 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import win32print
 import win32ui
+import os
+import shutil
 from core.config_manager import ConfigManager  # Добавляем импорт
 from core.shared_utils import (
     mm_to_pixels,
@@ -18,6 +20,10 @@ class SettingsDialog:
         self.preview_export_module = preview_export_module
         self.config_manager = ConfigManager()
         self.window = None
+        self.xml_folder_path = tk.StringVar(value="")
+        # Переменные для Excel
+        self.excel_folder_path = ""
+        self.status_var = tk.StringVar(value="")        
 
     def show(self):
         if self.window and self.window.winfo_exists():
@@ -85,6 +91,30 @@ class SettingsDialog:
             width=20
         )
         open_boxes_btn.grid(row=3, column=0, padx=5, pady=2, sticky="w")
+        
+        # === Добавляем меню настроек папок ===
+        folder_menu_btn = ttk.Menubutton(
+            print_frame, 
+            text="📂 Настройки папок", 
+            direction="below",
+            width=20
+        )
+        folder_menu_btn.grid(row=3, column=1, padx=5, pady=2, sticky="w")
+        
+        folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
+        folder_menu_btn["menu"] = folder_menu_btn.menu
+        
+        folder_menu_btn.menu.add_command(
+            label="Выбрать папку для импорта XML", 
+            command=self.select_xml_folder
+        )
+        folder_menu_btn.menu.add_command(
+            label="Выбрать папку для экспорта в Excel", 
+            command=self.select_excel_folder
+        )
+        
+        # Загружаем текущие пути
+        self.load_folder_paths()        
             
         # Кнопка обновления принтеров
         update_printers_btn = ttk.Button(
@@ -190,7 +220,6 @@ class SettingsDialog:
         cancel_button.grid(row=0, column=5, padx=5, pady=5, sticky="w")
         
         # Статус-бар внизу окна настроек
-        self.status_var = tk.StringVar(value="Готово")
         status_label = ttk.Label(
             main_frame, 
             textvariable=self.status_var,
@@ -198,9 +227,99 @@ class SettingsDialog:
             font=("Arial", 12)
         )
         status_label.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+        
+        self.update_folder_status()
 
         # Привязка Enter к сохранению
         self.window.bind("<Return>", lambda e: self.save_all_settings())
+        
+    def load_folder_paths(self):
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            
+            # Путь для XML
+            xml_path = settings.get("weight_data_base", "")
+            self.xml_folder_path.set(xml_path)
+            
+            # Путь для Excel
+            excel_path = settings.get("weight_orders_xlsx", "")
+            if excel_path and os.path.exists(excel_path):
+                self.excel_folder_path = excel_path
+            else:
+                self.excel_folder_path = ""
+            
+            self.update_folder_status()
+            
+        except Exception as e:
+            print(f"Ошибка загрузки путей папок: {e}")
+            self.excel_folder_path = ""
+
+    def select_xml_folder(self):
+        """Выбирает папку для XML файлов"""
+        folder = filedialog.askdirectory(title="Выберите папку с XML файлами")
+        if folder:
+            self.xml_folder_path.set(folder)
+            # Сохраняем в настройки
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            settings["weight_data_base"] = folder
+            self.config_manager.save_json_settings("shared_utils.json", settings)
+            self.update_folder_status()
+
+    def select_excel_folder(self):
+        """Выбирает папку для Excel файла"""
+        folder_path = filedialog.askdirectory(title="Выберите папку для файла Excel")
+        if not folder_path:
+            return
+        
+        try:
+            # Используем config_manager для получения пути к файлу
+            assets_file = self.config_manager.get_asset_path("weight_orders.xlsx")
+            
+            # Проверяем существование файла
+            if not os.path.exists(assets_file):
+                messagebox.showerror("Ошибка", 
+                    f"Файл weight_orders.xlsx не найден по пути:\n{assets_file}")
+                return
+            
+            # Путь к целевому файлу
+            target_file = os.path.join(folder_path, "weight_orders.xlsx")
+            
+            # Копируем файл (перезаписываем если существует)
+            shutil.copy2(assets_file, target_file)
+            
+            # Сохраняем путь к папке
+            self.excel_folder_path = folder_path
+            self.save_excel_folder_path()
+            
+            self.status_var.set(f"✅ Файл Excel скопирован в: {os.path.basename(folder_path)}")
+            
+        except Exception as e:
+            self.status_var.set(f"❌ Ошибка копирования: {str(e)}")
+
+    def save_excel_folder_path(self):
+        """Сохраняет путь к папке с Excel файлом в настройки"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            settings["weight_orders_xlsx"] = self.excel_folder_path
+            self.config_manager.save_json_settings("shared_utils.json", settings)
+        except Exception as e:
+            print(f"Ошибка сохранения пути к папке Excel: {e}")
+
+    def update_folder_status(self):
+        """Обновляет статусную строку с путями к папкам"""
+        xml_text = "Папка XML: " + (os.path.basename(self.xml_folder_path.get()) 
+                             if self.xml_folder_path.get() else "не выбрана")
+        
+        if self.excel_folder_path:
+            excel_name = os.path.basename(self.excel_folder_path)
+            if not excel_name:
+                excel_name = self.excel_folder_path.rstrip('/\\')
+            excel_text = "Папка экспорта в Excel: " + excel_name
+        else:
+            excel_text = "Папка Excel: не выбрана"
+        
+        status_text = f"{xml_text} | {excel_text}"
+        self.status_var.set(status_text)
         
     def update_printers(self):
         """Обновляет принтер во всех секциях настроек печати"""
