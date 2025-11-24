@@ -32,7 +32,7 @@ class SettingsDialog:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройки")
-        self.window.geometry("835x560")
+        self.window.geometry("900x600")
         self.window.grab_set()
 
         # Центрирование окна
@@ -45,7 +45,7 @@ class SettingsDialog:
 
         self.window.bind("<Escape>", lambda e: self.window.destroy())
 
-        main_frame = ttk.Frame(self.window, padding=15)
+        main_frame = ttk.Frame(self.window, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         content_frame = ttk.Frame(main_frame)
@@ -53,11 +53,11 @@ class SettingsDialog:
 
         # ЛЕВАЯ КОЛОНКА
         left_frame = ttk.Frame(content_frame)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=5)
 
         # 1.Настройки печати
-        print_frame = ttk.LabelFrame(left_frame, text="Настройки печати", padding=10)
-        print_frame.pack(fill=tk.X, pady=(0, 10))
+        print_frame = ttk.LabelFrame(left_frame, text="Настройки печати", padding=5)
+        print_frame.pack(fill=tk.X, pady=(0, 5))
 
         # Выбор принтера
         printers = win32print.EnumPrinters(2)
@@ -73,33 +73,32 @@ class SettingsDialog:
         self.settings_vars = {}
         
         # Размеры этикетки
-        ttk.Label(print_frame, text="Ширина (мм):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(print_frame, text="Ширина/высота, мм:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
         self.paper_width_var = tk.StringVar(value=str(self.preview_export_module.settings.get("paper_width_mm", 80)))
         paper_width_entry = ttk.Entry(print_frame, textvariable=self.paper_width_var, width=8)
-        paper_width_entry.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+        paper_width_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
-        ttk.Label(print_frame, text="Высота (мм):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
         self.paper_height_var = tk.StringVar(value=str(self.preview_export_module.settings.get("paper_height_mm", 58)))
         paper_height_entry = ttk.Entry(print_frame, textvariable=self.paper_height_var, width=8)
-        paper_height_entry.grid(row=2, column=1, padx=5, pady=2, sticky="w")
+        paper_height_entry.grid(row=1, column=1, padx=(65, 5), pady=5, sticky="w")
         
         # Редактирование коробок
         open_boxes_btn = ttk.Button(
             print_frame,
-            text="📦 Редактор коробок", 
+            text="📦 Список коробок", 
             command=self.open_box_editor,
             width=20
         )
-        open_boxes_btn.grid(row=3, column=0, padx=5, pady=2, sticky="w")
+        open_boxes_btn.grid(row=2, column=0, padx=5, pady=5, sticky="w")
         
         # === Добавляем меню настроек папок ===
         folder_menu_btn = ttk.Menubutton(
             print_frame, 
             text="📂 Настройки папок", 
             direction="below",
-            width=20
+            width=17
         )
-        folder_menu_btn.grid(row=3, column=1, padx=5, pady=2, sticky="w")
+        folder_menu_btn.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         
         folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
         folder_menu_btn["menu"] = folder_menu_btn.menu
@@ -123,7 +122,7 @@ class SettingsDialog:
         update_printers_btn.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         
         cutters_label = ttk.Label(print_frame, text="Резчики:")
-        cutters_label.grid(row=0, column=2, sticky="w", padx=10, pady=(10, 2))
+        cutters_label.grid(row=0, column=2, sticky="w", padx=10, pady=5)
 
         # Загружаем текущий список резчиков
         current_cutters = self.config_manager.get_cutters()
@@ -133,17 +132,17 @@ class SettingsDialog:
         for i, cutter in enumerate(current_cutters):
             entry = ttk.Entry(print_frame, width=20)
             entry.insert(0, cutter)
-            entry.grid(row=1+i, column=2, padx=10, pady=2, sticky="w")
+            entry.grid(row=1+i, column=2, padx=10, pady=5, sticky="w")
             self.cutter_entries.append(entry)
 
         # Добавляем пустое поле для нового резчика
         new_entry = ttk.Entry(print_frame, width=20)
-        new_entry.grid(row=1+len(current_cutters), column=2, padx=10, pady=2, sticky="w")
+        new_entry.grid(row=1+len(current_cutters), column=2, padx=10, pady=5, sticky="w")
         self.cutter_entries.append(new_entry)     
 
         # Список упаковщиков
         packers_label = ttk.Label(print_frame, text="Упаковщики:")
-        packers_label.grid(row=0, column=3, sticky="w", padx=10, pady=(10, 2))
+        packers_label.grid(row=0, column=3, sticky="w", padx=10, pady=5)
 
         # Загружаем текущий список упаковщиков
         current_packers = self.config_manager.get_packers()
@@ -153,71 +152,46 @@ class SettingsDialog:
         for i, packer in enumerate(current_packers):
             entry = ttk.Entry(print_frame, width=20)
             entry.insert(0, packer)
-            entry.grid(row=1+i, column=3, padx=10, pady=2, sticky="w")
+            entry.grid(row=1+i, column=3, padx=10, pady=5, sticky="w")
             self.packer_entries.append(entry)
 
         # Добавляем пустое поле для нового упаковщика
         new_packer_entry = ttk.Entry(print_frame, width=20)
-        new_packer_entry.grid(row=1+len(current_packers), column=3, padx=10, pady=2, sticky="w")
+        new_packer_entry.grid(row=1+len(current_packers), column=3, padx=10, pady=5, sticky="w")
         self.packer_entries.append(new_packer_entry)
 
         # 2. РАЗДЕЛ: Производитель
         manufacturer_frame = ttk.LabelFrame(left_frame, text="Производитель", padding=5)
-        manufacturer_frame.pack(fill=tk.X, pady=(0, 10))
+        manufacturer_frame.pack(fill=tk.X, pady=(0, 5))
         self.manufacturer_var = tk.StringVar(value=self.preview_export_module.manufacturer)
-        manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=30)
-        manufacturer_entry.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        
-        # Фрейм для кнопок редактирования списков
-        lists_frame = ttk.Frame(manufacturer_frame)
-        lists_frame.grid(row=0, column=2, columnspan=2, padx=10, pady=5, sticky="w")
+        manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
+        manufacturer_entry.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")      
+
+        ttk.Label(manufacturer_frame, text="Префикс заказа:").grid(row=1, column=0, sticky="w", pady=5)
+        self.settings_prefix_var = tk.StringVar(value=self.preview_export_module.order_prefix.get())
+        prefix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_prefix_var, width=6)
+        prefix_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+        ttk.Label(manufacturer_frame, text="Суффикс заказа:").grid(row=2, column=0, sticky="w", pady=5)
+        self.settings_suffix_var = tk.StringVar(value=self.preview_export_module.order_suffix.get())
+        suffix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_suffix_var, width=6)
+        suffix_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")              
 
         # Кнопка для открытия окна редактирования клиентов
         open_customers_btn = ttk.Button(
-            lists_frame,
-            text="📝 Список клиентов без Производителя",
+            manufacturer_frame,
+            text="📝 Без Производителя",
             command=self.open_customers_editor
         )
-        open_customers_btn.pack(fill=tk.X, pady=5)
+        open_customers_btn.grid(row=0, column=2, padx=5, pady=5, sticky="w")
 
         # Кнопка для открытия окна особых клиентов
         open_special_btn = ttk.Button(
-            lists_frame,
-            text="📋 Список особых клиентов", 
+            manufacturer_frame,
+            text="📋 Особые клиенты", 
             command=self.open_special_clients_editor
         )
-        open_special_btn.pack(fill=tk.X, pady=5)
-
-        # 3. РАЗДЕЛ: Номер заказа
-        order_frame = ttk.LabelFrame(left_frame, text="Номер заказа", padding=10)
-        order_frame.pack(fill=tk.X, pady=(0, 10))
-
-        ttk.Label(order_frame, text="Префикс:").grid(row=0, column=0, sticky="w", pady=5)
-        self.settings_prefix_var = tk.StringVar(value=self.preview_export_module.order_prefix.get())
-        prefix_entry = ttk.Entry(order_frame, textvariable=self.settings_prefix_var, width=10)
-        prefix_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-
-        ttk.Label(order_frame, text="Суффикс:").grid(row=0, column=2, sticky="w", pady=5)
-        self.settings_suffix_var = tk.StringVar(value=self.preview_export_module.order_suffix.get())
-        suffix_entry = ttk.Entry(order_frame, textvariable=self.settings_suffix_var, width=10)
-        suffix_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
-
-        # Кнопки сохранения
-        save_button = ttk.Button(
-            order_frame, 
-            text="💾 Сохранить", 
-            command=self.save_all_settings,
-            width=15
-        )
-        save_button.grid(row=0, column=4, padx=20, pady=5, sticky="w")
-        
-        cancel_button = ttk.Button(
-            order_frame, 
-            text="❌ Отмена", 
-            command=self.window.destroy,
-            width=15
-        )
-        cancel_button.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+        open_special_btn.grid(row=0, column=3, padx=5, pady=5, sticky="w")     
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
@@ -226,7 +200,16 @@ class SettingsDialog:
             foreground="green",
             font=("Arial", 12)
         )
-        status_label.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+        status_label.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=(10, 0))
+        
+        # Кнопки сохранения
+        save_button = ttk.Button(
+            main_frame, 
+            text="💾 Сохранить", 
+            command=self.save_all_settings,
+            width=15
+        )
+        save_button.pack(side=tk.RIGHT, fill=tk.X, padx=5, pady=(10, 0))        
         
         self.update_folder_status()
 
@@ -290,8 +273,11 @@ class SettingsDialog:
             # Сохраняем путь к папке
             self.excel_folder_path = folder_path
             self.save_excel_folder_path()
+            folder_name = os.path.basename(folder_path)
+            if not folder_name:  # Если корневой диск
+                folder_name = folder_path.rstrip('/\\')
             
-            self.status_var.set(f"✅ Файл Excel скопирован в: {os.path.basename(folder_path)}")
+            self.status_var.set(f"✅ Файл Excel скопирован в: {folder_name}")
             
         except Exception as e:
             self.status_var.set(f"❌ Ошибка копирования: {str(e)}")
