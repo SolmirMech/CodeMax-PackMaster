@@ -16,7 +16,7 @@ class RollPreview:
     def __init__(self, parent):
         self.parent = parent
         self.config_manager = ConfigManager()
-        self.roll_template_path = self.config_manager.get_asset_path("roll_2_cex.pdf")
+        self.roll_template_path = self.config_manager.get_asset_path("roll.pdf")
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
         
         self.current_data = {}
@@ -43,14 +43,14 @@ class RollPreview:
         frame.rowconfigure(0, weight=1)     # Ролик
         frame.rowconfigure(1, weight=1)     # Коробка
         
-        # Превью ролика - строка 0, колонка 0
+        # Превью ролика - строка 0, колонка 0 для 2 цеха width=420, height=420,
         roll_frame = ttk.LabelFrame(frame, text="Ролик", padding=2)
         roll_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nsew")
         
         self.roll_canvas_frame = ttk.Frame(roll_frame, relief="solid", borderwidth=2)
         self.roll_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=420, height=420, bg="white")
+        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=416, height=520, bg="white")
         self.roll_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.roll_canvas.bind("<Button-1>", lambda e: self.roll_canvas.focus_set())
         
@@ -193,6 +193,7 @@ class RollPreview:
                 "sleeve_diameter": roll_module.sleeve_diameter_var.get(),
                 "cutter": roll_module.cutter_var.get(),
                 "roll_length": roll_module.roll_length.get(),
+                "date_emission": roll_module.date_emission_var.get(),
             }
             
             # Обновляем предпросмотр
@@ -409,6 +410,7 @@ class RollPreview:
             # Технические параметры
             "$sx": data.get('winding_scheme', '7'),
             "dia": data.get('sleeve_diameter', '76'),
+            "$emission": data.get('date_emission', ''),
             
             # Специфичные для 2 цеха параметры
             "$cutter": data.get('cutter', ''),

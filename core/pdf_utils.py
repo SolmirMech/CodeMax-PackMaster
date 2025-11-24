@@ -46,6 +46,7 @@ class PDFTemplateFiller:
         "box_net": "other",
         "cutter": "other",
         "rll_length": "other",
+        "emission": "other",
     }    
     
     def __init__(self, template_path: str):
@@ -119,7 +120,7 @@ class PDFTemplateFiller:
             # Ищем и очищаем текст "Изготовитель"
             manufacturer_instances = page.search_for("Изготовитель:")
             for rect in manufacturer_instances:
-                # ФИЛЬТР: пропускаем слишком маленькие прямоугольники (артефакты)
+                # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
                 rect_width = rect.x1 - rect.x0
                 rect_height = rect.y1 - rect.y0
                 if rect_width < 10 or rect_height < 5:
@@ -136,7 +137,7 @@ class PDFTemplateFiller:
             for emission_text in emission_texts:
                 emission_instances = page.search_for(emission_text)
                 for rect in emission_instances:
-                    # ФИЛЬТР: пропускаем слишком маленькие прямоугольники (артефакты)
+                    # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
                     rect_width = rect.x1 - rect.x0
                     rect_height = rect.y1 - rect.y0
                     if rect_width < 10 or rect_height < 5:
@@ -152,7 +153,7 @@ class PDFTemplateFiller:
             "$customer", "$product", "$onum", "$date", "$packer",
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
-            "$box_brut", "$box_net", "$cutter", "$rll_length"
+            "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission"
         ]
         
         # Очищаем области пустых плейсхолдеров
@@ -160,7 +161,7 @@ class PDFTemplateFiller:
             if placeholder in data_map_without_d and (not data_map_without_d[placeholder] or data_map_without_d[placeholder].strip() == ""):
                 instances = page.search_for(placeholder)
                 for rect in instances:
-                    # ФИЛЬТР: пропускаем слишком маленькие прямоугольники (артефакты)
+                    # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
                     rect_width = rect.x1 - rect.x0
                     rect_height = rect.y1 - rect.y0
                     if rect_width < 10 or rect_height < 5:
@@ -171,14 +172,14 @@ class PDFTemplateFiller:
                     x1, y1 = transformed_rect.x1, transformed_rect.y1
                     draw.rectangle([x0, y0, x1, y1], fill='white')
         
-        # Обрабатываем ВСЕ плейсхолдеры
+        # Обрабатываем Все плейсхолдеры
         for placeholder, new_text in data_map_without_d.items():
             if not new_text or new_text.strip() == "":
                 continue
                 
             instances = page.search_for(placeholder)
             for rect in instances:
-                # ФИЛЬТР: пропускаем слишком маленькие прямоугольники (артефакты)
+                # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
                 rect_width = rect.x1 - rect.x0
                 rect_height = rect.y1 - rect.y0
                 

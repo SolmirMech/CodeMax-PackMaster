@@ -12,7 +12,7 @@ class ConfigManager:
         
         # Папка для данных в AppData/Local/CodeMax-CutMaster
         appdata_path = os.getenv('LOCALAPPDATA')
-        self.data_dir = Path(appdata_path) / "CodeMax-CutMaster" / "data_2_cex"
+        self.data_dir = Path(appdata_path) / "CodeMax-CutMaster" / "data"
 
         # Создаем папку data если ее нет
         os.makedirs(self.data_dir, exist_ok=True)
