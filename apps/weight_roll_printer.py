@@ -15,7 +15,6 @@ class RollLabelPrinter:
 
         self.order_data_module = None
         self.preview_module = None
-        self.weight_orders_window = None
         
         # Переменные интерфейса и данных
         self.show_manufacturer_var = BooleanVar(value=False)  # Показывать производителя
@@ -50,7 +49,6 @@ class RollLabelPrinter:
             self.rolls_count_var,
             self.box_weight_var, 
             self.gross_weight_kg_var,
-            self.net_weight_kg_var,
             self.net_weight_kg_var
         ]
         
@@ -140,10 +138,6 @@ class RollLabelPrinter:
         rolls_entry = ttk.Entry(data_frame, textvariable=self.rolls_count_var, width=15)
         rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=5, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
-        # Общее кол-во этикеток - СКРЫТО
-        total_entry = ttk.Entry(data_frame, textvariable=self.total_quantity_var, width=15, state="readonly")
-        total_entry.grid(row=4, column=1, padx=(225, 0), pady=5, sticky="w")
-        total_entry.grid_remove()
 
         # Вес рулона
         ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
@@ -157,11 +151,7 @@ class RollLabelPrinter:
             row=5, column=1, sticky="w", padx=(115, 0), pady=5
         )        
         sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=5, sticky="w")        
-
-        net_entry = ttk.Entry(data_frame, textvariable=self.net_weight_kg_var, width=15, state="readonly")
-        net_entry.grid(row=5, column=1, padx=(115, 0), pady=5, sticky="w")
-        net_entry.grid_remove()
+        sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=5, sticky="w")
 
         # Номер заказа (3 части)
         ttk.Label(data_frame, text="№ заказа:").grid(
@@ -221,19 +211,7 @@ class RollLabelPrinter:
         
         # Дата
         date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
-        date_entry.grid(row=8, column=1, padx=(115, 0), pady=5, sticky="w")        
-
-        # Вес коробки брутто/нетто - СКРЫТО
-        # ttk.Label(data_frame, text="Вес коробки брутто/нетто, кг:").grid(
-        #     row=9, column=0, sticky="w", pady=5
-        # )
-        gross_entry = ttk.Entry(data_frame, textvariable=self.total_gross_var, width=15, state="readonly")
-        gross_entry.grid(row=9, column=1, padx=5, pady=5, sticky="w")
-        gross_entry.grid_remove()
-
-        net_entry = ttk.Entry(data_frame, textvariable=self.total_net_var, width=15, state="readonly")
-        net_entry.grid(row=9, column=1, padx=(115, 0), pady=5, sticky="w")
-        net_entry.grid_remove()
+        date_entry.grid(row=8, column=1, padx=(115, 0), pady=5, sticky="w")
         
         # Схема намотки и Диаметр втулки
         ttk.Label(data_frame, text="Схема намотки:").grid(
@@ -246,14 +224,7 @@ class RollLabelPrinter:
             row=9, column=1, sticky="w", pady=5
         )
         diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        diameter_entry.grid(row=9, column=1, padx=(210, 0), pady=5, sticky="w")
-        
-        # Кнопка для открытия окна втулки
-        ttk.Button(
-            data_frame, 
-            text="✓ Ярлык на втулку", 
-            command=self.open_weight_orders_window
-        ).grid(row=10, column=0, pady=5, sticky="w")
+        diameter_entry.grid(row=9, column=1, padx=(210, 0), pady=5, sticky="w")      
         
         ttk.Checkbutton(data_frame, 
                        text="Без Производителя", 
@@ -324,40 +295,7 @@ class RollLabelPrinter:
     def on_customer_changed(self, *args):
         """Обрабатывает изменение заказчика и проверяет видимость производителя"""
         customer_name = self.customer_var.get()
-        self.check_manufacturer_visibility(customer_name)
-        
-    def open_weight_orders_window(self):
-        """Открывает окно для работы с втулками"""
-        if self.weight_orders_window and self.weight_orders_window.winfo_exists():
-            self.weight_orders_window.lift()
-            return
-
-        # Создаем новое окно
-        self.weight_orders_window = tk.Toplevel(self.parent)
-        self.weight_orders_window.title("Втулка")
-        self.weight_orders_window.geometry("440x600")
-        self.weight_orders_window.grab_set()
-        
-        # Центрируем окно
-        self.weight_orders_window.update_idletasks()
-        width = self.weight_orders_window.winfo_width()
-        height = self.weight_orders_window.winfo_height()
-        x = (self.weight_orders_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.weight_orders_window.winfo_screenheight() // 2) - (height // 2)
-        self.weight_orders_window.geometry(f"+{x}+{y}")
-        self.weight_orders_window.bind("<Escape>", lambda e: self.on_weight_orders_close())
-        
-        # Создаем модуль втулки в этом окне
-        self.weight_orders_module = WeightOrdersPrinter(self.weight_orders_window)
-        
-        # Устанавливаем обработчик закрытия окна
-        self.weight_orders_window.protocol("WM_DELETE_WINDOW", self.on_weight_orders_close)
-        
-    def on_weight_orders_close(self):
-        """Обработчик закрытия окна втулки"""
-        if self.weight_orders_window:
-            self.weight_orders_window.destroy()
-            self.weight_orders_window = None        
+        self.check_manufacturer_visibility(customer_name)              
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем предпросмотра для обратной связи"""

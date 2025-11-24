@@ -8,6 +8,7 @@ from core.printer_dia import SettingsDialog, CustomersEditorDialog, SpecialClien
 from core.config_manager import ConfigManager
 from core.font_settings_dialog import FontSettingsDialog
 from core.excel_exporter import WeightOrdersExporter
+from apps.weight_orders_printer import WeightOrdersPrinter
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
@@ -41,6 +42,7 @@ class PreviewExport:
         self.selected_preview = "roll"  # "roll" или "box"
         self.font_settings = None
         self.load_font_settings()
+        self.weight_orders_window = None
         
         # Переменные для коробки
         self.box_size_var = tk.StringVar(value="")
@@ -156,7 +158,14 @@ class PreviewExport:
             settings_frame, 
             text="⚙", 
             command=self.open_settings
-        ).grid(row=1, column=1, sticky="e", pady=5)
+        ).grid(row=1, column=0, padx=(150, 5), sticky="w", pady=5)
+        
+        # Кнопка для открытия окна втулки
+        ttk.Button(
+            settings_frame, 
+            text="✓ Ярлык на втулку", 
+            command=self.open_weight_orders_window
+        ).grid(row=2, column=0, sticky="we", pady=5)
 
         # Настройка колонок для растягивания
         settings_frame.columnconfigure(0, weight=1)
@@ -179,6 +188,39 @@ class PreviewExport:
         self.excel_status_label.grid(row=4, column=0, sticky="w", pady=5)
         
         self.parent.bind("<Visibility>", lambda e: self.update_comboboxes())
+        
+    def open_weight_orders_window(self):
+        """Открывает окно для работы с втулками"""
+        if self.weight_orders_window and self.weight_orders_window.winfo_exists():
+            self.weight_orders_window.lift()
+            return
+
+        # Создаем новое окно
+        self.weight_orders_window = tk.Toplevel(self.parent)
+        self.weight_orders_window.title("Втулка")
+        self.weight_orders_window.geometry("440x600")
+        self.weight_orders_window.grab_set()
+        
+        # Центрируем окно
+        self.weight_orders_window.update_idletasks()
+        width = self.weight_orders_window.winfo_width()
+        height = self.weight_orders_window.winfo_height()
+        x = (self.weight_orders_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.weight_orders_window.winfo_screenheight() // 2) - (height // 2)
+        self.weight_orders_window.geometry(f"+{x}+{y}")
+        self.weight_orders_window.bind("<Escape>", lambda e: self.on_weight_orders_close())
+        
+        # Создаем модуль втулки в этом окне
+        self.weight_orders_module = WeightOrdersPrinter(self.weight_orders_window)
+        
+        # Устанавливаем обработчик закрытия окна
+        self.weight_orders_window.protocol("WM_DELETE_WINDOW", self.on_weight_orders_close)
+        
+    def on_weight_orders_close(self):
+        """Обработчик закрытия окна втулки"""
+        if self.weight_orders_window:
+            self.weight_orders_window.destroy()
+            self.weight_orders_window = None        
         
     def update_comboboxes(self):
         """Обновляет все комбобоксы"""
@@ -536,7 +578,7 @@ class PreviewExport:
         FontSettingsDialog(self.parent, self.config_manager, self)
         
     def print_label(self):
-        """Печатает выбранную этикетку (ИЗМЕНЕННЫЙ МЕТОД)"""
+        """Печатает выбранную этикетку"""
         try:
             copies_text = self.copies_var.get().strip()
             if not copies_text:

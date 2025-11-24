@@ -107,12 +107,12 @@ class WeightOrdersApp:
         
         # Настраиваем пропорции колонок
         container.columnconfigure(0, weight=1)  # Левая часть - 1/3
-        container.columnconfigure(1, weight=2)  # Правая часть - 2/3
+        container.columnconfigure(1, weight=1)  # Правая часть - 2/3
         container.rowconfigure(0, weight=1)     # Одна строка
 
         # Левая часть
         left_frame = ttk.Frame(container)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         left_frame.columnconfigure(0, weight=1)
         left_frame.rowconfigure(0, weight=1)    # RollLabelPrinter
         left_frame.rowconfigure(1, weight=1)    # OrderDataProcessor
@@ -120,28 +120,28 @@ class WeightOrdersApp:
         # Правая часть
         right_frame = ttk.Frame(container)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        right_frame.columnconfigure(0, weight=4)  # Превью
+        right_frame.columnconfigure(0, weight=2)  # Превью
         right_frame.columnconfigure(1, weight=1)  # Экспорт
         right_frame.rowconfigure(0, weight=1)     # Одна строка
 
         # Верх - RollLabelPrinter
         roll_frame = ttk.Frame(left_frame)
-        roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 5))
+        roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
         self.roll_module = RollLabelPrinter(roll_frame)
 
         # Низ - OrderDataProcessor
         order_data_frame = ttk.Frame(left_frame)
-        order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
+        order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
         self.order_data_module = OrderDataProcessor(order_data_frame)
 
         # Правая часть - RollPreview (слева)
         preview_frame = ttk.Frame(right_frame)
-        preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         self.preview_module = RollPreview(preview_frame)
         
         # Правая часть - PreviewExport (справа)
         export_frame = ttk.Frame(right_frame)
-        export_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
         self.export_module = PreviewExport(export_frame, self.preview_module)
 
         self.setup_module_connections()
