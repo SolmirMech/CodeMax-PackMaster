@@ -82,7 +82,7 @@ class FontSettingsDialog:
         
         self.window = tk.Toplevel(parent)
         self.window.title("Настройки шрифтов")
-        self.window.geometry("1100x700")
+        self.window.geometry("1100x730")
         self.window.resizable(True, True)
         # Центрирование окна
         self.center_window()
@@ -92,17 +92,27 @@ class FontSettingsDialog:
         self.window.bind('<Escape>', lambda e: self.window.destroy())
         self.window.focus_set()
         
+        app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
+        self.current_template = app_settings.get("last_font_template", "default")
+        
         # Загружаем текущие настройки
         self.font_settings = self.load_font_settings()
         
         self.create_ui()
         
     def load_font_settings(self):
-        """Загружает настройки шрифтов"""
-        default_settings = self.get_default_font_settings()
+        """Загружает настройки шрифтов для текущего шаблона"""
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
         
-        settings = self.config_manager.load_json_settings("label_font_settings.json")
-        return self.merge_settings(default_settings, settings)
+        # Если файл пустой, создаем с дефолтным шаблоном
+        if not all_settings:
+            all_settings = {"default": self.get_default_font_settings()}
+            self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+        
+        # Получаем настройки текущего шаблона
+        template_settings = all_settings.get(self.current_template, self.get_default_font_settings())
+        
+        return self.merge_settings(self.get_default_font_settings(), template_settings)
     
     def merge_settings(self, default, current):
         """Объединяет настройки по умолчанию с текущими"""
@@ -121,6 +131,9 @@ class FontSettingsDialog:
         
     def create_ui(self):
         """Создает интерфейс настроек"""
+        
+        self.create_template_panel()
+        
         # Основной контейнер с двумя колонками
         main_frame = ttk.Frame(self.window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -137,6 +150,175 @@ class FontSettingsDialog:
         
         # Кнопки сохранения/отмены
         self.create_buttons()
+        
+    def create_template_panel(self):
+        """Создает панель управления шаблонами"""
+        template_frame = ttk.Frame(self.window)
+        template_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+        
+        ttk.Label(template_frame, text="Шаблон:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Combobox шаблонов
+        self.template_var = tk.StringVar(value=self.current_template)
+        self.template_combo = ttk.Combobox(
+            template_frame, 
+            textvariable=self.template_var,
+            state="readonly",
+            width=15
+        )
+        self.template_combo.pack(side=tk.LEFT, padx=5)
+        self.template_combo.bind('<<ComboboxSelected>>', self.on_template_changed)
+        
+        # Кнопки
+        ttk.Button(template_frame, text="🔄", width=3, 
+                   command=self.apply_template).pack(side=tk.LEFT, padx=2)
+        ttk.Button(template_frame, text="➕", width=3,
+                   command=self.save_as_template).pack(side=tk.LEFT, padx=2)
+        ttk.Button(template_frame, text="🗑️", width=3,
+                   command=self.delete_template).pack(side=tk.LEFT, padx=2)
+        
+        # Загружаем список шаблонов
+        self.update_template_list()
+        
+    def update_template_list(self):
+        """Обновляет список шаблонов в комбобоксе"""
+        # Загружаем текущие настройки чтобы получить список шаблонов
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        
+        # Если файл пустой, создаем дефолтный шаблон
+        if not all_settings:
+            all_settings = {"default": self.get_default_font_settings()}
+            self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+        
+        templates = list(all_settings.keys())
+        self.template_combo['values'] = templates
+        
+        # Устанавливаем текущий шаблон
+        if self.current_template in templates:
+            self.template_var.set(self.current_template)
+        else:
+            self.current_template = "default"
+            self.template_var.set("default")
+            
+    def apply_template(self):
+        """Применить выбранный шаблон"""
+        template_name = self.template_var.get()
+        if template_name == self.current_template:
+            return  # Уже активен
+        
+        # Сохраняем текущие настройки перед переключением
+        self._save_font_settings()
+        
+        # Загружаем новый шаблон
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        if template_name in all_settings:
+            self.current_template = template_name
+            template_data = all_settings[template_name]
+            
+            # Мерджим настройки шаблона с дефолтными
+            self.font_settings = self.merge_settings(self.get_default_font_settings(), template_data)
+            
+            self.update_ui_from_settings()
+            self.show_status(f"Шаблон '{template_name}' применен", "info")
+        else:
+            self.show_status(f"Шаблон '{template_name}' не найден", "error")
+            self.update_template_list()
+            
+    def save_as_template(self):
+        """Сохранить текущие настройки как новый шаблон"""
+        # Сначала сохраняем текущие настройки в активный шаблон
+        self._save_font_settings()
+        
+        # Запрашиваем имя шаблона
+        template_name = tk.simpledialog.askstring(
+            "Новый шаблон", 
+            "Введите имя нового шаблона:",
+            parent=self.window
+        )
+        
+        if not template_name:
+            return
+        
+        if template_name in ["default", ""]:
+            self.show_status("Недопустимое имя шаблона", "error")
+            return
+        
+        # Загружаем все настройки и добавляем новый шаблон
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        
+        # Сохраняем КОПИЮ текущих настроек как новый шаблон
+        all_settings[template_name] = {
+            "roll": self.font_settings["roll"].copy(),
+            "box": self.font_settings["box"].copy()
+        }
+        
+        # Сохраняем обновленные настройки
+        success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+        
+        if success:
+            self.current_template = template_name
+            self.update_template_list()
+            self.show_status(f"Шаблон '{template_name}' сохранен", "info")
+        else:
+            self.show_status("Не удалось сохранить шаблон", "error")
+            
+    def on_template_changed(self, event):
+        """При изменении выбора шаблона в комбобоксе"""
+        new_template = self.template_var.get()
+        if new_template != self.current_template:
+            self.apply_template()  # Автоматически применяем выбранный шаблон
+            
+    def delete_template(self):
+        """Удалить текущий шаблон"""
+        template_name = self.template_var.get()
+        
+        if template_name == "default":
+            messagebox.showerror("Ошибка", "Нельзя удалить шаблон 'default'")
+            return
+        
+        if not messagebox.askyesno("Подтверждение", f"Удалить шаблон '{template_name}'?"):
+            return
+        
+        # Загружаем настройки и удаляем шаблон
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        if template_name in all_settings:
+            del all_settings[template_name]
+            
+            # Сохраняем обновленные настройки
+            success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+            
+            if success:
+                self.current_template = "default"
+                self.update_template_list()
+                # Загружаем настройки default
+                self.apply_template()
+                self.show_status(f"Шаблон '{template_name}' удален", "info")
+            else:
+                self.show_status("Не удалось удалить шаблон", "error")
+                
+    def update_ui_from_settings(self):
+        """Обновляет UI из текущих настроек"""
+        # Обновляем поля ролика
+        for key, entries in self.roll_entries.items():
+            entries["preview"].set(str(self.font_settings["roll"][key]["preview"]))
+            entries["print"].set(str(self.font_settings["roll"][key]["print"]))
+        
+        # Обновляем поля коробки
+        for key, entries in self.box_entries.items():
+            entries["preview"].set(str(self.font_settings["box"][key]["preview"]))
+            entries["print"].set(str(self.font_settings["box"][key]["print"]))
+        
+        # Обновляем настройки переноса для ролика
+        roll_multiline = self.font_settings["roll"].get("multiline_settings", {})
+        for key, var in self.roll_wrap_entries.items():
+            if key in roll_multiline:
+                var.set(str(roll_multiline[key]))
+        
+        # Обновляем настройки переноса для коробки
+        box_multiline = self.font_settings["box"].get("multiline_settings", {})
+        for key, var in self.box_wrap_entries.items():
+            if key in box_multiline:
+                var.set(str(box_multiline[key]))
 
     def create_roll_tab(self, parent):
         """Создает вкладку настроек для ролика"""
@@ -336,7 +518,12 @@ class FontSettingsDialog:
         """Сохраняет все настройки через подметоды"""
         try:
             # Сохраняем настройки шрифтов
-            self._save_font_settings()          
+            self._save_font_settings()
+            
+            # Сохраняем выбранный шаблон в настройки приложения
+            app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
+            app_settings["last_font_template"] = self.current_template
+            self.config_manager.save_json_settings("shared_utils.json", app_settings)
             
             # Обновляем превью и закрываем окно
             self.preview_printer.update_font_settings(self.font_settings)
@@ -344,9 +531,9 @@ class FontSettingsDialog:
             self.window.destroy()
             
         except ValueError as e:
-            messagebox.showerror("Ошибка", "Некорректные значения в настройках")
+            self.show_status("Ошибка: Некорректные значения в настройках", "error")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка сохранения: {e}")
+            self.show_status(f"Ошибка сохранения: {e}", "error")
 
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
@@ -385,31 +572,62 @@ class FontSettingsDialog:
                 self.font_settings["box"]["multiline_settings"][key] = int(var.get())
         
         # Сохраняем через ConfigManager
-        success = self.config_manager.save_json_settings("label_font_settings.json", self.font_settings)
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        all_settings[self.current_template] = {
+            "roll": self.font_settings["roll"].copy(),
+            "box": self.font_settings["box"].copy()
+        }
+        
+        success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
         
         if not success:
-            messagebox.showerror("Ошибка", "Не удалось сохранить настройки шрифтов")
+            self.show_status("Не удалось сохранить настройки шрифтов", "error")
+        else:
+            self.show_status("Настройки шрифтов сохранены", "info")
 
     def create_buttons(self):
-        """Создает кнопки сохранения и отмены"""
+        """Создает кнопки сохранения/отмены и строку статуса"""
+        # Фрейм для кнопок и статуса
         button_frame = ttk.Frame(self.window)
         button_frame.pack(fill=tk.X, padx=10, pady=10)
         
+        # Левая часть - кнопки
+        left_frame = ttk.Frame(button_frame)
+        left_frame.pack(side=tk.LEFT)
+        
         save_btn = ttk.Button(
-            button_frame, 
+            left_frame, 
             text="💾 Сохранить", 
             command=self.save_settings
         )
         save_btn.pack(side=tk.LEFT, padx=5)
-        
         save_btn.configure(default='active')
         self.window.bind('<Return>', lambda e: save_btn.invoke())        
         
         ttk.Button(
-            button_frame,
+            left_frame,
             text="🧹 Сбросить",
             command=self.reset_to_default
-        ).pack(side=tk.RIGHT, padx=5)
+        ).pack(side=tk.LEFT, padx=(50, 5))
+        
+        # Центральная часть - строка статуса
+        center_frame = ttk.Frame(button_frame)
+        center_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=20)
+        
+        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
+        self.status_label = ttk.Label(center_frame, textvariable=self.status_var, foreground="green")
+        self.status_label.pack(anchor=tk.CENTER)
+        
+    def show_status(self, message, status_type="info"):
+        """Показывает статус в строке состояния"""
+        colors = {
+            "info": "green",
+            "warning": "orange", 
+            "error": "red"
+        }
+        self.status_var.set(message)
+        self.status_label.configure(foreground=colors.get(status_type, "green"))
+        self.window.update()
         
     def center_window(self):
         """Центрирует окно относительно родительского"""
@@ -433,4 +651,6 @@ class FontSettingsDialog:
             for key, entries in self.box_entries.items():
                 entries["preview"].set(str(default_settings["box"][key]["preview"]))
                 entries["print"].set(str(default_settings["box"][key]["print"]))
+                
+            self.show_status("Настройки сброшены к значениям по умолчанию", "info")
                                 
