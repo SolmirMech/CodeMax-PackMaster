@@ -27,6 +27,8 @@ class SettingsDialog:
         self.excel_folder_path = ""
         self.status_var = tk.StringVar(value="")
         self.workshop_var = tk.StringVar(value="1")
+        self.paper_width_var = tk.StringVar(value="")
+        self.paper_height_var = tk.StringVar(value="")
 
     def show(self):
         if self.window and self.window.winfo_exists():
@@ -73,17 +75,7 @@ class SettingsDialog:
         )
         printer_combo.grid(row=0, column=0, padx=5, pady=5, sticky="w")
 
-        self.settings_vars = {}
-        
-        # Размеры этикетки
-        ttk.Label(print_frame, text="Ширина/высота, мм:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.paper_width_var = tk.StringVar(value=str(self.preview_export_module.settings.get("paper_width_mm", 80)))
-        paper_width_entry = ttk.Entry(print_frame, textvariable=self.paper_width_var, width=8)
-        paper_width_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
-
-        self.paper_height_var = tk.StringVar(value=str(self.preview_export_module.settings.get("paper_height_mm", 58)))
-        paper_height_entry = ttk.Entry(print_frame, textvariable=self.paper_height_var, width=8)
-        paper_height_entry.grid(row=1, column=1, padx=(65, 5), pady=5, sticky="w")
+        self.settings_vars = {}     
         
         # Редактирование коробок
         open_boxes_btn = ttk.Button(
@@ -92,7 +84,7 @@ class SettingsDialog:
             command=self.open_box_editor,
             width=20
         )
-        open_boxes_btn.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        open_boxes_btn.grid(row=1, column=0, padx=5, pady=5, sticky="w")
         
         # === Добавляем меню настроек папок ===
         folder_menu_btn = ttk.Menubutton(
@@ -101,7 +93,7 @@ class SettingsDialog:
             direction="below",
             width=17
         )
-        folder_menu_btn.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        folder_menu_btn.grid(row=1, column=1, padx=5, pady=5, sticky="w")
         
         folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
         folder_menu_btn["menu"] = folder_menu_btn.menu
@@ -165,7 +157,7 @@ class SettingsDialog:
         
         # Переключатель цеха
         workshop_frame = ttk.Frame(print_frame)
-        workshop_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+        workshop_frame.grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=5)
 
         ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT, padx=(10,5))
         ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT, padx=(5,10))
