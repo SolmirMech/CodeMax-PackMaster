@@ -7,7 +7,7 @@ class FontSettingsDialog:
     
     @staticmethod
     def get_default_font_settings():
-        """Возвращает настройки шрифтов по умолчанию"""
+        """Возвращает настройки шрифтов по умолчанию для 1 цеха"""
         return {
             "roll": {
                 "customer": {
@@ -18,6 +18,10 @@ class FontSettingsDialog:
                     "preview": 16, 
                     "print": 44
                 },
+                "tu_number": {
+                    "preview": 12,
+                    "print": 24
+                },                
                 "other": {
                     "preview": 20,
                     "print": 42
@@ -93,7 +97,7 @@ class FontSettingsDialog:
         self.window.focus_set()
         
         app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-        self.current_template = app_settings.get("last_font_template", "default")
+        self.current_template = app_settings.get("last_font_template", "1_цех")
         
         # Загружаем текущие настройки
         self.font_settings = self.load_font_settings()
@@ -106,7 +110,7 @@ class FontSettingsDialog:
         
         # Если файл пустой, создаем с дефолтным шаблоном
         if not all_settings:
-            all_settings = {"default": self.get_default_font_settings()}
+            all_settings = {"1_цех": self.get_default_font_settings()}
             self.config_manager.save_json_settings("label_font_settings.json", all_settings)
         
         # Получаем настройки текущего шаблона
@@ -187,7 +191,7 @@ class FontSettingsDialog:
         
         # Если файл пустой, создаем дефолтный шаблон
         if not all_settings:
-            all_settings = {"default": self.get_default_font_settings()}
+            all_settings = {"1_цех": self.get_default_font_settings()}
             self.config_manager.save_json_settings("label_font_settings.json", all_settings)
         
         templates = list(all_settings.keys())
@@ -197,8 +201,8 @@ class FontSettingsDialog:
         if self.current_template in templates:
             self.template_var.set(self.current_template)
         else:
-            self.current_template = "default"
-            self.template_var.set("default")
+            self.current_template = "1_цех"
+            self.template_var.set("1_цех")
             
     def apply_template(self):
         """Применить выбранный шаблон"""
@@ -239,8 +243,8 @@ class FontSettingsDialog:
         if not template_name:
             return
         
-        if template_name in ["default", ""]:
-            self.show_status("Недопустимое имя шаблона", "error")
+        if template_name in ["1_цех", "2_цех"]:
+            self.show_status("Недопустимое имя шаблона - зарезервировано системой", "error")
             return
         
         # Загружаем все настройки и добавляем новый шаблон
@@ -272,8 +276,8 @@ class FontSettingsDialog:
         """Удалить текущий шаблон"""
         template_name = self.template_var.get()
         
-        if template_name == "default":
-            messagebox.showerror("Ошибка", "Нельзя удалить шаблон 'default'")
+        if template_name in ["1_цех", "2_цех"]:
+            self.show_status("Нельзя удалить системные шаблоны '1_цех' и '2_цех'", "error")
             return
         
         if not messagebox.askyesno("Подтверждение", f"Удалить шаблон '{template_name}'?"):
@@ -337,7 +341,8 @@ class FontSettingsDialog:
         self.roll_entries = {}
         roll_fields = [
             ("💼 Заказчик", "customer"),
-            ("🏷 Изделие", "product"), 
+            ("🏷 Изделие", "product"),
+            ("📑 ТУ", "tu_number"),
             ("🔧 Остальные поля", "other")
         ]
 

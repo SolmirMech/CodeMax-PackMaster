@@ -16,7 +16,7 @@ class RollPreview:
     def __init__(self, parent):
         self.parent = parent
         self.config_manager = ConfigManager()
-        self.roll_template_path = self.config_manager.get_asset_path("roll.pdf")
+        self._update_template_paths()
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
         
         self.current_data = {}
@@ -81,6 +81,31 @@ class RollPreview:
         
         # Сразу загружаем PDF и показываем превью
         self.load_and_show_previews()
+        
+    def _update_template_paths(self):
+        """Обновляет пути к шаблонам в зависимости от настройки цеха"""
+        workshop = self._get_workshop_setting()
+        
+        if workshop == "2":
+            self.roll_template_path = self.config_manager.get_asset_path("roll_2_cex.pdf")
+        else:  # По умолчанию 1 цех
+            self.roll_template_path = self.config_manager.get_asset_path("roll.pdf")
+        
+        # Коробка остается без изменений
+        self.box_template_path = self.config_manager.get_asset_path("box.pdf")
+
+    def _get_workshop_setting(self):
+        """Получает настройку цеха из shared_utils.json"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            return settings.get("workshop", "1")
+        except Exception:
+            return "1"  # По умолчанию 1 цех
+
+    def reload_templates(self):
+        """Перезагружает шаблоны при изменении цеха"""
+        self._update_template_paths()
+        self.check_templates()  # Перезагружаем и проверяем шаблоны
         
     def print_selected_preview(self):
         """Печатает выбранное превью через export_module"""
@@ -254,6 +279,12 @@ class RollPreview:
             self.load_and_show_previews()
         
         return templates_ok
+        
+    def reload_for_workshop_change(self):
+        """Перезагружает шаблоны и настройки при смене цеха"""
+        self._update_template_paths()  # Обновляем пути к PDF шаблонам
+        self.load_font_settings()      # Перезагружаем настройки шрифтов
+        self.check_templates()         # Перезагружаем PDF filler
         
     def load_and_show_previews(self):
         """Сразу загружает и показывает превью"""
