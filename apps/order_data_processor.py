@@ -17,6 +17,7 @@ class OrderDataProcessor:
         # Переменные для парсинга
         self.folder_path = StringVar(value="")
         self.parsed_data = []  # Список данных
+        self.parsed_names_list = []
         self.selected_name = StringVar(value="")  # Выбранное название
         
         # Переменные для Excel
@@ -325,8 +326,29 @@ class OrderDataProcessor:
             if filename.endswith('.xml') and order_number in filename:
                 file_path = os.path.join(folder, filename)
                 try:
-                    tree = ET.parse(file_path)
-                    root = tree.getroot()
+                    with open(file_path, 'rb') as f:
+                        raw_data = f.read()
+                    
+                    # Определяем кодировку
+                    if raw_data.startswith(b'\xff\xfe'):  # UTF-16 LE BOM
+                        content = raw_data.decode('utf-16')
+                    elif raw_data.startswith(b'\xfe\xff'):  # UTF-16 BE BOM  
+                        content = raw_data.decode('utf-16')
+                    else:
+                        # Пробуем UTF-8, если не получается - пытаемся определить
+                        try:
+                            content = raw_data.decode('utf-8')
+                        except UnicodeDecodeError:
+                            # Пытаемся определить кодировку
+                            try:
+                                import chardet
+                                encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
+                                content = raw_data.decode(encoding)
+                            except:
+                                content = raw_data.decode('utf-8', errors='ignore')
+                    
+                    # Парсим XML из строки
+                    root = ET.fromstring(content)
                     
                     # данные в атрибутах
                     if self._is_attributes_format(root):
@@ -509,8 +531,21 @@ class OrderDataProcessor:
         if not self.parsed_data:
             self.parse_status.config(text="Данные не найдены", foreground="red")
             return
+            
         # Ищем конкретный вид или тираж
-        search_digits = self.detail_num_search.get().strip()
+        search_digits = self.detail_num_search.get().strip()            
+            
+        if self.parsed_data:
+            if search_digits:  # Если ищем по тиражу (sheet_number)
+                # Фильтруем только виды этого тиража
+                filtered_data = [
+                    item for item in self.parsed_data 
+                    if search_digits in item.get('sheet_number', '')
+                ]
+                self.parsed_names_list = [item['name'] for item in filtered_data]
+            else:
+                # Иначе берем все виды заказа
+                self.parsed_names_list = [item['name'] for item in self.parsed_data]
         
         if search_digits:
             found_products = []

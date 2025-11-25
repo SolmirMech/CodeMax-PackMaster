@@ -163,7 +163,8 @@ class WeightOrdersApp:
         
         # Связь между preview и export для статуса Excel
         self.preview_module.export_module = self.export_module
-        self.order_data_module.export_module = self.export_module     
+        self.order_data_module.export_module = self.export_module
+        self.export_module.set_order_data_module(self.order_data_module)
 
     def center_window(self):
         self.root.update_idletasks()

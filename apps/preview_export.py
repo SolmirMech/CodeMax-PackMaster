@@ -59,6 +59,11 @@ class PreviewExport:
         
         self.connected_roll_module = None
         
+        # Переменные для печати тиража
+        self.batch_print_data = []  # Список всех видов для печати
+        self.current_batch_index = 0  # Текущий индекс печати
+        self.is_batch_printing = False  # Флаг массовой печати
+        
         self.create_export_ui()
         self.load_box_sizes()
         self.parent.after(100, self.on_box_selected)
@@ -166,6 +171,13 @@ class PreviewExport:
             text="✓ Ярлык на втулку", 
             command=self.open_weight_orders_window
         ).grid(row=2, column=0, sticky="we", pady=5)
+        
+        # Печать тиража
+        ttk.Button(
+            settings_frame, 
+            text="📋 Печать тиража", 
+            command=self.start_batch_print
+        ).grid(row=3, column=0, sticky="we", pady=5, padx=(5, 0))
 
         # Настройка колонок для растягивания
         settings_frame.columnconfigure(0, weight=1)
@@ -188,6 +200,82 @@ class PreviewExport:
         self.excel_status_label.grid(row=4, column=0, sticky="w", pady=5)
         
         self.parent.bind("<Visibility>", lambda e: self.update_comboboxes())
+        
+    def set_order_data_module(self, order_data_module):
+        self.order_data_module = order_data_module
+        
+    def start_batch_print(self):
+        """Запускает печать всего тиража из уже распарсенных данных"""
+        try:
+            # Берем список из order_data_processor через существующие связи
+            if (hasattr(self, 'order_data_module') and self.order_data_module):
+                names_list = getattr(self.order_data_module, 'parsed_names_list', [])
+                
+                if not names_list:
+                    self.excel_status_label.config(text="Нет данных для печати", foreground="red")
+                    return
+                    
+                # Сохраняем оригинальное название для восстановления
+                self.original_product_name = self.preview_module.connected_roll_module.product_text.get("1.0", "end-1c")
+                
+                # Начинаем печать
+                self.batch_print_data = names_list
+                self.current_batch_index = 0
+                self.is_batch_printing = True
+                self.excel_status_label.config(text=f"Печать тиража ({len(names_list)} видов)...", foreground="blue")
+                
+                self.print_next_in_batch()
+            else:
+                self.excel_status_label.config(text="Модуль данных не подключен", foreground="red")
+                
+        except Exception as e:
+            self.excel_status_label.config(text=f"Ошибка: {str(e)}", foreground="red")
+
+    def print_next_in_batch(self):
+        """Печатает следующий вид в тираже используя существующий метод print_label"""
+        if not self.is_batch_printing or self.current_batch_index >= len(self.batch_print_data):
+            # Завершение печати - восстанавливаем оригинальное название
+            if hasattr(self, 'original_product_name'):
+                self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
+                self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)
+            
+            self.is_batch_printing = False
+            self.excel_status_label.config(text=f"Печать завершена ({self.current_batch_index} шт)", foreground="green")
+            return
+            
+        try:
+            current_product_name = self.batch_print_data[self.current_batch_index]
+            
+            # Временно подменяем название продукции
+            self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
+            self.preview_module.connected_roll_module.product_text.insert("1.0", current_product_name)
+            
+            # 🔥 ЖДЕМ обновления данных перед печатью
+            self.parent.after(100, lambda: self.print_current_item(current_product_name))
+            
+        except Exception as e:
+            self.excel_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
+            self.current_batch_index += 1
+            self.parent.after(100, self.print_next_in_batch)
+
+    def print_current_item(self, product_name):
+        """Печатает текущий элемент после обновления данных"""
+        try:
+            # Теперь данные точно обновлены - печатаем
+            self.print_label()
+            
+            # Статус
+            product_name_short = product_name[:30] + "..." if len(product_name) > 30 else product_name
+            self.excel_status_label.config(text=f"Печатается {self.current_batch_index + 1}/{len(self.batch_print_data)}: {product_name_short}", foreground="blue")
+            
+            # Следующий вид
+            self.current_batch_index += 1
+            self.parent.after(100, self.print_next_in_batch)
+            
+        except Exception as e:
+            self.excel_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
+            self.current_batch_index += 1
+            self.parent.after(100, self.print_next_in_batch)
         
     def open_weight_orders_window(self):
         """Открывает окно для работы с втулками"""
