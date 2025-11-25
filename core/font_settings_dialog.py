@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from .config_manager import ConfigManager
+from core.settings_coordinator import SettingsCoordinator
 
 class FontSettingsDialog:
     """Окно настроек размеров шрифтов"""
@@ -83,6 +84,7 @@ class FontSettingsDialog:
         self.parent = parent
         self.config_manager = config_manager
         self.preview_printer = preview_printer
+        self.coordinator = SettingsCoordinator()
         
         self.window = tk.Toplevel(parent)
         self.window.title("Настройки шрифтов")
@@ -96,13 +98,22 @@ class FontSettingsDialog:
         self.window.bind('<Escape>', lambda e: self.window.destroy())
         self.window.focus_set()
         
-        app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-        self.current_template = app_settings.get("last_font_template", "1_цех")
+        self.current_template = self.coordinator.get_font_template()
         
         # Загружаем текущие настройки
         self.font_settings = self.load_font_settings()
         
         self.create_ui()
+        
+        self.coordinator.subscribe(self._on_coordinator_changed)
+        
+    def _on_coordinator_changed(self):
+        """Обрабатывает изменения от координатора"""
+        new_template = self.coordinator.get_font_template()
+        if new_template != self.current_template:
+            self.current_template = new_template
+            self.template_var.set(new_template)
+            self.apply_template(silent=True)        
         
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущего шаблона"""
@@ -204,7 +215,7 @@ class FontSettingsDialog:
             self.current_template = "1_цех"
             self.template_var.set("1_цех")
             
-    def apply_template(self):
+    def apply_template(self, silent=False):
         """Применить выбранный шаблон"""
         template_name = self.template_var.get()
         if template_name == self.current_template:
@@ -223,6 +234,11 @@ class FontSettingsDialog:
             self.font_settings = self.merge_settings(self.get_default_font_settings(), template_data)
             
             self.update_ui_from_settings()
+            
+            # Уведомляем координатор только если не silent режим
+            if not silent:
+                self.coordinator.set_font_template(template_name)
+                
             self.show_status(f"Шаблон '{template_name}' применен", "info")
         else:
             self.show_status(f"Шаблон '{template_name}' не найден", "error")
@@ -262,6 +278,9 @@ class FontSettingsDialog:
         if success:
             self.current_template = template_name
             self.update_template_list()
+            
+            self.coordinator.set_font_template(template_name)
+            
             self.show_status(f"Шаблон '{template_name}' сохранен", "info")
         else:
             self.show_status("Не удалось сохранить шаблон", "error")
@@ -292,10 +311,10 @@ class FontSettingsDialog:
             success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
             
             if success:
-                self.current_template = "default"
-                self.update_template_list()
-                # Загружаем настройки default
-                self.apply_template()
+                workshop = self.coordinator.get_workshop()
+                default_template = "1_цех" if workshop == "1" else "2_цех"
+                self.coordinator.set_font_template(default_template)               
+                
                 self.show_status(f"Шаблон '{template_name}' удален", "info")
             else:
                 self.show_status("Не удалось удалить шаблон", "error")
@@ -526,9 +545,7 @@ class FontSettingsDialog:
             self._save_font_settings()
             
             # Сохраняем выбранный шаблон в настройки приложения
-            app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-            app_settings["last_font_template"] = self.current_template
-            self.config_manager.save_json_settings("shared_utils.json", app_settings)
+            self.coordinator.set_font_template(self.current_template)
             
             # Обновляем превью и закрываем окно
             self.preview_printer.update_font_settings(self.font_settings)

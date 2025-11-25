@@ -4,12 +4,13 @@ import win32print
 import win32ui
 import os
 import shutil
-from core.config_manager import ConfigManager  # Добавляем импорт
+from core.config_manager import ConfigManager
+from core.settings_coordinator import SettingsCoordinator
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
     create_printer_dc,
-)  # Добавляем импорт
+)
 
 
 class SettingsDialog:
@@ -19,6 +20,7 @@ class SettingsDialog:
         self.parent = parent
         self.preview_export_module = preview_export_module
         self.config_manager = ConfigManager()
+        self.coordinator = SettingsCoordinator()
         self.window = None
         self.xml_folder_path = tk.StringVar(value="")
         # Переменные для Excel
@@ -165,7 +167,6 @@ class SettingsDialog:
         workshop_frame = ttk.Frame(print_frame)
         workshop_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=5)
 
-        ttk.Label(workshop_frame, text="Цех:").pack(side=tk.LEFT)
         ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT, padx=(10,5))
         ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT, padx=(5,10))
 
@@ -173,7 +174,10 @@ class SettingsDialog:
         self.workshop_var.trace_add("write", self._on_workshop_changed)
 
         # Загружаем текущую настройку цеха
-        self._load_workshop_setting()
+        workshop = self.coordinator.get_workshop()
+        self.workshop_var.set(workshop)
+        self._update_paper_sizes()
+        self.coordinator.subscribe(self._on_settings_changed)
 
         # 2. РАЗДЕЛ: Производитель
         manufacturer_frame = ttk.LabelFrame(left_frame, text="Производитель", padding=5)
@@ -231,15 +235,13 @@ class SettingsDialog:
         # Привязка Enter к сохранению
         self.window.bind("<Return>", lambda e: self.save_all_settings())
         
-    def _load_workshop_setting(self):
-        """Загружает настройку цеха из shared_utils.json"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            workshop = settings.get("workshop", "1")
+    def _on_settings_changed(self):
+        """Обрабатывает изменения настроек от координатора"""
+        # Обновляем UI при внешних изменениях
+        workshop = self.coordinator.get_workshop()
+        if self.workshop_var.get() != workshop:
             self.workshop_var.set(workshop)
-            self._update_paper_sizes()  # Обновляем размеры при загрузке
-        except Exception as e:
-            print(f"Ошибка загрузки настройки цеха: {e}")
+            self._update_paper_sizes()
 
     def _on_workshop_changed(self, *args):
         """Обрабатывает изменение выбора цеха"""
@@ -440,11 +442,9 @@ class SettingsDialog:
             shared_settings["packers"] = new_packers
             
             workshop = self.workshop_var.get()
-            shared_settings["workshop"] = workshop
-            self.apply_font_template_by_workshop(workshop)
-            # Обновляем превью модуль
-            if hasattr(self.preview_export_module, 'preview_printer'):
-                self.preview_export_module.preview_printer.reload_for_workshop_change()
+            self.coordinator.set_workshop(workshop)
+            
+            self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
 
             # Сохраняем упаковщиков через config_manager
             self.preview_export_module.config_manager.save_packers(new_packers)
@@ -479,52 +479,7 @@ class SettingsDialog:
                 self.preview_export_module.excel_status_label.config(
                     text=f"❌ Ошибка сохранения настроек: {str(e)}",
                     foreground="red"
-                )
-                
-    def apply_font_template_by_workshop(self, workshop):
-        """Применяет шаблон шрифтов в зависимости от цеха"""
-        try:
-            template_name = "1_цех" if workshop == "1" else "2_цех"
-            
-            # Получаем preview_module через preview_export_module
-            preview_module = self.preview_export_module.preview_module
-            
-            # Загружаем текущие настройки шрифтов
-            all_font_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-            
-            # Если шаблон для 2 цеха не существует, создаем его
-            if template_name == "2_цех" and "2_цех" not in all_font_settings:
-                # Используем текущие настройки preview_module как основу
-                if hasattr(preview_module, 'font_settings') and preview_module.font_settings:
-                    all_font_settings["2_цех"] = preview_module.font_settings.copy()
-                else:
-                    # Используем настройки по умолчанию
-                    from core.font_settings_dialog import FontSettingsDialog
-                    all_font_settings["2_цех"] = FontSettingsDialog.get_default_font_settings()
-                
-                # Сохраняем новый шаблон
-                self.config_manager.save_json_settings("label_font_settings.json", all_font_settings)
-            
-            # Сохраняем выбранный шаблон в настройках приложения
-            app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-            app_settings["last_font_template"] = template_name
-            self.config_manager.save_json_settings("shared_utils.json", app_settings)
-            
-            # Применяем шаблон через существующие методы preview_module
-            if hasattr(preview_module, 'current_template'):
-                preview_module.current_template = template_name
-            if hasattr(preview_module, 'load_font_settings'):
-                preview_module.load_font_settings()
-            
-            # ТЕПЕРЬ перезагружаем PDF шаблоны ПОСЛЕ применения настроек шрифтов
-            if hasattr(preview_module, 'reload_for_workshop_change'):
-                preview_module.reload_for_workshop_change()
-            elif hasattr(preview_module, 'update_preview_displays'):
-                # Fallback если метода reload_for_workshop_change нет
-                preview_module.update_preview_displays()
-                
-        except Exception as e:
-            print(f"Ошибка применения шаблона шрифтов: {e}")
+                )               
 
 class CustomersEditorDialog:
     """Диалог редактирования списка клиентов без производителя"""

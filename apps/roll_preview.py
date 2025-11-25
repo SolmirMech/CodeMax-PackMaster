@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 from core.pdf_utils import PDFTemplateFiller
 from core.config_manager import ConfigManager
 from core.font_settings_dialog import FontSettingsDialog
+from core.settings_coordinator import SettingsCoordinator
 import os
 import json
 from datetime import datetime
@@ -16,6 +17,7 @@ class RollPreview:
     def __init__(self, parent):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.coordinator = SettingsCoordinator()
         self._update_template_paths()
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
         
@@ -29,8 +31,14 @@ class RollPreview:
         
         self.create_preview_ui()
         self.load_font_settings()
-        self._sync_font_template_with_workshop()
-        self.check_templates()     
+        self.coordinator.subscribe(self._on_settings_changed)
+        self.check_templates()
+        
+    def _on_settings_changed(self):
+        """Обрабатывает изменения от координатора"""
+        # Перезагружаем настройки шрифтов и шаблоны
+        self.load_font_settings()
+        self.reload_for_workshop_change()        
         
     def create_preview_ui(self):
         """Создает интерфейс предпросмотра"""
@@ -85,7 +93,7 @@ class RollPreview:
         
     def _update_template_paths(self):
         """Обновляет пути к шаблонам в зависимости от настройки цеха"""
-        workshop = self._get_workshop_setting()
+        workshop = self.coordinator.get_workshop()
         
         if workshop == "2":
             self.roll_template_path = self.config_manager.get_asset_path("roll_2_cex.pdf")
@@ -95,36 +103,10 @@ class RollPreview:
         # Коробка остается без изменений
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
 
-    def _get_workshop_setting(self):
-        """Получает настройку цеха из shared_utils.json"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            return settings.get("workshop", "1")
-        except Exception:
-            return "1"  # По умолчанию 1 цех
-
     def reload_templates(self):
         """Перезагружает шаблоны при изменении цеха"""
         self._update_template_paths()
-        self.check_templates()  # Перезагружаем и проверяем шаблоны
-        
-    def _sync_font_template_with_workshop(self):
-        """Синхронизирует шаблон шрифтов с выбранным цехом"""
-        try:
-            # Получаем настройку цеха
-            workshop_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-            workshop = workshop_settings.get("workshop", "1")
-            
-            # Определяем соответствующий шаблон шрифтов
-            template_name = "1_цех" if workshop == "1" else "2_цех"
-            
-            # Если текущий шаблон не совпадает с цехом - применяем правильный
-            if hasattr(self, 'current_template') and self.current_template != template_name:
-                self.current_template = template_name
-                self.load_font_settings()  # Перезагружаем настройки для правильного шаблона
-                
-        except Exception as e:
-            print(f"Ошибка синхронизации шаблона шрифтов с цехом: {e}")
+        self.check_templates()  # Перезагружаем и проверяем шаблоны      
         
     def print_selected_preview(self):
         """Печатает выбранное превью через export_module"""
@@ -134,19 +116,24 @@ class RollPreview:
             self.status_label.config(text="Модуль печати не подключен", foreground="red")
         
     def load_font_settings(self):
-        """Загружает настройки шрифтов"""
-        # Пытаемся загрузить из файла
-        loaded_settings = self.config_manager.load_json_settings("label_font_settings.json")
+        """Загружает настройки шрифтов через координатор"""
+        # Получаем активный шаблон из координатора
+        active_template = self.coordinator.get_font_template()
         
-        # Загружаем активный шаблон из shared_utils.json
-        app_settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-        active_template = app_settings.get("last_font_template", "1_цех")
+        # Загружаем настройки для этого шаблона
+        loaded_settings = self.config_manager.load_json_settings("label_font_settings.json")
         
         if loaded_settings and active_template in loaded_settings:
             self.font_settings = loaded_settings[active_template]
         else:
-            # Используем настройки по умолчанию из FontSettingsDialog
+            # Используем настройки по умолчанию
             self.font_settings = FontSettingsDialog.get_default_font_settings()
+            
+        # Применяем настройки к pdf filler'ам
+        if self.roll_pdf_filler and self.font_settings:
+            self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
+        if self.box_pdf_filler and self.font_settings:
+            self.box_pdf_filler.set_font_settings(self.font_settings["box"])
         
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
@@ -308,6 +295,10 @@ class RollPreview:
         self._update_template_paths()  # Обновляем пути к PDF шаблонам
         self.load_font_settings()      # Перезагружаем настройки шрифтов
         self.check_templates()         # Перезагружаем PDF filler
+        
+        # Обновляем превью если есть данные
+        if self.current_data:
+            self.update_preview_displays()        
         
     def load_and_show_previews(self):
         """Сразу загружает и показывает превью"""
