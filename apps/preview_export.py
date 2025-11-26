@@ -209,9 +209,9 @@ class PreviewExport:
         try:
             # Берем список из order_data_processor через существующие связи
             if (hasattr(self, 'order_data_module') and self.order_data_module):
-                names_list = getattr(self.order_data_module, 'parsed_names_list', [])
+                filtered_data = getattr(self.order_data_module, 'filtered_parsed_data', [])
                 
-                if not names_list:
+                if not filtered_data:
                     self.excel_status_label.config(text="Нет данных для печати", foreground="red")
                     return
                     
@@ -219,10 +219,10 @@ class PreviewExport:
                 self.original_product_name = self.preview_module.connected_roll_module.product_text.get("1.0", "end-1c")
                 
                 # Начинаем печать
-                self.batch_print_data = names_list
+                self.batch_print_data = filtered_data
                 self.current_batch_index = 0
                 self.is_batch_printing = True
-                self.excel_status_label.config(text=f"Печать тиража ({len(names_list)} видов)...", foreground="blue")
+                self.excel_status_label.config(text=f"Печать тиража ({len(filtered_data)} видов)...", foreground="blue")
                 
                 self.print_next_in_batch()
             else:
@@ -232,41 +232,51 @@ class PreviewExport:
             self.excel_status_label.config(text=f"Ошибка: {str(e)}", foreground="red")
 
     def print_next_in_batch(self):
-        """Печатает следующий вид в тираже используя существующий метод print_label"""
+        """Печатает следующий вид в тираже с учетом количества stream"""
         if not self.is_batch_printing or self.current_batch_index >= len(self.batch_print_data):
-            # Завершение печати - восстанавливаем оригинальное название
+            # Завершение печати
             if hasattr(self, 'original_product_name'):
                 self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
                 self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)
             
+            self.copies_var.set("1")
             self.is_batch_printing = False
             self.excel_status_label.config(text=f"Печать завершена ({self.current_batch_index} шт)", foreground="green")
             return
             
         try:
-            current_product_name = self.batch_print_data[self.current_batch_index]
+            current_product_data = self.batch_print_data[self.current_batch_index]
+            current_product_name = current_product_data['name']
+            stream_count = int(current_product_data.get('stream', 1))  # ← Берем stream из данных
             
             # Временно подменяем название продукции
             self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
             self.preview_module.connected_roll_module.product_text.insert("1.0", current_product_name)
             
-            # 🔥 ЖДЕМ обновления данных перед печатью
-            self.parent.after(100, lambda: self.print_current_item(current_product_name))
+            # Устанавливаем количество копий для этого вида = stream
+            self.copies_var.set(str(stream_count))  # ← ВОТ ТУТ используем stream как кол-во копий
+            
+            # Ждем обновления данных перед печатью
+            self.parent.after(100, lambda: self.print_current_item(current_product_data, stream_count))
             
         except Exception as e:
+            self.copies_var.set("1")
             self.excel_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
 
-    def print_current_item(self, product_name):
+    def print_current_item(self, product_data, stream_count):
         """Печатает текущий элемент после обновления данных"""
         try:
-            # Теперь данные точно обновлены - печатаем
-            self.print_label()
+            # Теперь данные обновлены - печатаем (уже с установленным stream_count в copies_var)
+            self.print_label()  # ← этот метод использует self.copies_var.get()
             
-            # Статус
-            product_name_short = product_name[:30] + "..." if len(product_name) > 30 else product_name
-            self.excel_status_label.config(text=f"Печатается {self.current_batch_index + 1}/{len(self.batch_print_data)}: {product_name_short}", foreground="blue")
+            # Статус с информацией о stream
+            product_name_short = product_data['name'][:30] + "..." if len(product_data['name']) > 30 else product_data['name']
+            self.excel_status_label.config(
+                text=f"Печатается {self.current_batch_index + 1}/{len(self.batch_print_data)}: {product_name_short} (stream: {stream_count})", 
+                foreground="blue"
+            )
             
             # Следующий вид
             self.current_batch_index += 1

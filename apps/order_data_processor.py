@@ -401,6 +401,7 @@ class OrderDataProcessor:
                         detail_name_elem = obj_elem.find('detail_name')
                         detail_num_elem = obj_elem.find('detail_num')
                         gtin_elem = obj_elem.find('GTIN')
+                        stream_elem = obj_elem.find('stream')
                         
                         # Извлекаем detail_num
                         detail_num = ""
@@ -430,7 +431,8 @@ class OrderDataProcessor:
                                 'date_emission': date_emission,
                                 'manufacturer': "",
                                 'gtin': gtin if gtin_elem is not None and gtin_elem.text else '',
-                                'tirazh': ''
+                                'tirazh': '',
+                                'stream': stream_elem.text.strip() if stream_elem is not None and stream_elem.text else '1'
                             }
                             
                             # Добавляем дополнительные данные из object
@@ -567,6 +569,10 @@ class OrderDataProcessor:
                         found_by = f"тираж I-{sheet_number}"
             
             if found_products:
+                
+                self.filtered_parsed_data = found_products
+                self.parsed_names_list = [item['name'] for item in found_products]
+                
                 if len(found_products) == 1:
                     # Если найден один продукт - сразу отправляем
                     selected_data = found_products[0]
@@ -584,6 +590,7 @@ class OrderDataProcessor:
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
                 self.parse_status.config(text=f"Выберите название из списка. Всего: {len(names_list)} видов", foreground="orange")
+                self.filtered_parsed_data = self.parsed_data
         
         else:
             # Если поиск по коду не выполняется - старая логика
