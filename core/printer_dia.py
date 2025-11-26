@@ -172,7 +172,7 @@ class SettingsDialog:
         self.coordinator.subscribe(self._on_settings_changed)
 
         # 2. РАЗДЕЛ: Производитель
-        manufacturer_frame = ttk.LabelFrame(left_frame, text="Производитель", padding=5)
+        manufacturer_frame = ttk.LabelFrame(left_frame, text="Изготовитель", padding=5)
         manufacturer_frame.pack(fill=tk.X, pady=(0, 5))
         self.manufacturer_var = tk.StringVar(value=self.preview_export_module.manufacturer)
         manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
@@ -191,7 +191,7 @@ class SettingsDialog:
         # Кнопка для открытия окна редактирования клиентов
         open_customers_btn = ttk.Button(
             manufacturer_frame,
-            text="📝 Без Производителя",
+            text="📝 Без изготовителя",
             command=self.open_customers_editor
         )
         open_customers_btn.grid(row=0, column=2, padx=5, pady=5, sticky="w")

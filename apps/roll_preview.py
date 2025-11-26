@@ -176,6 +176,8 @@ class RollPreview:
             self.connected_roll_module.date_emission_var,
             self.connected_roll_module.cutter_var,
             self.connected_roll_module.roll_length,
+            self.connected_roll_module.manufacturer_var,
+            self.connected_roll_module.product_type_var,
         ]
         
         # Устанавливаем отслеживание для каждой переменной
@@ -338,61 +340,83 @@ class RollPreview:
             fill="gray",
             justify=tk.CENTER
         )
-    
+        
     def _get_manufacturer_data(self, order_number: str) -> dict:
-        """Получает данные изготовителя из packaging_tu.json"""
+        """Получает данные изготовителя из выпадающих списков или автоматически"""
         try:
-            # Пытаемся загрузить данные из data_dir
-            config_manager = self.config_manager
-            packaging_data = config_manager.load_json_settings("packaging_tu.json")
+            # Если выбран "Без изготовителя" - скрываем name и address, но оставляем ТУ
+            if (self.connected_roll_module and 
+                self.connected_roll_module.show_manufacturer_var.get()):
+                
+                # Получаем данные как обычно, но обнуляем name и address
+                regular_data = self._get_regular_manufacturer_data(order_number)
+                return {
+                    'name': '',
+                    'address': '',
+                    'tu_number': regular_data['tu_number']  # ТУ сохраняем!
+                }
             
-            # Если файл не найден в data_dir, копируем из assets
-            if not packaging_data:
-                self._copy_packaging_tu_from_assets()
-                # Пытаемся загрузить снова после копирования
-                packaging_data = config_manager.load_json_settings("packaging_tu.json")
+            # Иначе обычная логика
+            return self._get_regular_manufacturer_data(order_number)
+                        
+        except Exception as e:
+            print(f"Ошибка загрузки данных изготовителя: {e}")
+            return {
+                'name': 'ООО "Ремас-Флексо"',
+                'address': '426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1',
+                'tu_number': 'ТУ 9570-001-26604209-2014'
+            }
+    
+    def _get_regular_manufacturer_data(self, order_number: str) -> dict:
+        """Получает данные изготовителя из выпадающих списков или автоматически"""
+        try:
+            # Если есть подключенный модуль ролика И ВЫБРАНЫ ЗНАЧЕНИЯ (не пустые)
+            if (self.connected_roll_module and 
+                self.connected_roll_module.manufacturer_var.get() and 
+                self.connected_roll_module.product_type_var.get()):
+                
+                manufacturer = self.connected_roll_module.manufacturer_var.get()
+                product_type = self.connected_roll_module.product_type_var.get()
+                
+                # Ищем точное соответствие в packaging_tu.json
+                packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+                technical_specs = packaging_data.get("technical_specifications", [])
+                
+                for spec in technical_specs:
+                    if (spec["manufacturer"]["name"] == manufacturer and 
+                        spec["product"]["name"] == product_type):
+                        return {
+                            'name': spec["manufacturer"]["name"],
+                            'address': spec["manufacturer"].get("address", ""),
+                            'tu_number': spec["product"]["tu_number"]
+                        }
             
+            # Старая логика для автоматического выбора (ie заказы)
+            # Эта логика работает ТОЛЬКО если ручной выбор не сделан
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             technical_specs = packaging_data.get("technical_specifications", [])
             
-            # Логика выбора: IE заказы -> ID 2, остальные -> ID 3
             if order_number.startswith('IE'):
-                # Ищем запись ID 2 для IE заказов
                 for spec in technical_specs:
-                    if spec.get("id") == 2:
-                        manufacturer = spec.get("manufacturer", {})
-                        product = spec.get("product", {})
+                    if spec.get("id") == 2:  # Зюдин для IE
                         return {
-                            'name': manufacturer.get('name', ''),
-                            'address': manufacturer.get('address', ''),
-                            'tu_number': product.get('tu_number', '')
+                            'name': spec["manufacturer"]["name"],
+                            'address': spec["manufacturer"]["address"],
+                            'tu_number': spec["product"]["tu_number"]
                         }
             else:
-                # Ищем запись ID 3 для остальных заказов
                 for spec in technical_specs:
-                    if spec.get("id") == 3:
-                        manufacturer = spec.get("manufacturer", {})
-                        product = spec.get("product", {})
+                    if spec.get("id") == 3:  # Ремас-Флексо по умолчанию
                         return {
-                            'name': manufacturer.get('name', ''),
-                            'address': manufacturer.get('address', ''),
-                            'tu_number': product.get('tu_number', '')
+                            'name': spec["manufacturer"]["name"],
+                            'address': spec["manufacturer"]["address"], 
+                            'tu_number': spec["product"]["tu_number"]
                         }
-            
-            # Fallback - первая запись
-            if technical_specs:
-                first_spec = technical_specs[0]
-                manufacturer = first_spec.get("manufacturer", {})
-                product = first_spec.get("product", {})
-                return {
-                    'name': manufacturer.get('name', ''),
-                    'address': manufacturer.get('address', ''),
-                    'tu_number': product.get('tu_number', '')
-                }
-                
+                        
         except Exception as e:
             print(f"Ошибка загрузки данных изготовителя: {e}")
         
-        # Fallback значения
+        # Fallback
         return {
             'name': 'ООО "Ремас-Флексо"',
             'address': '426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1',
@@ -538,14 +562,7 @@ class RollPreview:
                 canvas.create_image(canvas_width//2, canvas_height//2, image=photo)
                 
         except Exception as e:
-            print(f"Ошибка обновления canvas: {e}")
-            
-    def __del__(self):
-        """Деструктор - закрывает PDF"""
-        if hasattr(self, 'roll_pdf_filler') and self.roll_pdf_filler:
-            self.roll_pdf_filler.close()
-        if hasattr(self, 'box_pdf_filler') and self.box_pdf_filler:
-            self.box_pdf_filler.close()
+            print(f"Ошибка обновления canvas: {e}")         
             
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика для отслеживания данных"""

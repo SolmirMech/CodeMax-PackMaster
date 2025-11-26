@@ -271,12 +271,7 @@ class PreviewExport:
             # Теперь данные обновлены - печатаем (уже с установленным stream_count в copies_var)
             self.print_label()  # ← этот метод использует self.copies_var.get()
             
-            # Статус с информацией о stream
-            product_name_short = product_data['name'][:30] + "..." if len(product_data['name']) > 30 else product_data['name']
-            self.excel_status_label.config(
-                text=f"Печатается {self.current_batch_index + 1}/{len(self.batch_print_data)}: {product_name_short} (stream: {stream_count})", 
-                foreground="blue"
-            )
+            product_name_full = product_data['name']
             
             # Следующий вид
             self.current_batch_index += 1

@@ -19,6 +19,11 @@ class RollLabelPrinter:
         # Переменные интерфейса и данных
         self.show_manufacturer_var = BooleanVar(value=False)  # Показывать производителя
         self.show_manufacturer_var.trace_add("write", self._on_producer_visibility_changed)
+        # Выбор производителя
+        self.manufacturer_var = StringVar(value="")
+        self.product_type_var = StringVar(value="")
+        self.manual_manufacturer_selection = False
+        self.manual_product_selection = False
         self.customer_var = StringVar(value="")  # Наименование заказчика
         self.gross_weight_kg_var = StringVar(value="")  # Вес ролика брутто в кг
         self.net_weight_kg_var = StringVar(value="")  # Вес ролика нетто в кг (авторасчет)
@@ -98,12 +103,50 @@ class RollLabelPrinter:
         """Создает интерфейс для печати этикеток на ролик"""
         frame = ttk.Frame(self.parent, padding=5)
         frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Добавляем стиль для автоматического выбора
+        style = ttk.Style()
+        style.configure("AutoSelect.TCombobox", fieldbackground="#fffacd")  # Светло-желтый фон
 
         # Основной контейнер для данных
         data_frame = ttk.LabelFrame(
             frame, text="Данные для этикетки", padding=5
         )
         data_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        
+        # Изготовитель и тип продукта
+        manufacturer_frame = ttk.Frame(data_frame)
+        manufacturer_frame.grid(row=0, column=0, columnspan=2, sticky="w", pady=2)
+
+        ttk.Label(manufacturer_frame, text="Изготовитель:").grid(row=0, column=0, sticky="w", padx=(0, 5), pady=2)
+        self.manufacturer_combo = ttk.Combobox(
+            manufacturer_frame, 
+            textvariable=self.manufacturer_var,
+            state="readonly",
+            width=20
+        )
+        self.manufacturer_combo.grid(row=0, column=0, sticky="w", padx=(150, 10), pady=2)
+        self.manufacturer_combo.bind('<<ComboboxSelected>>', self.on_manufacturer_selected)
+
+        ttk.Label(manufacturer_frame, text="ТУ:").grid(row=0, column=2, sticky="w", padx=(0, 5), pady=2)
+        self.product_combo = ttk.Combobox(
+            manufacturer_frame, 
+            textvariable=self.product_type_var,
+            state="readonly", 
+            width=25
+        )
+        self.product_combo.grid(row=0, column=2, padx=(40, 5), sticky="w", pady=2)
+        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
+        
+        # "Без изготовителя"
+        ttk.Checkbutton(
+            manufacturer_frame, 
+            text="Без изготовителя", 
+            variable=self.show_manufacturer_var
+        ).grid(row=1, column=0, sticky="w", padx=5, pady=5)
+
+        # Загружаем опции
+        self.load_manufacturer_options()
 
         # Заказчик
         ttk.Label(data_frame, text="Заказчик:").grid(
@@ -188,7 +231,7 @@ class RollLabelPrinter:
         date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
         date_entry.grid(row=8, column=1, padx=(135, 0), pady=5, sticky="w")
         
-        ttk.Label(data_frame, text="Резчик/ Без Изготовителя:").grid(
+        ttk.Label(data_frame, text="Резчик:").grid(
             row=9, column=0, sticky="w", pady=5
         )
         
@@ -203,12 +246,7 @@ class RollLabelPrinter:
             state="readonly", 
             width=15
         )
-        self.cutter_combo.grid(row=9, column=1, padx=5, pady=5, sticky="w")
-        
-        ttk.Checkbutton(data_frame, 
-                       text="Без Изготовителя", 
-                       variable=self.show_manufacturer_var
-        ).grid(row=9, column=1, padx=(135, 0), sticky="w", pady=5)        
+        self.cutter_combo.grid(row=9, column=1, padx=5, pady=5, sticky="w")             
         
         # Схема намотки и Диаметр втулки
         ttk.Label(data_frame, text="Схема намотки:").grid(
@@ -230,7 +268,100 @@ class RollLabelPrinter:
         roll_length_entry.grid(row=11, column=0, padx=(165, 0), pady=5, sticky="w")
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
-        self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)        
+        self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
+        self.order_prefix.trace_add("write", self.on_order_number_changed)
+        
+    def load_manufacturer_options(self):
+        """Загружает варианты производителей из packaging_tu.json"""
+        try:
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            # Собираем уникальных производителей
+            manufacturers = set()
+            manufacturer_products = {}
+            
+            for spec in technical_specs:
+                manufacturer = spec["manufacturer"]["name"]
+                product = spec["product"]["name"]
+                manufacturers.add(manufacturer)
+                
+                if manufacturer not in manufacturer_products:
+                    manufacturer_products[manufacturer] = []
+                manufacturer_products[manufacturer].append(product)
+            
+            self.manufacturer_options = sorted(manufacturers)
+            self.manufacturer_products_map = manufacturer_products
+            
+            # Устанавливаем комбобоксы
+            self.manufacturer_combo['values'] = self.manufacturer_options
+            if self.manufacturer_options:
+                self.manufacturer_var.set("ООО \"Ремас-Флексо\"")  # По умолчанию
+                self.update_product_options()
+                
+        except Exception as e:
+            print(f"Ошибка загрузки производителей: {e}")
+
+    def update_product_options(self):
+        """Обновляет список продуктов для выбранного производителя"""
+        manufacturer = self.manufacturer_var.get()
+        if manufacturer in self.manufacturer_products_map:
+            products = self.manufacturer_products_map[manufacturer]
+            self.product_combo['values'] = products
+            if products:
+                self.product_type_var.set("Обычная с\к этикетка")  # По умолчанию
+        else:
+            self.product_combo['values'] = []
+            self.product_type_var.set("")
+
+    def on_product_selected(self, event=None):
+        """Обрабатывает выбор типа продукта"""
+        self.manual_product_selection = True
+
+    def on_order_number_changed(self, *args):
+        """Автоматически выбирает производителя для IE заказов"""
+        if self.manual_manufacturer_selection:
+            return  # Не переопределяем ручной выбор
+            
+        order_prefix = self.order_prefix.get()
+        if order_prefix == 'IE':
+            # Автоматически выбираем Зюдина
+            self.manufacturer_var.set("ИП Зюдин В.Г.")
+            self.update_product_options()
+            self.product_type_var.set("Обычная с\к этикетка")
+            
+            # Визуальное выделение автоматического выбора
+            self.manufacturer_combo.configure(style="AutoSelect.TCombobox")
+            self.product_combo.configure(style="AutoSelect.TCombobox")
+        else:
+            # Возвращаем ремас-флексо при любом другом префиксе
+            self.manufacturer_var.set("ООО \"Ремас-Флексо\"")
+            self.update_product_options()
+            self.product_type_var.set("Обычная с\к этикетка")
+            
+            # Сбрасываем стиль для не-IE заказов
+            self.manufacturer_combo.configure(style="TCombobox")
+            self.product_combo.configure(style="TCombobox")
+
+    def on_manufacturer_selected(self, event=None):
+        """Обрабатывает выбор производителя"""
+        # Запоминаем, что для текущего заказа сделан ручной выбор
+        self.last_manual_order = self.order_number.get()
+        self.update_product_options()
+        
+        # Сбрасываем ручной выбор продукта при смене производителя
+        if self.product_combo['values']:
+            self.product_type_var.set("Обычная с\к этикетка")
+        
+        # Обновляем превью при смене производителя
+        if hasattr(self, 'preview_module') and self.preview_module:
+            self.preview_module.update_preview_displays()
+
+    def update_manufacturer_visibility(self):
+        """Обновляет видимость производителя на основе выбора"""
+        manufacturer = self.manufacturer_var.get()
+        # Показываем производителя если НЕ выбран "Без производителя"
+        self.show_manufacturer_var.set(manufacturer == "Без производителя")
         
     def check_manufacturer_visibility(self, customer_name):
         """Проверяет нужно ли показывать производителя для заказчика"""
