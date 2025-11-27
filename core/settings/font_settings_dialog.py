@@ -84,36 +84,40 @@ class FontSettingsDialog:
         self.parent = parent
         self.config_manager = config_manager
         self.preview_printer = preview_printer
-        self.coordinator = SettingsCoordinator()
+        self.coordinator = None
         
-        self.window = tk.Toplevel(parent)
-        self.window.title("Настройки шрифтов")
-        self.window.geometry("1100x730")
-        self.window.resizable(True, True)
-        # Центрирование окна
-        self.center_window()
-        
-        # Привязка клавиш
-        self.window.bind('<Return>', lambda e: self.save_settings())
-        self.window.bind('<Escape>', lambda e: self.window.destroy())
-        self.window.focus_set()
-        
-        self.current_template = self.coordinator.get_font_template()
-        
-        # Загружаем текущие настройки
+        # Инициализация переменных (как в оригинальном __init__)
+        self.window = None
+        self.current_template = "1_цех"
         self.font_settings = self.load_font_settings()
         
-        self.create_ui()
-        
-        self.coordinator.subscribe(self._on_coordinator_changed)
+        # UI переменные (добавляем инициализацию)
+        self.template_var = None
+        self.template_combo = None
+        self.roll_entries = {}
+        self.box_entries = {}
+        self.roll_wrap_entries = {}
+        self.box_wrap_entries = {}
+        self.status_var = None
+        self.status_label = None
+        self._initialized = False
         
     def _on_coordinator_changed(self):
         """Обрабатывает изменения от координатора"""
+        if not self._initialized:
+            return
+            
         new_template = self.coordinator.get_font_template()
+        
         if new_template != self.current_template:
+            if hasattr(self, 'template_combo'):
+                self.template_combo.unbind('<<ComboboxSelected>>')
+            
             self.current_template = new_template
             self.template_var.set(new_template)
-            self.apply_template(silent=True)        
+
+            if hasattr(self, 'template_combo'):
+                self.template_combo.bind('<<ComboboxSelected>>', self.on_template_changed)
         
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущего шаблона"""
@@ -144,9 +148,25 @@ class FontSettingsDialog:
             deep_merge(merged, current)
         return merged
         
-    def create_ui(self):
-        """Создает интерфейс настроек"""
+    def show_in_frame(self, parent):
+        """Показывает диалог внутри родительского фрейма"""
+        self.window = parent  # Используем переданный фрейм как основное окно
+        self.create_ui()  # Создаем UI внутри фрейма
         
+    def create_ui(self, parent_frame):
+        """Создает UI в указанном родительском фрейме"""
+        self.window = parent_frame  # Используем переданный фрейм как основное окно
+        
+        if self.coordinator:
+            self.current_template = self.coordinator.get_font_template()
+            self.coordinator.subscribe(self._on_coordinator_changed)
+        
+        # Основной код из __init__ (без создания Toplevel)
+        self.window.bind('<Return>', lambda e: self.save_settings())
+        self.window.bind('<Escape>', lambda e: self.close())
+        self.window.focus_set()
+        
+        # СОЗДАЕМ ВСЕ ВИДЖЕТЫ (переносим из create_ui)
         self.create_template_panel()
         
         # Основной контейнер с двумя колонками
@@ -165,6 +185,40 @@ class FontSettingsDialog:
         
         # Кнопки сохранения/отмены
         self.create_buttons()
+        self._initialized = True
+        
+    def show(self):
+        """Показывает диалог в отдельном окне (для обратной совместимости)"""
+        if self.window and isinstance(self.window, tk.Toplevel) and self.window.winfo_exists():
+            self.window.lift()
+            return
+
+        self.window = tk.Toplevel(self.parent)
+        self.window.title("Настройки шрифтов")
+        self.window.geometry("1100x730")
+        self.window.resizable(True, True)
+        
+        # Центрирование окна
+        self.center_window()
+        
+        # Привязка клавиш
+        self.window.bind('<Return>', lambda e: self.save_settings())
+        self.window.bind('<Escape>', lambda e: self.window.destroy())
+        self.window.focus_set()
+        
+        # Создаем UI в Toplevel
+        self.create_ui(self.window)
+
+    def show_in_frame(self, parent_frame):
+        """Показывает диалог внутри существующего фрейма"""
+        self.create_ui(parent_frame)
+
+    def close(self):
+        """Закрывает диалог"""
+        if self.window:
+            if isinstance(self.window, tk.Toplevel):
+                self.window.destroy()
+            self.window = None        
         
     def create_template_panel(self):
         """Создает панель управления шаблонами"""
@@ -547,10 +601,14 @@ class FontSettingsDialog:
             # Сохраняем выбранный шаблон в настройки приложения
             self.coordinator.set_font_template(self.current_template)
             
-            # Обновляем превью и закрываем окно
+            # Обновляем превью
             self.preview_printer.update_font_settings(self.font_settings)
             self.preview_printer.update_preview_displays()
-            self.window.destroy()
+            
+            # НЕ ЗАКРЫВАЕМ ОКНО ЕСЛИ МЫ ВО ВКЛАДКЕ!
+            if isinstance(self.window, tk.Toplevel):
+                self.window.destroy()
+            # Иначе - мы во вкладке, просто выходим из метода
             
         except ValueError as e:
             self.show_status("Ошибка: Некорректные значения в настройках", "error")

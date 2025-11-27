@@ -37,27 +37,19 @@ class SettingsCoordinator:
             
             # Загружаем шаблон шрифтов
             font_template = settings.get("last_font_template", "1_цех")
-            self._current_font_template = font_template
-            
-            # Синхронизируем если нужно
-            if not self._is_template_synced_with_workshop():
-                self._auto_sync_template_with_workshop()
+            self._current_font_template = font_template           
                 
         except Exception as e:
-            print(f"Ошибка загрузки начальных настроек: {e}")
-    
-    def _is_template_synced_with_workshop(self) -> bool:
-        """Проверяет синхронизацию шаблона с цехом"""
-        expected_template = "1_цех" if self._current_workshop == "1" else "2_цех"
-        return self._current_font_template == expected_template
-    
-    def _auto_sync_template_with_workshop(self):
-        """Автоматически синхронизирует шаблон с цехом"""
-        new_template = "1_цех" if self._current_workshop == "1" else "2_цех"
-        self._current_font_template = new_template
-        
-        # Сохраняем в настройки
-        self._save_font_template_setting()
+            print(f"Ошибка загрузки начальных настроек: {e}") 
+
+    def _save_font_template_setting(self):
+        """Сохраняет настройку шаблона шрифтов"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json") or {}
+            settings["last_font_template"] = self._current_font_template
+            success = self.config_manager.save_json_settings("shared_utils.json", settings)
+        except Exception as e:
+            print(f"DEBUG: _save_font_template_setting error: {e}")
     
     def subscribe(self, callback: Callable):
         """Подписывает компонент на уведомления об изменениях"""
@@ -78,7 +70,6 @@ class SettingsCoordinator:
                 print(f"Ошибка уведомления подписчика: {e}")
     
     def set_workshop(self, workshop: str):
-        """Устанавливает цех и синхронизирует шаблон"""
         if workshop not in ["1", "2"]:
             raise ValueError("Цех должен быть '1' или '2'")
         
@@ -86,9 +77,22 @@ class SettingsCoordinator:
             self._current_workshop = workshop
             self._auto_sync_template_with_workshop()
             
-            # Сохраняем настройки
+            # Синхронизируем шаблон с цехом
+            if not self._is_template_synced_with_workshop():
+                self._auto_sync_template_with_workshop()
+            
             self._save_workshop_setting()
             self._notify_subscribers()
+            
+    def _is_template_synced_with_workshop(self) -> bool:
+        """Проверяет синхронизацию шаблона с цехом"""
+        expected_template = "1_цех" if self._current_workshop == "1" else "2_цех"
+        return self._current_font_template == expected_template            
+            
+    def _auto_sync_template_with_workshop(self):
+        """Автоматически синхронизирует шаблон с цехом"""
+        new_template = "1_цех" if self._current_workshop == "1" else "2_цех"
+        self._current_font_template = new_template
     
     def set_font_template(self, template: str):
         """Устанавливает шаблон шрифтов"""
@@ -117,27 +121,20 @@ class SettingsCoordinator:
     def _save_workshop_setting(self):
         """Сохраняет настройку цеха"""
         try:
+            print(f"SAVE WORKSHOP: Сохраняем цех '{self._current_workshop}' в файл")
+            import traceback
+            traceback.print_stack()  # Покажет кто вызвал этот метод
+            
             settings = self.config_manager.load_json_settings("shared_utils.json") or {}
             settings["workshop"] = self._current_workshop
-            self.config_manager.save_json_settings("shared_utils.json", settings)
+            success = self.config_manager.save_json_settings("shared_utils.json", settings)
+            print(f"SAVE WORKSHOP: Успех = {success}")
         except Exception as e:
             print(f"Ошибка сохранения цеха: {e}")
     
-    def _save_font_template_setting(self):
-        """Сохраняет настройку шаблона шрифтов"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-            settings["last_font_template"] = self._current_font_template
-            self.config_manager.save_json_settings("shared_utils.json", settings)
-        except Exception as e:
-            print(f"Ошибка сохранения шаблона шрифтов: {e}")
-    
     def apply_workshop_changes(self, preview_module):
         """Применяет изменения цеха ко всем компонентам"""
-        try:
-            # Обновляем шаблон шрифтов
-            self._auto_sync_template_with_workshop()
-            
+        try:          
             # Уведомляем подписчиков
             self._notify_subscribers()
             

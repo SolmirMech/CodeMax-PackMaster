@@ -155,15 +155,9 @@ class PreviewExport:
         # Иконки настроек - ряд 1
         ttk.Button(
             settings_frame, 
-            text="🔤", 
-            command=self.open_font_settings
-        ).grid(row=1, column=0, sticky="w", pady=5)
-
-        ttk.Button(
-            settings_frame, 
-            text="⚙", 
-            command=self.open_settings
-        ).grid(row=1, column=0, padx=(150, 5), sticky="w", pady=5)
+            text="⚙ Настройки", 
+            command=self.open_settings_manager
+        ).grid(row=1, column=0, sticky="we", pady=5)
         
         # Кнопка для открытия окна втулки
         ttk.Button(
@@ -200,6 +194,20 @@ class PreviewExport:
         self.excel_status_label.grid(row=4, column=0, sticky="w", pady=5)
         
         self.parent.bind("<Visibility>", lambda e: self.update_comboboxes())
+        
+    def open_settings_manager(self):
+        """Открывает единое окно настроек с вкладками"""
+        from core.settings.settings_manager import SettingsManager
+        if not hasattr(self, '_settings_manager'):
+            self._settings_manager = SettingsManager(self.parent, self)
+            # Передаем колбэк для статуса
+            self._settings_manager.set_status_callback(self.set_status)
+        self._settings_manager.show()
+
+    def set_status(self, message, color="green"):
+        """Универсальный метод установки статуса"""
+        if hasattr(self, 'excel_status_label'):
+            self.excel_status_label.config(text=message, foreground=color)
         
     def set_order_data_module(self, order_data_module):
         self.order_data_module = order_data_module
@@ -337,14 +345,17 @@ class PreviewExport:
             all_settings["weight_box_print"] = self.settings
 
             if self.config_manager.save_json_settings(self.settings_file, all_settings):
-                messagebox.showinfo("Сохранено", "Настройки печати сохранены!")
+                # ТАК ЖЕ КАК ВО ВСЕХ ДРУГИХ МЕТОДАХ
+                self.excel_status_label.config(
+                    text="✅ Настройки печати сохранены!",
+                    foreground="green"
+                )
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")            
-        
-    def open_settings(self):
-        """Открывает единое окно настроек со всеми разделами"""
-        dialog = SettingsDialog(self.parent, self)
-        dialog.show()        
+            # ТАК ЖЕ КАК ВО ВСЕХ ДРУГИХ МЕТОДАХ
+            self.excel_status_label.config(
+                text=f"❌ Не удалось сохранить настройки: {str(e)}",
+                foreground="red"
+            )
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""
@@ -664,11 +675,7 @@ class PreviewExport:
             self.font_settings = loaded_settings
         else:
             # Используем настройки по умолчанию из FontSettingsDialog
-            self.font_settings = FontSettingsDialog.get_default_font_settings()
-        
-    def open_font_settings(self):
-        """Открывает окно настроек шрифтов"""
-        FontSettingsDialog(self.parent, self.config_manager, self)
+            self.font_settings = FontSettingsDialog.get_default_font_settings()        
         
     def print_label(self):
         """Печатает выбранную этикетку"""

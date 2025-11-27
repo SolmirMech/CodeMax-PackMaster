@@ -20,7 +20,7 @@ class SettingsDialog:
         self.parent = parent
         self.preview_export_module = preview_export_module
         self.config_manager = ConfigManager()
-        self.coordinator = SettingsCoordinator()
+        self.coordinator = None
         self.window = None
         self.xml_folder_path = tk.StringVar(value="")
         # Переменные для Excel
@@ -29,31 +29,18 @@ class SettingsDialog:
         self.workshop_var = tk.StringVar(value="1")
         self.paper_width_var = tk.StringVar(value="")
         self.paper_height_var = tk.StringVar(value="")
+        self.main_frame = None
 
-    def show(self):
-        if self.window and self.window.winfo_exists():
-            self.window.lift()
-            return
+    def create_ui(self, parent_frame):
+        """Создает UI в указанном родительском фрейме"""
+        self.main_frame = ttk.Frame(parent_frame)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Если показываем во фрейме, используем parent_frame как окно для привязки событий
+        if not hasattr(self, 'window') or self.window is None:
+            self.window = parent_frame.winfo_toplevel()  # Получаем корневое окно
 
-        self.window = tk.Toplevel(self.parent)
-        self.window.title("Настройки")
-        self.window.geometry("900x600")
-        self.window.grab_set()
-
-        # Центрирование окна
-        self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry(f"+{x}+{y}")
-
-        self.window.bind("<Escape>", lambda e: self.window.destroy())
-
-        main_frame = ttk.Frame(self.window, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        content_frame = ttk.Frame(main_frame)
+        content_frame = ttk.Frame(self.main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
         # ЛЕВАЯ КОЛОНКА
@@ -206,7 +193,7 @@ class SettingsDialog:
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
-            main_frame, 
+            self.main_frame, 
             textvariable=self.status_var,
             foreground="green",
             font=("Arial", 12)
@@ -215,7 +202,7 @@ class SettingsDialog:
         
         # Кнопки сохранения
         save_button = ttk.Button(
-            main_frame, 
+            self.main_frame, 
             text="💾 Сохранить", 
             command=self.save_all_settings,
             width=15
@@ -226,11 +213,48 @@ class SettingsDialog:
 
         # Привязка Enter к сохранению
         self.window.bind("<Return>", lambda e: self.save_all_settings())
+        return self.main_frame
+        
+    def show(self):
+        if self.window and self.window.winfo_exists():
+            self.window.lift()
+            return
+
+        self.window = tk.Toplevel(self.parent)
+        self.window.title("Настройки")
+        self.window.geometry("900x600")
+        self.window.grab_set()
+
+        # Центрирование окна
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f"+{x}+{y}")
+
+        self.window.bind("<Escape>", lambda e: self.window.destroy())
+        self.create_ui(self.window)
+        
+    def show_in_frame(self, parent_frame):
+        """Показывает диалог внутри существующего фрейма"""
+        self.create_ui(parent_frame)     
+    
+    def set_status_callback(self, callback):
+        """Устанавливает колбэк для обновления статуса"""
+        self.status_callback = callback
+        
+    def update_status(self, message, color="green"):
+        """Обновляет статус через колбэк"""
+        if hasattr(self, 'status_callback') and self.status_callback:
+            self.status_callback(message, color)        
         
     def _on_settings_changed(self):
         """Обрабатывает изменения настроек от координатора"""
+        
         # Обновляем UI при внешних изменениях
         workshop = self.coordinator.get_workshop()
+        
         if self.workshop_var.get() != workshop:
             self.workshop_var.set(workshop)
             self._update_paper_sizes()
@@ -393,7 +417,7 @@ class SettingsDialog:
         dialog.show()
 
     def save_all_settings(self):
-        """Сохраняет все настройки из единого окна (БЕЗ списка клиентов)"""
+        """Сохраняет все настройки из единого окна"""
         try:
             self.preview_export_module.settings["printer"] = self.printer_var.get()
             self.preview_export_module.settings["paper_width_mm"] = int(self.paper_width_var.get())
@@ -435,6 +459,7 @@ class SettingsDialog:
             
             workshop = self.workshop_var.get()
             self.coordinator.set_workshop(workshop)
+            shared_settings["workshop"] = workshop
             
             self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
 
@@ -456,22 +481,14 @@ class SettingsDialog:
             if hasattr(self.preview_export_module, 'update_cutters_menu'):
                 self.preview_export_module.update_cutters_menu()
 
-            if self.preview_export_module and hasattr(self.preview_export_module, 'excel_status_label'):
-                self.preview_export_module.excel_status_label.config(
-                    text="✅ Все настройки успешно сохранены!",
-                    foreground="green"
-                )
+            self.update_status("✅ Все настройки успешно сохранены!", "green")
             
-            if self.window:
+            if self.window and isinstance(self.window, tk.Toplevel):
                 self.window.destroy()
                 self.window = None
 
         except Exception as e:
-            if self.preview_export_module and hasattr(self.preview_export_module, 'excel_status_label'):
-                self.preview_export_module.excel_status_label.config(
-                    text=f"❌ Ошибка сохранения настроек: {str(e)}",
-                    foreground="red"
-                )               
+            self.update_status("❌ Ошибка сохранения настроек: {str(e)}", "red")
 
 class CustomersEditorDialog:
     """Диалог редактирования списка клиентов без производителя"""
