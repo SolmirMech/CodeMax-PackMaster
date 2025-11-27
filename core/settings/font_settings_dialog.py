@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from .config_manager import ConfigManager
-from core.settings_coordinator import SettingsCoordinator
+from core.config_manager import ConfigManager
+from core.settings.settings_coordinator import SettingsCoordinator
 
 class FontSettingsDialog:
     """Окно настроек размеров шрифтов"""

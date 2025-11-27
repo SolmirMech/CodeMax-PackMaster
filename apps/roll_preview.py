@@ -4,8 +4,8 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 from core.pdf_utils import PDFTemplateFiller
 from core.config_manager import ConfigManager
-from core.font_settings_dialog import FontSettingsDialog
-from core.settings_coordinator import SettingsCoordinator
+from core.settings.font_settings_dialog import FontSettingsDialog
+from core.settings.settings_coordinator import SettingsCoordinator
 import os
 import json
 from datetime import datetime

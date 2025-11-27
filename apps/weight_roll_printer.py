@@ -5,7 +5,6 @@ from tkinter import ttk, messagebox, StringVar, BooleanVar
 from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
-from apps.weight_orders_printer import WeightOrdersPrinter
 
 class RollLabelPrinter:
     """Управление заказами с весом"""

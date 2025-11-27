@@ -4,9 +4,9 @@ from tkinter import ttk, StringVar
 import win32print
 import win32ui
 from PIL import Image, ImageTk
-from core.printer_dia import SettingsDialog, CustomersEditorDialog, SpecialClientsEditorDialog
+from core.settings.settings_dialog import SettingsDialog, CustomersEditorDialog, SpecialClientsEditorDialog
 from core.config_manager import ConfigManager
-from core.font_settings_dialog import FontSettingsDialog
+from core.settings.font_settings_dialog import FontSettingsDialog
 from core.excel_exporter import WeightOrdersExporter
 from apps.weight_orders_printer import WeightOrdersPrinter
 from core.shared_utils import (

@@ -184,8 +184,20 @@ class WeightOrdersPrinter:
         """Автоматически рассчитывает вес нетто"""
         try:
             gross = float(self.gross_weight.get() or 0)
+            
+            # Если брутто пустое, то нетто тоже пустое
+            if not self.gross_weight.get():
+                self.net_weight.set("")
+                return
+                
             sleeve = float(self.sleeve_weight.get() or 0)
             net = gross - sleeve
+            
+            # Не допускаем отрицательные значения и ноль
+            if net <= 0:
+                self.net_weight.set("")
+                return
+                
             self.net_weight.set(str(int(net)) if net.is_integer() else f"{net:.1f}")
             
         except (ValueError, TypeError):
@@ -340,11 +352,16 @@ class WeightOrdersPrinter:
         lines = [
             f"Дата {data['date']}   Кол-во {data['quantity']}",
             f"№ Заказа {data['order']}   {data['executor']}",
-            f"Вес Брутто, г: {data['gross_weight']}   Нетто, г: {data['net_weight']}",
         ]
 
+        # Добавляем строку с весом только если есть данные
+        if data['gross_weight'] or data['net_weight']:
+            lines.append(f"Вес Брутто, г: {data['gross_weight']}   Нетто, г: {data['net_weight']}")
+        else:
+            lines.append(" ")  # Пустая строка для сохранения позиционирования        
+
         # Добавляем производителя если не скрыто
-        if not data["hide_producer"]:
+        if not data["hide_producer"] and self.order_prefix.get() != "IE":
             lines.append(f"Производитель {self.manufacturer}")
         else:
             lines.append(" ")  # Пустая строка для сохранения позиционирования

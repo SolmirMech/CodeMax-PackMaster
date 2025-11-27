@@ -5,7 +5,7 @@ import win32ui
 import os
 import shutil
 from core.config_manager import ConfigManager
-from core.settings_coordinator import SettingsCoordinator
+from core.settings.settings_coordinator import SettingsCoordinator
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
