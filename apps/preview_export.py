@@ -19,10 +19,11 @@ import os
 class PreviewExport:
     """Модуль управления печатью и экспортом"""
 
-    def __init__(self, parent, preview_module):
+    def __init__(self, parent, preview_module, coordinator=None):
         self.parent = parent
         self.preview_module = preview_module  # ссылка на RollPreview
         self.config_manager = ConfigManager()
+        self.coordinator = coordinator
         self.settings_file = "print_settings.json"
         
         self.manufacturer = self.config_manager.get_manufacturer()
@@ -65,12 +66,17 @@ class PreviewExport:
         self.is_batch_printing = False  # Флаг массовой печати
         
         self.create_export_ui()
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)        
         self.load_box_sizes()
         self.parent.after(100, self.on_box_selected)
         self.load_pallet_sizes()
+        
+    def on_settings_changed(self):
+        """Обработчик изменений настроек от координатора"""
 
     def load_box_sizes(self):
-        """Загружает список коробок из shared_utils.json (ПЕРЕНЕСЕНО ИЗ ROLL_PREVIEW)"""
+        """Загружает список коробок из shared_utils.json"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
             weight_box = settings.get("weight_box", {})
@@ -345,13 +351,11 @@ class PreviewExport:
             all_settings["weight_box_print"] = self.settings
 
             if self.config_manager.save_json_settings(self.settings_file, all_settings):
-                # ТАК ЖЕ КАК ВО ВСЕХ ДРУГИХ МЕТОДАХ
                 self.excel_status_label.config(
                     text="✅ Настройки печати сохранены!",
                     foreground="green"
                 )
         except Exception as e:
-            # ТАК ЖЕ КАК ВО ВСЕХ ДРУГИХ МЕТОДАХ
             self.excel_status_label.config(
                 text=f"❌ Не удалось сохранить настройки: {str(e)}",
                 foreground="red"

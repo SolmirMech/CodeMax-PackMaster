@@ -5,7 +5,6 @@ from PIL import Image, ImageTk
 from core.pdf_utils import PDFTemplateFiller
 from core.config_manager import ConfigManager
 from core.settings.font_settings_dialog import FontSettingsDialog
-from core.settings.settings_coordinator import SettingsCoordinator
 import os
 import json
 from datetime import datetime
@@ -14,10 +13,10 @@ from typing import Dict
 class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
-    def __init__(self, parent):
+    def __init__(self, parent, coordinator=None):
         self.parent = parent
         self.config_manager = ConfigManager()
-        self.coordinator = SettingsCoordinator()
+        self.coordinator = coordinator
         self._update_template_paths()
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
         
@@ -31,8 +30,9 @@ class RollPreview:
         
         self.create_preview_ui()
         self.load_font_settings()
-        self.coordinator.subscribe(self._on_settings_changed)
         self.check_templates()
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self._on_settings_changed)        
         
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""

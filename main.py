@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import configparser
 from datetime import datetime
+from core.settings.settings_coordinator import SettingsCoordinator
 
 def check_demo_mode():
     """Проверяет, не истек ли демо-период"""
@@ -58,6 +59,8 @@ class WeightOrdersApp:
         self.root = root
         self.root.title("Упаковка")
         self.root.geometry("1450x860")
+        
+        self.coordinator = SettingsCoordinator()
         
         # Установка стилей как в оригинале
         self.setup_styles()
@@ -127,22 +130,22 @@ class WeightOrdersApp:
         # Верх - RollLabelPrinter
         roll_frame = ttk.Frame(left_frame)
         roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.roll_module = RollLabelPrinter(roll_frame)
+        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator)
 
         # Низ - OrderDataProcessor
         order_data_frame = ttk.Frame(left_frame)
         order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.order_data_module = OrderDataProcessor(order_data_frame)
+        self.order_data_module = OrderDataProcessor(order_data_frame, self.coordinator)
 
         # Правая часть - RollPreview (слева)
         preview_frame = ttk.Frame(right_frame)
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
-        self.preview_module = RollPreview(preview_frame)
+        self.preview_module = RollPreview(preview_frame, self.coordinator)
         
         # Правая часть - PreviewExport (справа)
         export_frame = ttk.Frame(right_frame)
         export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
-        self.export_module = PreviewExport(export_frame, self.preview_module)
+        self.export_module = PreviewExport(export_frame, self.preview_module, self.coordinator)
 
         self.setup_module_connections()
 

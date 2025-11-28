@@ -5,14 +5,14 @@ from tkinter import ttk, messagebox, StringVar, BooleanVar
 from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
-from core.settings.settings_coordinator import SettingsCoordinator
+
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
-    def __init__(self, parent):
+    def __init__(self, parent, coordinator=None):
         self.parent = parent
         self.config_manager = ConfigManager()
-        self.coordinator = SettingsCoordinator()
+        self.coordinator = coordinator
 
         self.order_data_module = None
         self.preview_module = None
@@ -49,7 +49,8 @@ class RollLabelPrinter:
         
         self.create_ui()
         self.load_box_sizes()
-        self.coordinator.subscribe(self.on_settings_changed)
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
         variables_to_track = [
             self.rolls_count_var,
@@ -276,6 +277,7 @@ class RollLabelPrinter:
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
         try:
+            self.config_manager.reload_settings()
             # Обновляем списки упаковщиков и резчиков
             self.update_packers_list()
             self.update_cutters_list()

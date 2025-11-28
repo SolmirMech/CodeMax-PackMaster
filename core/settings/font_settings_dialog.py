@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from core.config_manager import ConfigManager
-from core.settings.settings_coordinator import SettingsCoordinator
 
 class FontSettingsDialog:
     """Окно настроек размеров шрифтов"""
@@ -80,11 +79,11 @@ class FontSettingsDialog:
             }
         }
     
-    def __init__(self, parent, config_manager, preview_printer):
+    def __init__(self, parent, config_manager, preview_printer, coordinator=None):
         self.parent = parent
         self.config_manager = config_manager
         self.preview_printer = preview_printer
-        self.coordinator = None
+        self.coordinator = coordinator
         
         # Инициализация переменных (как в оригинальном __init__)
         self.window = None
@@ -102,6 +101,8 @@ class FontSettingsDialog:
         self.status_var = None
         self.status_label = None
         self._initialized = False
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self._on_coordinator_changed)
         
     def _on_coordinator_changed(self):
         """Обрабатывает изменения от координатора"""
@@ -116,21 +117,14 @@ class FontSettingsDialog:
         
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущего шаблона"""
-        print(f"=== load_font_settings ===")
-        print(f"Текущий шаблон: {self.current_template}")
-        
         all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        print(f"Все шаблоны в файле: {list(all_settings.keys())}")
         
         # Получаем настройки текущего шаблона
         template_settings = all_settings.get(self.current_template)
-        print(f"Настройки шаблона '{self.current_template}': {template_settings is not None}")
         
         if template_settings:
-            print(f"Значение 'other' из файла: {template_settings['roll']['other']['preview']}")
             return template_settings
         else:
-            print("Используются дефолтные настройки!")
             return self.get_default_font_settings()
         
     def show_in_frame(self, parent_frame):

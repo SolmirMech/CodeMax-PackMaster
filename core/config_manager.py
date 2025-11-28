@@ -40,6 +40,16 @@ class ConfigManager:
         
         return assets_file
         
+    def reload_settings(self):
+        """Перезагружает настройки из файлов"""
+        try:
+            # Сбрасываем кэш или перечитываем файлы
+            if hasattr(self, '_settings_cache'):
+                del self._settings_cache
+            print("DEBUG: ConfigManager - настройки перезагружены")
+        except Exception as e:
+            print(f"Ошибка перезагрузки настроек: {e}")
+        
     def get_default_cutter(self):
         """Возвращает первого резчика из списка или пустую строку"""
         cutters = self.get_cutters()

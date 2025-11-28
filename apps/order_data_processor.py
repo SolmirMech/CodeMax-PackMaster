@@ -10,9 +10,10 @@ from core.excel_exporter import WeightOrdersExporter
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
     
-    def __init__(self, parent):
+    def __init__(self, parent, coordinator=None):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.coordinator = coordinator
         
         # Переменные для парсинга
         self.folder_path = StringVar(value="")
@@ -31,6 +32,11 @@ class OrderDataProcessor:
         self.load_initial_settings()
         self.detail_num_search = StringVar(value="")
         self.create_ui()
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)
+            
+    def on_settings_changed(self):
+        """Обработчик изменений настроек от координатора"""
         
     def load_initial_settings(self):
         """Загружает начальные настройки"""

@@ -5,7 +5,6 @@ import win32ui
 import os
 import shutil
 from core.config_manager import ConfigManager
-from core.settings.settings_coordinator import SettingsCoordinator
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
@@ -20,7 +19,7 @@ class SettingsDialog:
         self.parent = parent
         self.preview_export_module = preview_export_module
         self.config_manager = ConfigManager()
-        self.coordinator = None
+        self.coordinator = preview_export_module.coordinator
         self.window = None
         self.xml_folder_path = tk.StringVar(value="")
         # Переменные для Excel
@@ -466,10 +465,6 @@ class SettingsDialog:
             # Сохраняем упаковщиков через config_manager
             self.preview_export_module.config_manager.save_packers(new_packers)
 
-            # Обновляем меню упаковщиков в интерфейсе
-            if hasattr(self.preview_export_module, 'update_packers_menu'):
-                self.preview_export_module.update_packers_menu()
-
             # Сохраняем все изменения в shared_utils.json
             self.preview_export_module.config_manager.save_json_settings("shared_utils.json", shared_settings)
 
@@ -477,9 +472,7 @@ class SettingsDialog:
             self.preview_export_module.order_prefix.set(shared_settings["order_number"]["prefix"])
             self.preview_export_module.order_suffix.set(shared_settings["order_number"]["suffix"])
 
-            # Обновляем кнопки резчиков в интерфейсе
-            if hasattr(self.preview_export_module, 'update_cutters_menu'):
-                self.preview_export_module.update_cutters_menu()
+            self.coordinator._notify_subscribers()
 
             self.update_status("✅ Все настройки успешно сохранены!", "green")
             
