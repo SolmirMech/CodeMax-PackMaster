@@ -5,12 +5,14 @@ from tkinter import ttk, messagebox, StringVar, BooleanVar
 from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
+from core.settings.settings_coordinator import SettingsCoordinator
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
     def __init__(self, parent):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.coordinator = SettingsCoordinator()
 
         self.order_data_module = None
         self.preview_module = None
@@ -46,7 +48,8 @@ class RollLabelPrinter:
         self.roll_length = StringVar(value="")
         
         self.create_ui()
-        self.load_box_sizes()       
+        self.load_box_sizes()
+        self.coordinator.subscribe(self.on_settings_changed)
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
         variables_to_track = [
             self.rolls_count_var,
@@ -269,6 +272,50 @@ class RollLabelPrinter:
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
         self.order_prefix.trace_add("write", self.on_order_number_changed)
+        
+    def on_settings_changed(self):
+        """Обработчик изменений настроек от координатора"""
+        try:
+            # Обновляем списки упаковщиков и резчиков
+            self.update_packers_list()
+            self.update_cutters_list()
+        except Exception as e:
+            print(f"Ошибка обновления списков после изменения настроек: {e}")
+
+    def update_packers_list(self):
+        """Обновляет список упаковщиков в комбобоксе"""
+        try:
+            packers = self.config_manager.get_packers()
+            self.packer_combo['values'] = packers
+            
+            # Сохраняем текущее значение, если оно есть в новом списке
+            current_packer = self.packer_var.get()
+            if current_packer in packers:
+                self.packer_var.set(current_packer)
+            elif packers:
+                self.packer_var.set(packers[0])
+                
+        except Exception as e:
+            print(f"Ошибка обновления списка упаковщиков: {e}")
+
+    def update_cutters_list(self):
+        """Обновляет список резчиков в комбобоксе"""
+        try:
+            cutters = self.config_manager.get_cutters()
+            self.cutter_combo['values'] = cutters
+            
+            # Сохраняем текущее значение, если оно есть в новом списке
+            current_cutter = self.cutter_var.get()
+            if current_cutter in cutters:
+                self.cutter_var.set(current_cutter)
+            else:
+                # Используем резчика по умолчанию из config_manager
+                default_cutter = self.config_manager.get_default_cutter()
+                self.cutter_var.set(default_cutter)
+                
+        except Exception as e:
+            print(f"Ошибка обновления списка резчиков: {e}")
+        
         
     def load_manufacturer_options(self):
         """Загружает варианты производителей из packaging_tu.json"""

@@ -20,8 +20,6 @@ class SettingsCoordinator:
             
         self.config_manager = ConfigManager()
         self._subscribers = []
-        self._current_workshop = "1"
-        self._current_font_template = "1_цех"
         
         self._load_initial_settings()
         self._initialized = True
@@ -49,7 +47,7 @@ class SettingsCoordinator:
             settings["last_font_template"] = self._current_font_template
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
         except Exception as e:
-            print(f"DEBUG: _save_font_template_setting error: {e}")
+            print(f"Ошибка сохранения шаблона шрифтов: {e}")
     
     def subscribe(self, callback: Callable):
         """Подписывает компонент на уведомления об изменениях"""
@@ -121,14 +119,9 @@ class SettingsCoordinator:
     def _save_workshop_setting(self):
         """Сохраняет настройку цеха"""
         try:
-            print(f"SAVE WORKSHOP: Сохраняем цех '{self._current_workshop}' в файл")
-            import traceback
-            traceback.print_stack()  # Покажет кто вызвал этот метод
-            
             settings = self.config_manager.load_json_settings("shared_utils.json") or {}
             settings["workshop"] = self._current_workshop
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
-            print(f"SAVE WORKSHOP: Успех = {success}")
         except Exception as e:
             print(f"Ошибка сохранения цеха: {e}")
     

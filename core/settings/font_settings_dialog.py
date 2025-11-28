@@ -88,7 +88,8 @@ class FontSettingsDialog:
         
         # Инициализация переменных (как в оригинальном __init__)
         self.window = None
-        self.current_template = "1_цех"
+        settings = self.config_manager.load_json_settings("shared_utils.json") or {}
+        self.current_template = settings.get("last_font_template", "1_цех")
         self.font_settings = self.load_font_settings()
         
         # UI переменные (добавляем инициализацию)
@@ -110,48 +111,43 @@ class FontSettingsDialog:
         new_template = self.coordinator.get_font_template()
         
         if new_template != self.current_template:
-            if hasattr(self, 'template_combo'):
-                self.template_combo.unbind('<<ComboboxSelected>>')
-            
             self.current_template = new_template
             self.template_var.set(new_template)
-
-            if hasattr(self, 'template_combo'):
-                self.template_combo.bind('<<ComboboxSelected>>', self.on_template_changed)
         
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущего шаблона"""
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        print(f"=== load_font_settings ===")
+        print(f"Текущий шаблон: {self.current_template}")
         
-        # Если файл пустой, создаем с дефолтным шаблоном
-        if not all_settings:
-            all_settings = {"1_цех": self.get_default_font_settings()}
-            self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        print(f"Все шаблоны в файле: {list(all_settings.keys())}")
         
         # Получаем настройки текущего шаблона
-        template_settings = all_settings.get(self.current_template, self.get_default_font_settings())
+        template_settings = all_settings.get(self.current_template)
+        print(f"Настройки шаблона '{self.current_template}': {template_settings is not None}")
         
-        return self.merge_settings(self.get_default_font_settings(), template_settings)
-    
-    def merge_settings(self, default, current):
-        """Объединяет настройки по умолчанию с текущими"""
-        merged = default.copy()
+        if template_settings:
+            print(f"Значение 'other' из файла: {template_settings['roll']['other']['preview']}")
+            return template_settings
+        else:
+            print("Используются дефолтные настройки!")
+            return self.get_default_font_settings()
         
-        def deep_merge(default_dict, current_dict):
-            for key, value in current_dict.items():
-                if key in default_dict and isinstance(default_dict[key], dict) and isinstance(value, dict):
-                    deep_merge(default_dict[key], value)
-                else:
-                    default_dict[key] = value
-        
-        if current:
-            deep_merge(merged, current)
-        return merged
-        
-    def show_in_frame(self, parent):
+    def show_in_frame(self, parent_frame):
         """Показывает диалог внутри родительского фрейма"""
-        self.window = parent  # Используем переданный фрейм как основное окно
-        self.create_ui()  # Создаем UI внутри фрейма
+        self.window = parent_frame
+        
+        # КРИТИЧЕСКИ ВАЖНО: получаем шаблон из координатора
+        if self.coordinator:
+            self.current_template = self.coordinator.get_font_template()
+            print(f"show_in_frame: шаблон из координатора = {self.current_template}")
+        else:
+            print("ОШИБКА: координатор не установлен!")
+            self.current_template = "1_цех"
+        
+        # Теперь загружаем настройки
+        self.font_settings = self.load_font_settings()
+        self.create_ui()
         
     def create_ui(self, parent_frame):
         """Создает UI в указанном родительском фрейме"""
@@ -284,8 +280,8 @@ class FontSettingsDialog:
             self.current_template = template_name
             template_data = all_settings[template_name]
             
-            # Мерджим настройки шаблона с дефолтными
-            self.font_settings = self.merge_settings(self.get_default_font_settings(), template_data)
+            # Загружаем настройки шаблона БЕЗ мерджа с дефолтными
+            self.font_settings = template_data
             
             self.update_ui_from_settings()
             
@@ -617,53 +613,60 @@ class FontSettingsDialog:
 
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
-        # Сохраняем настройки ролика
-        for key, entries in self.roll_entries.items():
-            self.font_settings["roll"][key]["preview"] = int(entries["preview"].get())
-            self.font_settings["roll"][key]["print"] = int(entries["print"].get())
-        
-        # Сохраняем настройки переноса для ролика
-        if "multiline_settings" not in self.font_settings["roll"]:
-            self.font_settings["roll"]["multiline_settings"] = {}
-        
-        for key, var in self.roll_wrap_entries.items():
-            if key == "font_factor":
-                self.font_settings["roll"]["multiline_settings"][key] = float(var.get())
-            elif key in ["font_family", "font_style"]:
-                self.font_settings["roll"]["multiline_settings"][key] = var.get()
-            else:
-                self.font_settings["roll"]["multiline_settings"][key] = int(var.get())
-        
-        # Сохраняем настройки коробки
-        for key, entries in self.box_entries.items():
-            self.font_settings["box"][key]["preview"] = int(entries["preview"].get())
-            self.font_settings["box"][key]["print"] = int(entries["print"].get())
-        
-        # Сохраняем настройки переноса для коробки
-        if "multiline_settings" not in self.font_settings["box"]:
-            self.font_settings["box"]["multiline_settings"] = {}
+        try:
+            # Сохраняем настройки ролика
+            for key, entries in self.roll_entries.items():
+                self.font_settings["roll"][key]["preview"] = int(entries["preview"].get())
+                self.font_settings["roll"][key]["print"] = int(entries["print"].get())
             
-        for key, var in self.box_wrap_entries.items():
-            if key == "font_factor":
-                self.font_settings["box"]["multiline_settings"][key] = float(var.get())
-            elif key in ["font_family", "font_style"]:
-                self.font_settings["box"]["multiline_settings"][key] = var.get()
+            # Сохраняем настройки переноса для ролика
+            if "multiline_settings" not in self.font_settings["roll"]:
+                self.font_settings["roll"]["multiline_settings"] = {}
+            
+            for key, var in self.roll_wrap_entries.items():
+                if key == "font_factor":
+                    self.font_settings["roll"]["multiline_settings"][key] = float(var.get())
+                elif key in ["font_family", "font_style"]:
+                    self.font_settings["roll"]["multiline_settings"][key] = var.get()
+                else:
+                    self.font_settings["roll"]["multiline_settings"][key] = int(var.get())
+            
+            # Сохраняем настройки коробки
+            for key, entries in self.box_entries.items():
+                self.font_settings["box"][key]["preview"] = int(entries["preview"].get())
+                self.font_settings["box"][key]["print"] = int(entries["print"].get())
+            
+            # Сохраняем настройки переноса для коробки
+            if "multiline_settings" not in self.font_settings["box"]:
+                self.font_settings["box"]["multiline_settings"] = {}
+                
+            for key, var in self.box_wrap_entries.items():
+                if key == "font_factor":
+                    self.font_settings["box"]["multiline_settings"][key] = float(var.get())
+                elif key in ["font_family", "font_style"]:
+                    self.font_settings["box"]["multiline_settings"][key] = var.get()
+                else:
+                    self.font_settings["box"]["multiline_settings"][key] = int(var.get())
+            
+            # Сохраняем через ConfigManager
+            all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+            all_settings[self.current_template] = {
+                "roll": self.font_settings["roll"].copy(),
+                "box": self.font_settings["box"].copy()
+            }
+            
+            success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+            
+            if not success:
+                self.show_status("Не удалось сохранить настройки шрифтов", "error")
             else:
-                self.font_settings["box"]["multiline_settings"][key] = int(var.get())
-        
-        # Сохраняем через ConfigManager
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        all_settings[self.current_template] = {
-            "roll": self.font_settings["roll"].copy(),
-            "box": self.font_settings["box"].copy()
-        }
-        
-        success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
-        
-        if not success:
-            self.show_status("Не удалось сохранить настройки шрифтов", "error")
-        else:
-            self.show_status("Настройки шрифтов сохранены", "info")
+                self.show_status("Настройки шрифтов сохранены", "info")
+                
+            return success
+            
+        except Exception as e:
+            self.show_status(f"Ошибка сохранения: {e}", "error")
+            return False
 
     def create_buttons(self):
         """Создает кнопки сохранения/отмены и строку статуса"""
