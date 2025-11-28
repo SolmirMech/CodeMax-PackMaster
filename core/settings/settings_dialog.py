@@ -210,8 +210,6 @@ class SettingsDialog:
         
         self.update_folder_status()
 
-        # Привязка Enter к сохранению
-        self.window.bind("<Return>", lambda e: self.save_all_settings())
         return self.main_frame
         
     def show(self):
@@ -237,7 +235,8 @@ class SettingsDialog:
         
     def show_in_frame(self, parent_frame):
         """Показывает диалог внутри существующего фрейма"""
-        self.create_ui(parent_frame)     
+        self.create_ui(parent_frame)
+        self.window.bind("<Return>", lambda e: self.save_all_settings())
     
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""

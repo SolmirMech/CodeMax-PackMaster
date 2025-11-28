@@ -35,7 +35,11 @@ class SettingsCoordinator:
             
             # Загружаем шаблон шрифтов
             font_template = settings.get("last_font_template", "1_цех")
-            self._current_font_template = font_template           
+            self._current_font_template = font_template
+            
+            if not self._is_template_synced_with_workshop():
+                self._auto_sync_template_with_workshop()
+                self._save_font_template_setting()
                 
         except Exception as e:
             print(f"Ошибка загрузки начальных настроек: {e}") 

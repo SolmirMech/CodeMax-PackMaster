@@ -79,11 +79,12 @@ class FontSettingsDialog:
             }
         }
     
-    def __init__(self, parent, config_manager, preview_printer, coordinator=None):
+    def __init__(self, parent, config_manager, preview_printer, preview_export_module):
         self.parent = parent
         self.config_manager = config_manager
         self.preview_printer = preview_printer
-        self.coordinator = coordinator
+        self.preview_export_module = preview_export_module
+        self.coordinator = preview_export_module.coordinator
         
         # Инициализация переменных (как в оригинальном __init__)
         self.window = None
@@ -129,9 +130,10 @@ class FontSettingsDialog:
         
     def show_in_frame(self, parent_frame):
         """Показывает диалог внутри родительского фрейма"""
-        self.window = parent_frame
+        # ИСПРАВИТЬ: получаем корневое окно, а не используем фрейм как окно
+        self.window = parent_frame.winfo_toplevel()
         
-        # КРИТИЧЕСКИ ВАЖНО: получаем шаблон из координатора
+        # Критически важно: получаем шаблон из координатора
         if self.coordinator:
             self.current_template = self.coordinator.get_font_template()
             print(f"show_in_frame: шаблон из координатора = {self.current_template}")
@@ -141,22 +143,25 @@ class FontSettingsDialog:
         
         # Теперь загружаем настройки
         self.font_settings = self.load_font_settings()
-        self.create_ui()
+        self.create_ui(parent_frame)
+        
+        # ИСПРАВИТЬ: привязываем к окну, а не к фрейму
+        self.window.bind('<Return>', lambda e: self.save_settings())
         
     def create_ui(self, parent_frame):
         """Создает UI в указанном родительском фрейме"""
-        self.window = parent_frame  # Используем переданный фрейм как основное окно
+        self.window = parent_frame
         
         if self.coordinator:
             self.current_template = self.coordinator.get_font_template()
             self.coordinator.subscribe(self._on_coordinator_changed)
         
         # Основной код из __init__ (без создания Toplevel)
-        self.window.bind('<Return>', lambda e: self.save_settings())
         self.window.bind('<Escape>', lambda e: self.close())
+        # self.window.bind('<Return>', lambda e: self.save_settings())        
         self.window.focus_set()
         
-        # СОЗДАЕМ ВСЕ ВИДЖЕТЫ (переносим из create_ui)
+        # Создаем все виджеты (переносим из create_ui)
         self.create_template_panel()
         
         # Основной контейнер с двумя колонками
@@ -192,16 +197,11 @@ class FontSettingsDialog:
         self.center_window()
         
         # Привязка клавиш
-        self.window.bind('<Return>', lambda e: self.save_settings())
         self.window.bind('<Escape>', lambda e: self.window.destroy())
         self.window.focus_set()
         
         # Создаем UI в Toplevel
         self.create_ui(self.window)
-
-    def show_in_frame(self, parent_frame):
-        """Показывает диалог внутри существующего фрейма"""
-        self.create_ui(parent_frame)
 
     def close(self):
         """Закрывает диалог"""
@@ -595,7 +595,7 @@ class FontSettingsDialog:
             self.preview_printer.update_font_settings(self.font_settings)
             self.preview_printer.update_preview_displays()
             
-            # НЕ ЗАКРЫВАЕМ ОКНО ЕСЛИ МЫ ВО ВКЛАДКЕ!
+            # Не закрываем окно если мы во вкладке!
             if isinstance(self.window, tk.Toplevel):
                 self.window.destroy()
             # Иначе - мы во вкладке, просто выходим из метода
@@ -679,7 +679,7 @@ class FontSettingsDialog:
         )
         save_btn.pack(side=tk.LEFT, padx=5)
         save_btn.configure(default='active')
-        self.window.bind('<Return>', lambda e: save_btn.invoke())        
+        self.window.bind('<Return>', lambda e: self.save_settings())
         
         ttk.Button(
             left_frame,

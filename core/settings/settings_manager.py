@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from .settings_dialog import SettingsDialog
 from .font_settings_dialog import FontSettingsDialog
-from .settings_coordinator import SettingsCoordinator
+
 
 class SettingsManager:
     def __init__(self, parent, preview_export_module):
@@ -11,7 +11,6 @@ class SettingsManager:
         self.preview_export_module = preview_export_module
         self.window = None
         self.status_callback = None  # Колбэк для статуса
-        self.coordinator = SettingsCoordinator()
         
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""
@@ -50,14 +49,15 @@ class SettingsManager:
         
         # Инициализируем диалоги
         self.general_dialog = SettingsDialog(self.window, self.preview_export_module)
-        self.general_dialog.coordinator = self.coordinator  # ← Передаем координатор
         self.general_dialog.set_status_callback(self.update_status)
         self.general_dialog.show_in_frame(general_frame)
         
-        self.font_dialog = FontSettingsDialog(self.window, 
-                                            self.preview_export_module.config_manager,
-                                            self.preview_export_module)
-        self.font_dialog.coordinator = self.coordinator  # ← Передаем координатор
+        self.font_dialog = FontSettingsDialog(
+            self.window, 
+            self.preview_export_module.config_manager,
+            self.preview_export_module.preview_module,  # ← preview_printer (RollPreview)
+            self.preview_export_module                   # ← preview_export_module (PreviewExport)
+        )
         self.font_dialog.show_in_frame(font_frame)
         
     def center_window(self):
