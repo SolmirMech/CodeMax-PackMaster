@@ -132,14 +132,14 @@ class RollLabelPrinter:
         self.manufacturer_combo.grid(row=0, column=0, sticky="w", padx=(150, 10), pady=2)
         self.manufacturer_combo.bind('<<ComboboxSelected>>', self.on_manufacturer_selected)
 
-        ttk.Label(manufacturer_frame, text="ТУ:").grid(row=0, column=2, sticky="w", padx=(0, 5), pady=2)
+        ttk.Label(manufacturer_frame, text="ТУ:").grid(row=0, column=0, sticky="w", padx=(305, 5), pady=2)
         self.product_combo = ttk.Combobox(
             manufacturer_frame, 
             textvariable=self.product_type_var,
             state="readonly", 
             width=25
         )
-        self.product_combo.grid(row=0, column=2, padx=(40, 5), sticky="w", pady=2)
+        self.product_combo.grid(row=0, column=0, padx=(345, 5), sticky="w", pady=2)
         self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
         
         # "Без изготовителя"
@@ -148,11 +148,46 @@ class RollLabelPrinter:
             text="Без изготовителя", 
             variable=self.show_manufacturer_var
         ).grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        
+        # Упаковщик
+        ttk.Label(manufacturer_frame, text="Упаковка").grid(
+            row=1, column=0, sticky="w", padx=(200, 5), pady=5
+        )
+        
+        packers = self.config_manager.get_packers()
+        default_packer = packers[0] if packers else ""
+        self.packer_var = StringVar(value=default_packer)
+        
+        self.packer_combo = ttk.Combobox(
+            manufacturer_frame, 
+            textvariable=self.packer_var,
+            values=packers,
+            state="readonly",
+            width=15
+        )
+        self.packer_combo.grid(row=1, column=0, padx=(295, 5), pady=5, sticky="w")
+        
+        # Резчик
+        self.cutter_label = ttk.Label(manufacturer_frame, text="Резка")
+        self.cutter_label.grid(row=1, column=0, sticky="w", padx=(415, 5), pady=5)
+        
+        cutters = self.config_manager.get_cutters()
+        default_cutter = self.config_manager.get_default_cutter()
+        self.cutter_var = StringVar(value=default_cutter)
+        
+        self.cutter_combo = ttk.Combobox(
+            manufacturer_frame, 
+            textvariable=self.cutter_var,
+            values=cutters,
+            state="readonly", 
+            width=15
+        )
+        self.cutter_combo.grid(row=1, column=0, padx=(480, 5), pady=5, sticky="w")        
 
         # Загружаем опции
         self.load_manufacturer_options()
 
-        # Заказчик
+        # Заказчик: Начало данных
         ttk.Label(data_frame, text="Заказчик:").grid(
             row=1, column=0, sticky="w", pady=5
         )
@@ -174,6 +209,26 @@ class RollLabelPrinter:
         # Контекстное меню для текстового поля
         self.add_context_menu_to_text(self.product_text)
         
+        # Основные поля ввода
+        
+        # Номер заказа (3 части)
+        ttk.Label(data_frame, text="№ заказа/ Дата:").grid(
+            row=3, column=0, sticky="w", pady=5
+        )
+        entry_prefix = ttk.Entry(data_frame, textvariable=self.order_prefix, width=4)
+        entry_prefix.grid(row=3, column=1, padx=(5, 0), pady=5, sticky="w")
+
+        entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
+        entry_number.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
+        entry_number.bind("<Return>", lambda e: self.order_data_module.get_product_name())
+
+        entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
+        entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")     
+        
+        # Дата
+        date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
+        date_entry.grid(row=3, column=1, padx=(145, 0), pady=5, sticky="e")        
+        
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
             row=4, column=0, sticky="w", pady=5
         )
@@ -184,92 +239,40 @@ class RollLabelPrinter:
         rolls_entry = ttk.Entry(data_frame, textvariable=self.rolls_count_var, width=15)
         rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=5, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
-
-        # Вес рулона
-        ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
-            row=5, column=0, sticky="w", pady=5
-        )
-        gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
-        gross_entry.grid(row=5, column=1, padx=(5, 0), pady=5, sticky="w")
-        
-        # Вес втулки
-        ttk.Label(data_frame, text="Вес втулки, г:").grid(
-            row=5, column=1, sticky="w", padx=(115, 0), pady=5
-        )        
-        sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=5, sticky="w")
-
-        # Номер заказа (3 части)
-        ttk.Label(data_frame, text="№ заказа:").grid(
-            row=7, column=0, sticky="w", pady=5
-        )
-        entry_prefix = ttk.Entry(data_frame, textvariable=self.order_prefix, width=4)
-        entry_prefix.grid(row=7, column=1, padx=(5, 0), pady=5, sticky="w")
-
-        entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
-        entry_number.grid(row=7, column=1, padx=(42, 0), pady=5, sticky="w")
-        entry_number.bind("<Return>", lambda e: self.order_data_module.get_product_name())
-
-        entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
-        entry_suffix.grid(row=7, column=1, padx=(95, 0), pady=5, sticky="w")     
-
-        # Дата/Упаковщик
-        ttk.Label(data_frame, text="Упаковщик/ Дата:").grid(
-            row=8, column=0, sticky="w", pady=5
-        )
-        
-        packers = self.config_manager.get_packers()
-        default_packer = packers[0] if packers else ""
-        self.packer_var = StringVar(value=default_packer)
-        
-        self.packer_combo = ttk.Combobox(
-            data_frame, 
-            textvariable=self.packer_var,
-            values=packers,
-            state="readonly",
-            width=15
-        )
-        self.packer_combo.grid(row=8, column=1, padx=5, pady=5, sticky="w")
-        
-        # Дата
-        date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
-        date_entry.grid(row=8, column=1, padx=(135, 0), pady=5, sticky="w")
-        
-        # Резчик
-        self.cutter_label = ttk.Label(data_frame, text="Резчик:")
-        self.cutter_label.grid(row=9, column=0, sticky="w", pady=5)
-        
-        cutters = self.config_manager.get_cutters()
-        default_cutter = self.config_manager.get_default_cutter()
-        self.cutter_var = StringVar(value=default_cutter)
-        
-        self.cutter_combo = ttk.Combobox(
-            data_frame, 
-            textvariable=self.cutter_var,
-            values=cutters,
-            state="readonly", 
-            width=15
-        )
-        self.cutter_combo.grid(row=9, column=1, padx=5, pady=5, sticky="w")             
         
         # Схема намотки и Диаметр втулки
         ttk.Label(data_frame, text="Схема намотки:").grid(
-            row=10, column=0, sticky="w", pady=5
+            row=5, column=0, sticky="w", pady=5
         )
         winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
-        winding_entry.grid(row=10, column=0, padx=(190, 0), pady=5, sticky="w")
+        winding_entry.grid(row=5, column=0, padx=(180, 0), pady=5, sticky="w")
         
         ttk.Label(data_frame, text="Диаметр втулки, мм:").grid(
-            row=10, column=1, sticky="w", pady=5
+            row=5, column=1, sticky="w", pady=5
         )
         diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        diameter_entry.grid(row=10, column=1, padx=(210, 0), pady=5, sticky="w")                                         
+        diameter_entry.grid(row=5, column=1, padx=(210, 0), pady=5, sticky="w")
         
-        ttk.Label(data_frame, text="Длина ролика, м").grid(
-            row=11, column=0, sticky="w", pady=5
+        # Длина ролика
+        ttk.Label(data_frame, text="Длина ролика, м:").grid(
+            row=6, column=0, sticky="w", pady=5
         )              
         roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=11, column=0, padx=(165, 0), pady=5, sticky="w")
+        roll_length_entry.grid(row=6, column=0, padx=(170, 0), pady=5, sticky="w")        
+
+        # Вес рулона
+        ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
+            row=7, column=0, sticky="w", pady=5
+        )
+        gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
+        gross_entry.grid(row=7, column=1, padx=(5, 0), pady=5, sticky="w")
+        
+        # Вес втулки
+        ttk.Label(data_frame, text="Вес втулки, г:").grid(
+            row=7, column=1, sticky="w", padx=(115, 0), pady=5
+        )        
+        sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
+        sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)

@@ -10,43 +10,46 @@ class PDFTemplateFiller:
     
     # Сопоставление имен полей плейсхолдеров с настройками
     FIELD_MAPPING = {
-        # РОЛИК
-        "customer": "customer",      # $customer - заказчик
-        "brutto": "other",           # $brutto - вес брутто (группа "other" для ролика)
-        "netto": "other",            # $netto - вес нетто (группа "other" для ролика)
-        "rol": "other",              # $rol - кол-во этикеток в ролике (группа "other" для ролика)
-        "tr": "other",               # $tr - кол-во роликов (группа "other" для ролика)
-        "sx": "other",               # $sx - схема намотки (группа "other" для ролика)
-        "dia": "other",              # dia - диаметр втулки (группа "other" для ролика)
-        "onum": "other",             # $onum - номер заказа (группа "other" для ролика)
-        "date": "other",             # $date - дата изготовления (группа "other" для ролика)
-        "product": "product",        # $product - изделие
-        "packer": "other",           # $packer - упаковщик (группа "other" для ролика)
+        # Общие поля для ролика и коробки
+        "customer": "customer",      # Заказчик
+        "product": "product",        # Изделие
+        "packer": "other",           # Упаковщик
         
-        # КОРОБКА - отдельные настройки
-        "printhouse": "manufacturer",    # $printhouse - изготовитель
-        "printaddress": "address",       # $printaddress - адрес изготовителя
-        "total": "total",                # $total - всего этикеток в коробке
-        "tu_number": "tu_number",        # $tu_number - технические условия
+        # Поля ролика и коробки (группа "other")
+        "brutto": "other",           # Вес брутто
+        "netto": "other",            # Вес нетто  
+        "rol": "other",              # Этикеток в ролике
+        "tr": "other",               # Количество роликов
+        "sx": "other",               # Схема намотки
+        "dia": "other",              # Диаметр втулки
+        "onum": "other",             # Номер заказа
+        "date": "other",             # Дата изготовления
         
-        # КОРОБКА - группа "other" (одинаковый размер шрифта)
-        # Эти поля в коробке используют настройку "other":
-        # "customer": "customer",        # НЕТ! В коробке заказчик отдельно
-        # "product": "product",          # НЕТ! В коробке изделие отдельно  
-        # "packer": "packer",            # НЕТ! В коробке упаковщик отдельно
-        "rol": "other",                  # $rol - в коробке в группе "other"
-        "tr": "other",                   # $tr - в коробке в группе "other"
-        "onum": "other",                 # $onum - в коробке в группе "other"
-        "dia": "other",                  # dia - в коробке в группе "other"
-        "date": "other",                 # $date - в коробке в группе "other"
-        "sx": "other",                   # $sx - в коробке в группе "other"
-        "brutto": "other",               # $brutto - в коробке в группе "other"
-        "netto": "other",                # $netto - в коробке в группе "other"
-        "box_brut": "other",
-        "box_net": "other",
-        "cutter": "other",
-        "rll_length": "other",
-        "emission": "other",
+        # Поля только для коробки
+        "printhouse": "manufacturer",    # Изготовитель
+        "printaddress": "address",       # Адрес изготовителя
+        "total": "total",                # Всего этикеток
+        "tu_number": "tu_number",        # Технические условия
+        
+        # Новые поля коробки
+        "box_brut": "other",             # Вес коробки брутто
+        "box_net": "other",              # Вес коробки нетто
+        "cutter": "other",               # Резчик
+        "rll_length": "other",           # Длина ролика
+        "emission": "other",             # Дата эмиссии
+    }
+    
+    # Сопоставление статического текста с плейсхолдерами для очистки
+    STATIC_TEXT_MAPPING = {
+        # статический_текст: плейсхолдер
+        "Изготовитель:": "$printhouse",
+        "Заказчик:": "$customer",
+        "Дата эмиссии:": "$emission", 
+        "Длина ролика:": "$rll_length",
+        "№ съема/№ ролика :": "$batch_num",
+        "Вес рулонов, брутто:": "$brutto",
+        "Вес рулонов, нетто:": "$netto",
+        "Кол-во этикеток:": "$rol",
     }    
     
     def __init__(self, template_path: str):
@@ -115,45 +118,16 @@ class PDFTemplateFiller:
         if '$d' in data_map_without_d:
             del data_map_without_d['$d']
             
-        # Очистка статического текста "Изготовитель" если скрываем производителя
-        if not data_map.get("$printhouse") or data_map["$printhouse"].strip() == "":
-            # Ищем и очищаем текст "Изготовитель"
-            manufacturer_instances = page.search_for("Изготовитель:")
-            for rect in manufacturer_instances:
-                # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
-                rect_width = rect.x1 - rect.x0
-                rect_height = rect.y1 - rect.y0
-                if rect_width < 10 or rect_height < 5:
-                    continue
-                    
-                transformed_rect = rect * mat
-                x0, y0 = transformed_rect.x0, transformed_rect.y0
-                x1, y1 = transformed_rect.x1, transformed_rect.y1
-                draw.rectangle([x0, y0, x1, y1], fill='white')
-                
-        if not data_map.get("$emission") or data_map["$emission"].strip() == "":
-            # Ищем и очищаем текст "Дата эмиссии" (возможные варианты написания)
-            emission_texts = ["Дата эмиссии:", "Эмиссия:", "Дата эмиссия:"]
-            for emission_text in emission_texts:
-                emission_instances = page.search_for(emission_text)
-                for rect in emission_instances:
-                    # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
-                    rect_width = rect.x1 - rect.x0
-                    rect_height = rect.y1 - rect.y0
-                    if rect_width < 10 or rect_height < 5:
-                        continue
-                        
-                    transformed_rect = rect * mat
-                    x0, y0 = transformed_rect.x0, transformed_rect.y0
-                    x1, y1 = transformed_rect.x1, transformed_rect.y1
-                    draw.rectangle([x0, y0, x1, y1], fill='white')
+        # Очистка статического текста для пустых плейсхолдеров
+        self._clear_empty_static_text(draw, page, mat, data_map)
         
         # Список всех плейсхолдеров для очистки
         all_placeholders = [
             "$customer", "$product", "$onum", "$date", "$packer",
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
-            "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission"
+            "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
+            "$batch_num", "$roul_num"
         ]
         
         # Очищаем области пустых плейсхолдеров
@@ -193,6 +167,23 @@ class PDFTemplateFiller:
                 self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
         
         return img
+        
+    def _clear_empty_static_text(self, draw: ImageDraw.Draw, page, mat, data_map: Dict[str, str]):
+        """Очищает статический текст, если соответствующий плейсхолдер пустой"""
+        for static_text, placeholder in self.STATIC_TEXT_MAPPING.items():
+            if not data_map.get(placeholder) or data_map[placeholder].strip() == "":
+                instances = page.search_for(static_text)
+                for rect in instances:
+                    # Фильтр артефактов
+                    rect_width = rect.x1 - rect.x0
+                    rect_height = rect.y1 - rect.y0
+                    if rect_width < 10 or rect_height < 5:
+                        continue
+                        
+                    transformed_rect = rect * mat
+                    x0, y0 = transformed_rect.x0, transformed_rect.y0
+                    x1, y1 = transformed_rect.x1, transformed_rect.y1
+                    draw.rectangle([x0, y0, x1, y1], fill='white')
         
     def _prepare_text_lines(self, text: str, font_size: int, wrap_settings: dict, for_print: bool) -> List[str]:
         """Разбивает текст на строки с учетом настроек переноса"""
