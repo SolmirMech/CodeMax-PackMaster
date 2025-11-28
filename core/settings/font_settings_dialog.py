@@ -79,20 +79,20 @@ class FontSettingsDialog:
             }
         }
     
-    def __init__(self, parent, config_manager, preview_printer, preview_export_module):
-        self.parent = parent
+    def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module):
+        self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.preview_printer = preview_printer
         self.preview_export_module = preview_export_module
         self.coordinator = preview_export_module.coordinator
+        self.parent_manager = None
+        self.last_status = ""
         
-        # Инициализация переменных (как в оригинальном __init__)
-        self.window = None
-        settings = self.config_manager.load_json_settings("shared_utils.json") or {}
-        self.current_template = settings.get("last_font_template", "1_цех")
-        self.font_settings = self.load_font_settings()
+        # Инициализация переменных
+        self.current_template = ""
+        self.font_settings = {}
         
-        # UI переменные (добавляем инициализацию)
+        # UI переменные
         self.template_var = None
         self.template_combo = None
         self.roll_entries = {}
@@ -102,8 +102,70 @@ class FontSettingsDialog:
         self.status_var = None
         self.status_label = None
         self._initialized = False
-        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+
+    def set_parent_manager(self, manager):
+        """Устанавливает ссылку на родительский менеджер"""
+        self.parent_manager = manager
+        
+    def create_ui(self):
+        """Создает UI в указанном родительском фрейме"""
+        # Получаем шаблон из координатора
+        if self.coordinator:
+            self.current_template = self.coordinator.get_font_template()
             self.coordinator.subscribe(self._on_coordinator_changed)
+            
+        self.font_settings = self.load_font_settings()
+        
+        # Основной контейнер с двумя колонками
+        self.main_frame = ttk.Frame(self.parent_frame)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Панель шаблонов
+        self.create_template_panel()
+        
+        # Левая колонка - Ролик
+        roll_frame = ttk.LabelFrame(self.main_frame, text="Ролик")
+        roll_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.create_roll_tab(roll_frame)
+        
+        # Правая колонка - Коробка
+        box_frame = ttk.LabelFrame(self.main_frame, text="Коробка")
+        box_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        self.create_box_tab(box_frame)
+        
+        self._initialized = True
+
+    def _on_save_clicked(self):
+        """Обработчик клика по кнопке сохранения"""
+        if self.parent_manager:
+            self.parent_manager.save_all_and_close()
+
+    def save_settings(self):
+        """Сохраняет настройки шрифтов"""
+        try:
+            # Сохраняем настройки шрифтов
+            success = self._save_font_settings()
+            
+            if success:
+                # Сохраняем выбранный шаблон в настройки приложения
+                self.coordinator.set_font_template(self.current_template)
+                
+                # Обновляем превью
+                self.preview_printer.update_font_settings(self.font_settings)
+                self.preview_printer.update_preview_displays()
+                
+                self.last_status = "✅ Настройки шрифтов сохранены"
+                return True
+            else:
+                self.last_status = "❌ Не удалось сохранить настройки шрифтов"
+                return False
+                
+        except ValueError as e:
+            self.last_status = "❌ Ошибка: Некорректные значения в настройках"
+            return False
+        except Exception as e:
+            self.last_status = f"❌ Ошибка сохранения: {e}"
+            return False        
         
     def _on_coordinator_changed(self):
         """Обрабатывает изменения от координатора"""
@@ -126,101 +188,23 @@ class FontSettingsDialog:
         if template_settings:
             return template_settings
         else:
-            return self.get_default_font_settings()
-        
-    def show_in_frame(self, parent_frame):
-        """Показывает диалог внутри родительского фрейма"""
-        # ИСПРАВИТЬ: получаем корневое окно, а не используем фрейм как окно
-        self.window = parent_frame.winfo_toplevel()
-        
-        # Критически важно: получаем шаблон из координатора
-        if self.coordinator:
-            self.current_template = self.coordinator.get_font_template()
-            print(f"show_in_frame: шаблон из координатора = {self.current_template}")
-        else:
-            print("ОШИБКА: координатор не установлен!")
-            self.current_template = "1_цех"
-        
-        # Теперь загружаем настройки
-        self.font_settings = self.load_font_settings()
-        self.create_ui(parent_frame)
-        
-        # ИСПРАВИТЬ: привязываем к окну, а не к фрейму
-        self.window.bind('<Return>', lambda e: self.save_settings())
-        
-    def create_ui(self, parent_frame):
-        """Создает UI в указанном родительском фрейме"""
-        self.window = parent_frame
-        
-        if self.coordinator:
-            self.current_template = self.coordinator.get_font_template()
-            self.coordinator.subscribe(self._on_coordinator_changed)
-        
-        # Основной код из __init__ (без создания Toplevel)
-        self.window.bind('<Escape>', lambda e: self.close())
-        # self.window.bind('<Return>', lambda e: self.save_settings())        
-        self.window.focus_set()
-        
-        # Создаем все виджеты (переносим из create_ui)
-        self.create_template_panel()
-        
-        # Основной контейнер с двумя колонками
-        main_frame = ttk.Frame(self.window)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Левая колонка - Ролик
-        roll_frame = ttk.LabelFrame(main_frame, text="Ролик")
-        roll_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        self.create_roll_tab(roll_frame)
-        
-        # Правая колонка - Коробка
-        box_frame = ttk.LabelFrame(main_frame, text="Коробка")
-        box_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        self.create_box_tab(box_frame)
-        
-        # Кнопки сохранения/отмены
-        self.create_buttons()
-        self._initialized = True
-        
-    def show(self):
-        """Показывает диалог в отдельном окне (для обратной совместимости)"""
-        if self.window and isinstance(self.window, tk.Toplevel) and self.window.winfo_exists():
-            self.window.lift()
-            return
-
-        self.window = tk.Toplevel(self.parent)
-        self.window.title("Настройки шрифтов")
-        self.window.geometry("1100x730")
-        self.window.resizable(True, True)
-        
-        # Центрирование окна
-        self.center_window()
-        
-        # Привязка клавиш
-        self.window.bind('<Escape>', lambda e: self.window.destroy())
-        self.window.focus_set()
-        
-        # Создаем UI в Toplevel
-        self.create_ui(self.window)
-
-    def close(self):
-        """Закрывает диалог"""
-        if self.window:
-            if isinstance(self.window, tk.Toplevel):
-                self.window.destroy()
-            self.window = None        
+            return self.get_default_font_settings()            
         
     def create_template_panel(self):
         """Создает панель управления шаблонами"""
-        template_frame = ttk.Frame(self.window)
+        template_frame = ttk.Frame(self.main_frame)
         template_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
         
-        ttk.Label(template_frame, text="Шаблон:").pack(side=tk.LEFT, padx=(0, 5))
+        # Левая часть - выбор шаблона
+        left_frame = ttk.Frame(template_frame)
+        left_frame.pack(side=tk.LEFT)
+        
+        ttk.Label(left_frame, text="Шаблон:").pack(side=tk.LEFT, padx=(0, 5))
         
         # Combobox шаблонов
         self.template_var = tk.StringVar(value=self.current_template)
         self.template_combo = ttk.Combobox(
-            template_frame, 
+            left_frame, 
             textvariable=self.template_var,
             state="readonly",
             width=15
@@ -228,13 +212,37 @@ class FontSettingsDialog:
         self.template_combo.pack(side=tk.LEFT, padx=5)
         self.template_combo.bind('<<ComboboxSelected>>', self.on_template_changed)
         
-        # Кнопки
-        ttk.Button(template_frame, text="🔄", width=3, 
-                   command=self.apply_template).pack(side=tk.LEFT, padx=2)
-        ttk.Button(template_frame, text="➕", width=3,
-                   command=self.save_as_template).pack(side=tk.LEFT, padx=2)
-        ttk.Button(template_frame, text="🗑️", width=3,
-                   command=self.delete_template).pack(side=tk.LEFT, padx=2)
+        # Кнопки управления шаблонами
+        ttk.Button(left_frame, text="🔄", width=3, 
+                   command=self.apply_template).pack(side=tk.LEFT, padx=5)
+        ttk.Button(left_frame, text="➕", width=3,
+                   command=self.save_as_template).pack(side=tk.LEFT, padx=5)
+        ttk.Button(left_frame, text="🗑️", width=3,
+                   command=self.delete_template).pack(side=tk.LEFT, padx=(5, 60))
+        
+        # Правая часть - кнопки сохранения и статус
+        right_frame = ttk.Frame(template_frame)
+        right_frame.pack(side=tk.LEFT)
+        
+        # Кнопка сохранения
+        save_btn = ttk.Button(
+            right_frame, 
+            text="💾 Сохранить", 
+            command=self._on_save_clicked
+        )
+        save_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Кнопка сброса
+        ttk.Button(
+            right_frame,
+            text="🧹 Сбросить",
+            command=self.reset_to_default
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Строка статуса
+        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
+        self.status_label = ttk.Label(right_frame, textvariable=self.status_var, foreground="green")
+        self.status_label.pack(side=tk.LEFT, padx=5)
         
         # Загружаем список шаблонов
         self.update_template_list()
@@ -297,7 +305,7 @@ class FontSettingsDialog:
         template_name = tk.simpledialog.askstring(
             "Новый шаблон", 
             "Введите имя нового шаблона:",
-            parent=self.window
+            parent=self.main_frame.winfo_toplevel()
         )
         
         if not template_name:
@@ -579,31 +587,8 @@ class FontSettingsDialog:
 
     def open_customers_editor(self):
         """Открывает диалог редактирования списка клиентов без производителя"""
-        customers_editor = CustomersEditorDialog(self.window, self.config_manager)
+        customers_editor = CustomersEditorDialog(self.main_frame.winfo_toplevel(), self.config_manager)
         customers_editor.show()
-
-    def save_settings(self):
-        """Сохраняет все настройки через подметоды"""
-        try:
-            # Сохраняем настройки шрифтов
-            self._save_font_settings()
-            
-            # Сохраняем выбранный шаблон в настройки приложения
-            self.coordinator.set_font_template(self.current_template)
-            
-            # Обновляем превью
-            self.preview_printer.update_font_settings(self.font_settings)
-            self.preview_printer.update_preview_displays()
-            
-            # Не закрываем окно если мы во вкладке!
-            if isinstance(self.window, tk.Toplevel):
-                self.window.destroy()
-            # Иначе - мы во вкладке, просто выходим из метода
-            
-        except ValueError as e:
-            self.show_status("Ошибка: Некорректные значения в настройках", "error")
-        except Exception as e:
-            self.show_status(f"Ошибка сохранения: {e}", "error")
 
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
@@ -661,39 +646,6 @@ class FontSettingsDialog:
         except Exception as e:
             self.show_status(f"Ошибка сохранения: {e}", "error")
             return False
-
-    def create_buttons(self):
-        """Создает кнопки сохранения/отмены и строку статуса"""
-        # Фрейм для кнопок и статуса
-        button_frame = ttk.Frame(self.window)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        # Левая часть - кнопки
-        left_frame = ttk.Frame(button_frame)
-        left_frame.pack(side=tk.LEFT)
-        
-        save_btn = ttk.Button(
-            left_frame, 
-            text="💾 Сохранить", 
-            command=self.save_settings
-        )
-        save_btn.pack(side=tk.LEFT, padx=5)
-        save_btn.configure(default='active')
-        self.window.bind('<Return>', lambda e: self.save_settings())
-        
-        ttk.Button(
-            left_frame,
-            text="🧹 Сбросить",
-            command=self.reset_to_default
-        ).pack(side=tk.LEFT, padx=(50, 5))
-        
-        # Центральная часть - строка статуса
-        center_frame = ttk.Frame(button_frame)
-        center_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=20)
-        
-        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
-        self.status_label = ttk.Label(center_frame, textvariable=self.status_var, foreground="green")
-        self.status_label.pack(anchor=tk.CENTER)
         
     def show_status(self, message, status_type="info"):
         """Показывает статус в строке состояния"""
@@ -704,16 +656,7 @@ class FontSettingsDialog:
         }
         self.status_var.set(message)
         self.status_label.configure(foreground=colors.get(status_type, "green"))
-        self.window.update()
-        
-    def center_window(self):
-        """Центрирует окно относительно родительского"""
-        self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+        self.main_frame.winfo_toplevel().update()       
 
     def reset_to_default(self):
         """Сбрасывает настройки к значениям по умолчанию"""

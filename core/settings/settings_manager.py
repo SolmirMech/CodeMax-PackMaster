@@ -10,7 +10,9 @@ class SettingsManager:
         self.parent = parent
         self.preview_export_module = preview_export_module
         self.window = None
-        self.status_callback = None  # Колбэк для статуса
+        self.status_callback = None
+        self.general_dialog = None
+        self.font_dialog = None
         
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""
@@ -33,7 +35,6 @@ class SettingsManager:
         
         # Центрирование
         self.center_window()
-        self.window.bind("<Escape>", lambda e: self.window.destroy())
         
         # Создаем вкладки
         notebook = ttk.Notebook(self.window)
@@ -48,18 +49,56 @@ class SettingsManager:
         notebook.add(font_frame, text="Настройки шрифтов")
         
         # Инициализируем диалоги
-        self.general_dialog = SettingsDialog(self.window, self.preview_export_module)
-        self.general_dialog.set_status_callback(self.update_status)
-        self.general_dialog.show_in_frame(general_frame)
+        self.general_dialog = SettingsDialog(general_frame, self.preview_export_module)
+        self.general_dialog.set_parent_manager(self)
+        self.general_dialog.create_ui()
         
         self.font_dialog = FontSettingsDialog(
-            self.window, 
+            font_frame, 
             self.preview_export_module.config_manager,
-            self.preview_export_module.preview_module,  # ← preview_printer (RollPreview)
-            self.preview_export_module                   # ← preview_export_module (PreviewExport)
+            self.preview_export_module.preview_module,
+            self.preview_export_module
         )
-        self.font_dialog.show_in_frame(font_frame)
+        self.font_dialog.set_parent_manager(self)
+        self.font_dialog.create_ui()
         
+        # Привязки клавиш на главное окно
+        self.window.bind('<Return>', self.save_all_and_close)
+        self.window.bind('<Escape>', self.close)
+        self.window.focus_set()
+        
+    def save_all_and_close(self, event=None):
+        """Сохраняет настройки из активной вкладки"""
+        # Получаем активную вкладку из notebook
+        notebook = None
+        for child in self.window.winfo_children():
+            if isinstance(child, ttk.Notebook):
+                notebook = child
+                break
+        
+        if notebook:
+            current_tab = notebook.index(notebook.select())
+            
+            if current_tab == 0:  # Общие настройки
+                success = self.general_dialog.save_settings()
+                if success:
+                    self.update_status("✅ Общие настройки сохранены!", "green")
+                    self.close()
+                else:
+                    self.update_status(self.general_dialog.last_status, "red")
+            else:  # Настройки шрифтов
+                success = self.font_dialog.save_settings()
+                if success:
+                    self.update_status("✅ Настройки шрифтов сохранены!", "green")
+                else:
+                    self.update_status(self.font_dialog.last_status, "red")
+            
+    def close(self, event=None):
+        """Закрывает окно настроек"""
+        if self.window:
+            self.window.destroy()
+            self.window = None
+            
     def center_window(self):
         """Центрирует окно"""
         self.window.update_idletasks()

@@ -14,15 +14,16 @@ from core.shared_utils import (
 
 class SettingsDialog:
     """Диалог настроек"""
-
-    def __init__(self, parent, preview_export_module):
-        self.parent = parent
+    def __init__(self, parent_frame, preview_export_module):
+        self.parent_frame = parent_frame
         self.preview_export_module = preview_export_module
         self.config_manager = ConfigManager()
         self.coordinator = preview_export_module.coordinator
-        self.window = None
+        self.parent_manager = None
+        self.last_status = ""
+        
+        # Инициализация переменных
         self.xml_folder_path = tk.StringVar(value="")
-        # Переменные для Excel
         self.excel_folder_path = ""
         self.status_var = tk.StringVar(value="")
         self.workshop_var = tk.StringVar(value="1")
@@ -30,14 +31,14 @@ class SettingsDialog:
         self.paper_height_var = tk.StringVar(value="")
         self.main_frame = None
 
-    def create_ui(self, parent_frame):
-        """Создает UI в указанном родительском фрейме"""
-        self.main_frame = ttk.Frame(parent_frame)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+    def set_parent_manager(self, manager):
+        """Устанавливает ссылку на родительский менеджер"""
+        self.parent_manager = manager
         
-        # Если показываем во фрейме, используем parent_frame как окно для привязки событий
-        if not hasattr(self, 'window') or self.window is None:
-            self.window = parent_frame.winfo_toplevel()  # Получаем корневое окно
+    def create_ui(self):
+        """Создает UI в родительском фрейме"""
+        self.main_frame = ttk.Frame(self.parent_frame)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
 
         content_frame = ttk.Frame(self.main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
@@ -72,7 +73,7 @@ class SettingsDialog:
         )
         open_boxes_btn.grid(row=1, column=0, padx=5, pady=5, sticky="w")
         
-        # === Добавляем меню настроек папок ===
+        # Меню настроек папок
         folder_menu_btn = ttk.Menubutton(
             print_frame, 
             text="📂 Настройки папок", 
@@ -199,44 +200,87 @@ class SettingsDialog:
         )
         status_label.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=(10, 0))
         
-        # Кнопки сохранения
+        # Кнопка сохранения
         save_button = ttk.Button(
             self.main_frame, 
             text="💾 Сохранить", 
-            command=self.save_all_settings,
+            command=self._on_save_clicked,
             width=15
         )
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=5, pady=(10, 0))        
         
         self.update_folder_status()
 
-        return self.main_frame
-        
-    def show(self):
-        if self.window and self.window.winfo_exists():
-            self.window.lift()
-            return
+    def _on_save_clicked(self):
+        """Обработчик клика по кнопке сохранения"""
+        if self.parent_manager:
+            self.parent_manager.save_all_and_close()
 
-        self.window = tk.Toplevel(self.parent)
-        self.window.title("Настройки")
-        self.window.geometry("900x600")
-        self.window.grab_set()
+    def save_settings(self):
+        """Сохраняет настройки этой вкладки"""
+        try:
+            self.preview_export_module.settings["printer"] = self.printer_var.get()
+            self.preview_export_module.settings["paper_width_mm"] = int(self.paper_width_var.get())
+            self.preview_export_module.settings["paper_height_mm"] = int(self.paper_height_var.get())
+            
+            # Сохраняем настройки печати
+            all_settings = self.preview_export_module.config_manager.load_json_settings(self.preview_export_module.settings_file)
+            all_settings["weight_box_print"] = self.preview_export_module.settings
+            self.preview_export_module.config_manager.save_json_settings(self.preview_export_module.settings_file, all_settings)
 
-        # Центрирование окна
-        self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry(f"+{x}+{y}")
+            # Сохраняем производителя
+            new_manufacturer = self.manufacturer_var.get().strip()
+            if new_manufacturer:
+                self.preview_export_module.config_manager.save_manufacturer(new_manufacturer)
+                self.preview_export_module.manufacturer = new_manufacturer
 
-        self.window.bind("<Escape>", lambda e: self.window.destroy())
-        self.create_ui(self.window)
-        
-    def show_in_frame(self, parent_frame):
-        """Показывает диалог внутри существующего фрейма"""
-        self.create_ui(parent_frame)
-        self.window.bind("<Return>", lambda e: self.save_all_settings())
+            # Сохраняем настройки номера заказа
+            shared_settings = self.preview_export_module.config_manager.load_json_settings("shared_utils.json")
+            shared_settings["order_number"] = {
+                "prefix": self.settings_prefix_var.get().strip(),
+                "suffix": self.settings_suffix_var.get().strip()
+            }
+
+            # Сохраняем список резчиков
+            new_cutters = []
+            for entry in self.cutter_entries:
+                cutter_name = entry.get().strip()
+                if cutter_name:
+                    new_cutters.append(cutter_name)
+            shared_settings["cutters"] = new_cutters
+            
+            # Сохраняем список упаковщиков
+            new_packers = []
+            for entry in self.packer_entries:
+                packer_name = entry.get().strip()
+                if packer_name:
+                    new_packers.append(packer_name)
+            shared_settings["packers"] = new_packers
+            
+            workshop = self.workshop_var.get()
+            self.coordinator.set_workshop(workshop)
+            shared_settings["workshop"] = workshop
+            
+            self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
+
+            # Сохраняем упаковщиков через config_manager
+            self.preview_export_module.config_manager.save_packers(new_packers)
+
+            # Сохраняем все изменения в shared_utils.json
+            self.preview_export_module.config_manager.save_json_settings("shared_utils.json", shared_settings)
+
+            # Обновляем текущие значения
+            self.preview_export_module.order_prefix.set(shared_settings["order_number"]["prefix"])
+            self.preview_export_module.order_suffix.set(shared_settings["order_number"]["suffix"])
+
+            self.coordinator._notify_subscribers()
+
+            self.last_status = "✅ Общие настройки успешно сохранены!"
+            return True
+
+        except Exception as e:
+            self.last_status = f"❌ Ошибка сохранения общих настроек: {str(e)}"
+            return False        
     
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""
@@ -413,74 +457,6 @@ class SettingsDialog:
         dialog = BoxEditorDialog(self.window, self.preview_export_module)
         dialog.parent_dialog = self
         dialog.show()
-
-    def save_all_settings(self):
-        """Сохраняет все настройки из единого окна"""
-        try:
-            self.preview_export_module.settings["printer"] = self.printer_var.get()
-            self.preview_export_module.settings["paper_width_mm"] = int(self.paper_width_var.get())
-            self.preview_export_module.settings["paper_height_mm"] = int(self.paper_height_var.get())
-            
-            # Сохраняем настройки печати
-            all_settings = self.preview_export_module.config_manager.load_json_settings(self.preview_export_module.settings_file)
-            all_settings["weight_box_print"] = self.preview_export_module.settings
-            self.preview_export_module.config_manager.save_json_settings(self.preview_export_module.settings_file, all_settings)
-
-            # 2. Сохраняем производителя
-            new_manufacturer = self.manufacturer_var.get().strip()
-            if new_manufacturer:
-                self.preview_export_module.config_manager.save_manufacturer(new_manufacturer)
-                self.preview_export_module.manufacturer = new_manufacturer
-
-            # 3. Сохраняем настройки номера заказа
-            shared_settings = self.preview_export_module.config_manager.load_json_settings("shared_utils.json")
-            shared_settings["order_number"] = {
-                "prefix": self.settings_prefix_var.get().strip(),
-                "suffix": self.settings_suffix_var.get().strip()
-            }
-
-            # 4. Сохраняем список резчиков (из отдельных полей)
-            new_cutters = []
-            for entry in self.cutter_entries:
-                cutter_name = entry.get().strip()
-                if cutter_name:  # Добавляем только непустые имена
-                    new_cutters.append(cutter_name)
-            shared_settings["cutters"] = new_cutters
-            
-            # 5. Сохраняем список упаковщиков (из отдельных полей)
-            new_packers = []
-            for entry in self.packer_entries:
-                packer_name = entry.get().strip()
-                if packer_name:  # Добавляем только непустые имена
-                    new_packers.append(packer_name)
-            shared_settings["packers"] = new_packers
-            
-            workshop = self.workshop_var.get()
-            self.coordinator.set_workshop(workshop)
-            shared_settings["workshop"] = workshop
-            
-            self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
-
-            # Сохраняем упаковщиков через config_manager
-            self.preview_export_module.config_manager.save_packers(new_packers)
-
-            # Сохраняем все изменения в shared_utils.json
-            self.preview_export_module.config_manager.save_json_settings("shared_utils.json", shared_settings)
-
-            # Обновляем текущие значения
-            self.preview_export_module.order_prefix.set(shared_settings["order_number"]["prefix"])
-            self.preview_export_module.order_suffix.set(shared_settings["order_number"]["suffix"])
-
-            self.coordinator._notify_subscribers()
-
-            self.update_status("✅ Все настройки успешно сохранены!", "green")
-            
-            if self.window and isinstance(self.window, tk.Toplevel):
-                self.window.destroy()
-                self.window = None
-
-        except Exception as e:
-            self.update_status("❌ Ошибка сохранения настроек: {str(e)}", "red")
 
 class CustomersEditorDialog:
     """Диалог редактирования списка клиентов без производителя"""
