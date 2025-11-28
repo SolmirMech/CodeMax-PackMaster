@@ -198,7 +198,7 @@ class SettingsDialog:
             foreground="green",
             font=("Arial", 12)
         )
-        status_label.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=(10, 0))
+        status_label.pack(side=tk.LEFT, fill=tk.X, padx=10, pady=10)
         
         # Кнопка сохранения
         save_button = ttk.Button(
@@ -207,7 +207,7 @@ class SettingsDialog:
             command=self._on_save_clicked,
             width=15
         )
-        save_button.pack(side=tk.RIGHT, fill=tk.X, padx=5, pady=(10, 0))        
+        save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
 
@@ -442,19 +442,22 @@ class SettingsDialog:
         
     def open_customers_editor(self):
         """Открывает окно редактирования списка клиентов без производителя"""
-        dialog = CustomersEditorDialog(self.window, self.preview_export_module)
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = CustomersEditorDialog(parent_window, self.preview_export_module)
         dialog.parent_dialog = self
         dialog.show()
 
     def open_special_clients_editor(self):
         """Открывает окно редактирования списка особых клиентов"""
-        dialog = SpecialClientsEditorDialog(self.window, self.preview_export_module)
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = SpecialClientsEditorDialog(parent_window, self.preview_export_module)
         dialog.parent_dialog = self
         dialog.show()
         
     def open_box_editor(self):
         """Открывает редактор коробок"""
-        dialog = BoxEditorDialog(self.window, self.preview_export_module)
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = BoxEditorDialog(parent_window, self.preview_export_module)
         dialog.parent_dialog = self
         dialog.show()
 

@@ -51,6 +51,7 @@ class RollLabelPrinter:
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+            self._update_cutter_visibility()
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
         variables_to_track = [
             self.rolls_count_var,
@@ -234,9 +235,9 @@ class RollLabelPrinter:
         date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
         date_entry.grid(row=8, column=1, padx=(135, 0), pady=5, sticky="w")
         
-        ttk.Label(data_frame, text="Резчик:").grid(
-            row=9, column=0, sticky="w", pady=5
-        )
+        # Резчик
+        self.cutter_label = ttk.Label(data_frame, text="Резчик:")
+        self.cutter_label.grid(row=9, column=0, sticky="w", pady=5)
         
         cutters = self.config_manager.get_cutters()
         default_cutter = self.config_manager.get_default_cutter()
@@ -281,8 +282,20 @@ class RollLabelPrinter:
             # Обновляем списки упаковщиков и резчиков
             self.update_packers_list()
             self.update_cutters_list()
+            self._update_cutter_visibility()
         except Exception as e:
             print(f"Ошибка обновления списков после изменения настроек: {e}")
+            
+    def _update_cutter_visibility(self):
+        """Показывает/скрывает резчика в зависимости от цеха"""
+        if hasattr(self, 'cutter_label') and hasattr(self, 'cutter_combo'):
+            workshop = self.coordinator.get_workshop()
+            if workshop == "1":
+                self.cutter_label.grid_remove()
+                self.cutter_combo.grid_remove()
+            else:  # цех 2
+                self.cutter_label.grid()
+                self.cutter_combo.grid()
 
     def update_packers_list(self):
         """Обновляет список упаковщиков в комбобоксе"""

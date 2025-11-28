@@ -218,7 +218,7 @@ class FontSettingsDialog:
         ttk.Button(left_frame, text="➕", width=3,
                    command=self.save_as_template).pack(side=tk.LEFT, padx=5)
         ttk.Button(left_frame, text="🗑️", width=3,
-                   command=self.delete_template).pack(side=tk.LEFT, padx=(5, 60))
+                   command=self.delete_template).pack(side=tk.LEFT, padx=(5, 150))
         
         # Правая часть - кнопки сохранения и статус
         right_frame = ttk.Frame(template_frame)
@@ -230,19 +230,14 @@ class FontSettingsDialog:
             text="💾 Сохранить", 
             command=self._on_save_clicked
         )
-        save_btn.pack(side=tk.LEFT, padx=5)
+        save_btn.pack(side=tk.LEFT, padx=(5, 220))
         
         # Кнопка сброса
         ttk.Button(
             right_frame,
             text="🧹 Сбросить",
             command=self.reset_to_default
-        ).pack(side=tk.LEFT, padx=5)
-        
-        # Строка статуса
-        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
-        self.status_label = ttk.Label(right_frame, textvariable=self.status_var, foreground="green")
-        self.status_label.pack(side=tk.LEFT, padx=5)
+        ).pack(side=tk.RIGHT, padx=(0, 5))     
         
         # Загружаем список шаблонов
         self.update_template_list()
@@ -487,6 +482,13 @@ class FontSettingsDialog:
                     
                 entry.pack(side=tk.LEFT, padx=5)
                 self.roll_wrap_entries[key] = var
+                
+        status_frame = ttk.Frame(parent)
+        status_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
+                
+        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
+        self.status_label = ttk.Label(status_frame, textvariable=self.status_var, foreground="green")
+        self.status_label.pack(side=tk.LEFT, padx=5)
 
     def create_box_tab(self, parent):
         """Создает вкладку настроек для коробки"""
