@@ -40,6 +40,31 @@ class ConfigManager:
         
         return assets_file
         
+    def get_font_settings(self):
+        """Загружает настройки шрифтов: сначала из data, если нет - копирует из assets"""
+        data_path = self.get_settings_path("label_font_settings.json")
+        asset_path = self.get_asset_path("label_font_settings.json")
+        
+        # Пробуем загрузить из data (пользовательские настройки)
+        if os.path.exists(data_path):
+            settings = self.load_json_settings("label_font_settings.json")
+            if settings:
+                return settings
+        
+        # Если в data нет, копируем из assets
+        if os.path.exists(asset_path):
+            try:
+                with open(asset_path, "r", encoding="utf-8") as f:
+                    default_settings = json.load(f)
+                # Сохраняем копию в data
+                self.save_json_settings("label_font_settings.json", default_settings)
+                return default_settings
+            except Exception as e:
+                print(f"Ошибка копирования настроек шрифтов: {e}")
+        
+        # Если ничего нет, возвращаем пустой словарь
+        return {}
+        
     def reload_settings(self):
         """Перезагружает настройки из файлов"""
         try:

@@ -180,7 +180,7 @@ class FontSettingsDialog:
         
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущего шаблона"""
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        all_settings = self.config_manager.get_font_settings()
         
         # Получаем настройки текущего шаблона
         template_settings = all_settings.get(self.current_template)
