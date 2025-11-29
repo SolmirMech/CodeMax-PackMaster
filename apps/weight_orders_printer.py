@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, StringVar, BooleanVar
+from tkinter import ttk, StringVar, BooleanVar
 from datetime import datetime
 import win32print
 import win32ui
@@ -43,6 +43,7 @@ class WeightOrdersPrinter:
         self.gross_weight = StringVar(value="")
         self.net_weight = StringVar(value="")
         self.sleeve_weight = StringVar(value="40")
+        self.status_var = StringVar(value="")
         
         # Переменные интерфейса
         self.entries = {}
@@ -160,6 +161,30 @@ class WeightOrdersPrinter:
 
         settings_btn = ttk.Button(buttons_frame, text="⚙️ Настройки", command=self.open_settings)
         settings_btn.grid(row=0, column=1)
+        
+        # Строка статуса в самом низу основного контейнера
+        status_frame = ttk.Frame(main_container)
+        status_frame.pack(fill=tk.X, pady=(10, 0))
+
+        self.status_label = ttk.Label(
+            status_frame, 
+            textvariable=self.status_var,
+            foreground="green",
+            font=("Arial", 9)
+        )
+        self.status_label.pack(fill=tk.X)
+        
+    def show_status(self, message, color="green"):
+        """Показывает статусное сообщение с автоочисткой"""
+        self.status_var.set(message)
+        
+        # Устанавливаем цвет
+        self.status_label.config(foreground=color)
+        
+        # Очищаем через 5 секунд
+        if hasattr(self, '_status_after_id'):
+            self.parent.after_cancel(self._status_after_id)
+        self._status_after_id = self.parent.after(5000, lambda: self.status_var.set(""))
 
         
     def update_cutters_menu(self):
@@ -196,12 +221,14 @@ class WeightOrdersPrinter:
             # Не допускаем отрицательные значения и ноль
             if net <= 0:
                 self.net_weight.set("")
+                self.show_status("⚠️ Вес нетто должен быть положительным", "orange")
                 return
                 
             self.net_weight.set(str(int(net)) if net.is_integer() else f"{net:.1f}")
             
         except (ValueError, TypeError):
             self.net_weight.set("")
+            self.show_status("⚠️ Введите корректные числовые значения", "orange")
 
     def set_cutter(self, name):
         """Устанавливает выбранного резчика в поле ввода"""
@@ -225,9 +252,9 @@ class WeightOrdersPrinter:
             all_settings["weight_labels"] = self.settings
 
             if self.config_manager.save_json_settings(self.settings_file, all_settings):
-                messagebox.showinfo("Сохранено", "Настройки печати сохранены!")
+                self.show_status("✅ Настройки печати сохранены", "green")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")
+            self.show_status(f"❌ Не удалось сохранить настройки: {str(e)}", "red")
 
     def open_settings(self):
         """Открывает окно настроек печати"""
@@ -308,7 +335,7 @@ class WeightOrdersPrinter:
                 self.settings_window = None
 
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось обновить настройки:\n{str(e)}")
+            self.show_status(f"❌ Не удалось обновить настройки: {str(e)}", "red")
 
     def print_labels(self, data=None):
         """Печать этикеток для Заказов с весом."""
@@ -325,8 +352,9 @@ class WeightOrdersPrinter:
             }
 
             self._print_double_label(data)
+            self.show_status("✅ Этикетки отправлены на печать", "green")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка при печати: {str(e)}")
+            self.show_status(f"❌ Ошибка при печати: {str(e)}", "red")
 
     def _print_double_label(self, data):
         hdc = create_printer_dc(self.settings["printer"])

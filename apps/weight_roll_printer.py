@@ -288,23 +288,20 @@ class RollLabelPrinter:
         sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
         
         # Row 8: Поля для номеров съёмов и роликов       
-        ttk.Label(data_frame, text="Кол-во ручьев:").grid(
-            row=8, column=0, sticky="w", pady=5
-        )
-        streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=6)
-        streams_entry.grid(row=8, column=0, padx=(160, 0), pady=5, sticky="w")
-        
-        ttk.Label(data_frame, text="№ съёма:").grid(
-            row=8, column=1, sticky="w", pady=5
-        )
-        batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
-        batch_entry.grid(row=8, column=1, padx=(110, 0), pady=5, sticky="w")
+        self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
+        self.streams_label.grid(row=8, column=0, sticky="w", pady=5)
+        self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=6)
+        self.streams_entry.grid(row=8, column=0, padx=(160, 0), pady=5, sticky="w")
 
-        ttk.Label(data_frame, text="№ ролика:").grid(
-            row=8, column=1, sticky="w", padx=(160, 0), pady=5
-        )
-        roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=6)
-        roll_entry.grid(row=8, column=1, padx=(275, 0), pady=5, sticky="w")
+        self.batch_label = ttk.Label(data_frame, text="№ съёма:")
+        self.batch_label.grid(row=8, column=1, sticky="w", pady=5)
+        self.batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
+        self.batch_entry.grid(row=8, column=1, padx=(110, 0), pady=5, sticky="w")
+
+        self.roll_label = ttk.Label(data_frame, text="№ ролика:")
+        self.roll_label.grid(row=8, column=1, sticky="w", padx=(160, 0), pady=5)
+        self.roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=6)
+        self.roll_entry.grid(row=8, column=1, padx=(275, 0), pady=5, sticky="w")
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
@@ -349,6 +346,26 @@ class RollLabelPrinter:
             else:  # цех 2
                 self.cutter_label.grid()
                 self.cutter_combo.grid()
+                
+        # Добавляем управление видимостью полей row=8
+        if hasattr(self, 'streams_label') and hasattr(self, 'streams_entry'):
+            workshop = self.coordinator.get_workshop()
+            if workshop == "1":
+                # Цех 1 - скрываем поля автогенерации
+                self.streams_label.grid_remove()
+                self.streams_entry.grid_remove()
+                self.batch_label.grid_remove()
+                self.batch_entry.grid_remove()
+                self.roll_label.grid_remove()
+                self.roll_entry.grid_remove()
+            else:  # цех 2
+                # Цех 2 - показываем поля автогенерации
+                self.streams_label.grid()
+                self.streams_entry.grid()
+                self.batch_label.grid()
+                self.batch_entry.grid()
+                self.roll_label.grid()
+                self.roll_entry.grid()
 
     def update_packers_list(self):
         """Обновляет список упаковщиков в комбобоксе"""
