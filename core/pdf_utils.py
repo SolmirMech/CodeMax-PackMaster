@@ -37,6 +37,8 @@ class PDFTemplateFiller:
         "cutter": "other",               # Резчик
         "rll_length": "other",           # Длина ролика
         "emission": "other",             # Дата эмиссии
+        "batch_num": "customer",             # № съёма
+        "roul_num": "customer",             # № ролика
     }
     
     # Сопоставление статического текста с плейсхолдерами для очистки
@@ -50,6 +52,7 @@ class PDFTemplateFiller:
         "Вес рулонов, брутто:": "$brutto",
         "Вес рулонов, нетто:": "$netto",
         "Кол-во этикеток:": "$rol",
+        "—": "$roul_num",
     }    
     
     def __init__(self, template_path: str):

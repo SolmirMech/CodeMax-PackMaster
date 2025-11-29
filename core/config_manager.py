@@ -46,7 +46,6 @@ class ConfigManager:
             # Сбрасываем кэш или перечитываем файлы
             if hasattr(self, '_settings_cache'):
                 del self._settings_cache
-            print("DEBUG: ConfigManager - настройки перезагружены")
         except Exception as e:
             print(f"Ошибка перезагрузки настроек: {e}")
         

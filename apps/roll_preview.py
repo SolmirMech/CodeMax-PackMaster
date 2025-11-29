@@ -178,6 +178,8 @@ class RollPreview:
             self.connected_roll_module.roll_length,
             self.connected_roll_module.manufacturer_var,
             self.connected_roll_module.product_type_var,
+            self.connected_roll_module.batch_num_var,
+            self.connected_roll_module.roll_num_var,
         ]
         
         # Устанавливаем отслеживание для каждой переменной
@@ -231,6 +233,8 @@ class RollPreview:
                 "cutter": roll_module.cutter_var.get(),
                 "roll_length": roll_module.roll_length.get(),
                 "date_emission": roll_module.date_emission_var.get(),
+                "batch_num": roll_module.batch_num_var.get(),
+                "roll_num": roll_module.roll_num_var.get(),
             }
             
             # Обновляем предпросмотр
@@ -467,26 +471,28 @@ class RollPreview:
             "$onum": order_full,
             "$date": data.get('date', ''),
             "$packer": data.get('packer', ''),
+            "$rol": data.get('quantity', ''),
+            "$tr": data.get('rolls_count', ''),
+            "$emission": data.get('date_emission', ''),
             
             # Весовые данные
             "$brutto": data.get('gross_weight_kg', ''),
             "$netto": data.get('net_weight_kg', ''),
             
-            # Данные из таблицы
-            "$rol": data.get('quantity', '100'),
-            "$tr": data.get('rolls_count', ''),
-            
             # Технические параметры
-            "$sx": data.get('winding_scheme', '7'),
-            "dia": data.get('sleeve_diameter', '76'),
-            "$emission": data.get('date_emission', ''),
+            "$sx": data.get('winding_scheme', ''),
+            "dia": data.get('sleeve_diameter', ''),
+            
+            # Данные из метода manufacturer_data
+            "$tu_number": manufacturer_data['tu_number'],
+            "$printhouse": manufacturer_data['name'] if show_manufacturer else "",
+            "$printaddress": manufacturer_data['address'] if show_manufacturer else "",
             
             # Специфичные для 2 цеха параметры
             "$cutter": data.get('cutter', ''),
             "$rll_length": data.get('roll_length', ''),
-            "$tu_number": manufacturer_data['tu_number'],
-            "$printhouse": manufacturer_data['name'] if show_manufacturer else "",
-            "$printaddress": manufacturer_data['address'] if show_manufacturer else "",            
+            "$batch_num": data.get('batch_num', ''),
+            "$roul_num": data.get('roll_num', ''),
         }
         
         return data_map

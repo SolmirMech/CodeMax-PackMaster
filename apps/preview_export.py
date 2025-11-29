@@ -682,41 +682,124 @@ class PreviewExport:
             self.font_settings = FontSettingsDialog.get_default_font_settings()        
         
     def print_label(self):
-        """Печатает выбранную этикетку"""
+        """Печатает выбранную этикетку с поддержкой автогенерации"""
         try:
+            # Получаем данные из roll_module
+            roll_module = self.connected_roll_module
+            batch_num = roll_module.batch_num_var.get().strip()
+            roll_num = roll_module.roll_num_var.get().strip()  
+            streams = roll_module.streams_var.get().strip()
             copies_text = self.copies_var.get().strip()
-            if not copies_text:
-                copies = 1
-            else:
-                copies = int(copies_text)
-                
+            
+            copies = int(copies_text) if copies_text else 1
             if copies < 1:
                 copies = 1
             
-            printer_name = self._find_printer()
-            if not printer_name:
-                # Используем status_label из preview_module
-                self.preview_module.status_label.config(text="Принтер не найден!", foreground="red")
-                return
-            
-            # ИСПОЛЬЗУЕМ preview_module для получения данных и PDF фильлеров
-            if self.selected_preview == "roll":
-                data_map = self.preview_module._prepare_roll_data_map()
-                print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
-                label_type = "ролика"
+            # Определяем режим печати
+            if batch_num and roll_num and not streams:
+                # Ручной режим - одна конкретная комбинация
+                self._print_single_combination(batch_num, roll_num, copies)
+                
+            elif streams and batch_num:
+                # Авторежим - генерируем все комбинации
+                self._print_auto_combinations(streams, batch_num, copies)
+                
             else:
-                data_map = self.preview_module._prepare_box_data_map()
-                print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
-                label_type = "коробки"
-            
-            # Печатаем указанное количество копий
-            for i in range(copies):
-                self._print_image_gdi(print_image, printer_name)
-            
-            self.preview_module.status_label.config(text=f"Печать {label_type} отправлена ({copies} шт)", foreground="green")
-            
+                # Обычный режим - как раньше
+                self._print_standard_label(copies)
+                
         except Exception as e:
             self.preview_module.status_label.config(text=f"Ошибка печати: {e}", foreground="red")
+
+    def _print_single_combination(self, batch_num, roll_num, copies):
+        """Печатает одну комбинацию съём/ролик"""
+        # Сохраняем оригинальные данные
+        original_batch = self.connected_roll_module.batch_num_var.get()
+        original_roll = self.connected_roll_module.roll_num_var.get()
+        
+        try:
+            # Временно устанавливаем нужные номера
+            self.connected_roll_module.batch_num_var.set(batch_num)
+            self.connected_roll_module.roll_num_var.set(roll_num)
+            
+            # Обновляем превью и печатаем
+            self.preview_module.update_preview_displays()
+            self._print_standard_label(copies)
+            
+        finally:
+            # Восстанавливаем оригинальные данные
+            self.connected_roll_module.batch_num_var.set(original_batch)
+            self.connected_roll_module.roll_num_var.set(original_roll)
+            self.preview_module.update_preview_displays()
+
+    def _print_auto_combinations(self, streams, batch_range, copies):
+        """Печатает все комбинации по автогенерации"""
+        try:
+            # Парсим диапазон съёмов
+            batch_numbers = self._parse_range(batch_range)
+            stream_count = int(streams)
+            
+            # Генерируем все комбинации
+            combinations = []
+            for batch in batch_numbers:
+                for stream in range(1, stream_count + 1):
+                    combinations.append((str(batch), str(stream)))
+            
+            # Сохраняем оригинальные данные
+            original_batch = self.connected_roll_module.batch_num_var.get()
+            original_roll = self.connected_roll_module.roll_num_var.get()
+            
+            # Печатаем каждую комбинацию
+            total_combinations = len(combinations)
+            for i, (batch, roll) in enumerate(combinations):
+                # Устанавливаем текущую комбинацию
+                self.connected_roll_module.batch_num_var.set(batch)
+                self.connected_roll_module.roll_num_var.set(roll)
+                
+                # Обновляем превью и печатаем
+                self.preview_module.update_preview_displays()
+                self._print_standard_label(copies)             
+            
+            # Восстанавливаем оригинальные данные
+            self.connected_roll_module.batch_num_var.set(original_batch)
+            self.connected_roll_module.roll_num_var.set(original_roll)
+            self.preview_module.update_preview_displays()
+            
+            self.preview_module.status_label.config(
+                text=f"Автопечать завершена: {total_combinations} комбинаций × {copies} копий", 
+                foreground="green"
+            )
+            
+        except Exception as e:
+            self.preview_module.status_label.config(text=f"Ошибка автопечати: {e}", foreground="red")
+
+    def _print_standard_label(self, copies):
+        """Стандартная печать без изменений (как был старый print_label)"""
+        printer_name = self._find_printer()
+        if not printer_name:
+            self.preview_module.status_label.config(text="Принтер не найден!", foreground="red")
+            return
+        
+        if self.selected_preview == "roll":
+            data_map = self.preview_module._prepare_roll_data_map()
+            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+        else:
+            data_map = self.preview_module._prepare_box_data_map()
+            print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+        
+        for i in range(copies):
+            self._print_image_gdi(print_image, printer_name)
+
+    def _parse_range(self, range_str):
+        """Парсит диапазон типа '1-5' в список чисел [1,2,3,4,5]"""
+        try:
+            if '-' in range_str:
+                start, end = map(int, range_str.split('-'))
+                return list(range(start, end + 1))
+            else:
+                return [int(range_str)]
+        except:
+            raise ValueError(f"Неверный формат диапазона: {range_str}")
             
     def _find_printer(self):
         """Находит принтер из настроек weight_box_print"""

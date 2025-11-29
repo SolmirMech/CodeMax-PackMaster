@@ -2,6 +2,7 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, StringVar, BooleanVar
+import math
 from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
@@ -44,8 +45,13 @@ class RollLabelPrinter:
         self.box_weight_var = StringVar(value="0.0")  # Вес пустой коробки в кг
         self.box_size_var = StringVar(value="")  # Размер коробки (выбирается из списка)
         self.date_emission_var = StringVar(value="") # Дата эмиссии кодов
-        self.cutter_var = StringVar(value="")
-        self.roll_length = StringVar(value="")
+        # Раздел 2 цеха
+        self.cutter_var = StringVar(value="") # Резчик
+        self.roll_length = StringVar(value="") # Длина ролика
+        self.label_length_mm = StringVar(value="") # Длина этикетки
+        self.batch_num_var = StringVar(value="")  # № съёма
+        self.roll_num_var = StringVar(value="")   # № ролика  
+        self.streams_var = StringVar(value="")    # Кол-во ручьёв
         
         self.create_ui()
         self.load_box_sizes()
@@ -253,12 +259,19 @@ class RollLabelPrinter:
         diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
         diameter_entry.grid(row=5, column=1, padx=(210, 0), pady=5, sticky="w")
         
+        # Длина этикетки
+        ttk.Label(data_frame, text="Длина этикетки, мм:").grid(
+            row=6, column=0, sticky="w", pady=5
+        )
+        label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=6)
+        label_length_entry.grid(row=6, column=0, padx=(200, 0), pady=5, sticky="w")
+        
         # Длина ролика
         ttk.Label(data_frame, text="Длина ролика, м:").grid(
-            row=6, column=0, sticky="w", pady=5
+            row=6, column=1, sticky="w", pady=5
         )              
         roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=6, column=0, padx=(170, 0), pady=5, sticky="w")        
+        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=5, sticky="w")        
 
         # Вес рулона
         ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
@@ -274,9 +287,46 @@ class RollLabelPrinter:
         sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
         sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
         
+        # Row 8: Поля для номеров съёмов и роликов       
+        ttk.Label(data_frame, text="Кол-во ручьев:").grid(
+            row=8, column=0, sticky="w", pady=5
+        )
+        streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=6)
+        streams_entry.grid(row=8, column=0, padx=(160, 0), pady=5, sticky="w")
+        
+        ttk.Label(data_frame, text="№ съёма:").grid(
+            row=8, column=1, sticky="w", pady=5
+        )
+        batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
+        batch_entry.grid(row=8, column=1, padx=(110, 0), pady=5, sticky="w")
+
+        ttk.Label(data_frame, text="№ ролика:").grid(
+            row=8, column=1, sticky="w", padx=(160, 0), pady=5
+        )
+        roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=6)
+        roll_entry.grid(row=8, column=1, padx=(275, 0), pady=5, sticky="w")
+        
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
         self.order_prefix.trace_add("write", self.on_order_number_changed)
+        self.roll_length.trace_add("write", self.calculate_quantity_from_length)
+        self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
+        
+    def calculate_quantity_from_length(self, *args):
+        """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""
+        try:
+            roll_length_m = self.parse_float(self.roll_length.get() or 0)
+            label_length_mm = self.parse_float(self.label_length_mm.get() or 0)
+            
+            if roll_length_m > 0 and label_length_mm > 0:
+                # Переводим мм в метры и рассчитываем количество
+                label_length_m = label_length_mm / 1000
+                quantity = math.ceil(roll_length_m / label_length_m)
+                self.quantity_var.set(str(quantity))
+            # Если одно из полей очищено - не меняем количество
+        except (ValueError, TypeError, ZeroDivisionError):
+            # В случае ошибки не изменяем значение quantity_var
+            pass
         
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
