@@ -564,68 +564,7 @@ class RollLabelPrinter:
             self.total_quantity_var.set(str(total))
             
         except (ValueError, TypeError):
-            self.total_quantity_var.set("")
-        
-    def export_box_to_excel(self):
-        """Экспортирует данные коробки в Excel"""
-        try:
-            # Проверяем, что все необходимые данные заполнены
-            if not self.rolls_count_var.get() or not self.order_number.get():
-                return {'success': False, 'error': 'Введите количество роликов и номер заказа'}
-
-            # Проверяем наличие модуля данных
-            if not hasattr(self, 'order_data_module') or not self.order_data_module:
-                return {'success': False, 'error': 'Модуль данных не подключен'}
-                
-            # Загружаем путь к Excel файлу
-            self.order_data_module.load_excel_folder_path()
-            
-            if not self.order_data_module.excel_file_path:
-                return {'success': False, 'error': 'Сначала выберите папку для Excel'}
-
-            # Создаем экспортер и выполняем экспорт
-            exporter = WeightOrdersExporter(
-                excel_file_path=self.order_data_module.excel_file_path,
-                roll_module=self,
-                preview_module=self.preview_module
-            )
-            
-            result = exporter.export_data()  # enable_pallet=False по умолчанию
-            
-            return result  # Просто возвращаем результат
-                
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def clear_box_excel_data(self):
-        """Очищает данные коробки в Excel"""
-        try:
-            # Проверяем наличие модуля данных
-            if not hasattr(self, 'order_data_module') or not self.order_data_module:
-                return False
-                
-            # Загружаем путь к Excel файлу
-            self.order_data_module.load_excel_folder_path()
-            
-            if not self.order_data_module.excel_file_path:
-                return False
-                
-            if not os.path.exists(self.order_data_module.excel_file_path):
-                return False
-
-            # Создаем экспортер и выполняем очистку
-            exporter = WeightOrdersExporter(
-                excel_file_path=self.order_data_module.excel_file_path,
-                roll_module=self,
-                preview_module=self.preview_module
-            )
-            
-            success = exporter.clear_all_rolls()  # enable_pallet=False по умолчанию
-            return success
-            
-        except Exception as e:
-            print(f"Ошибка при очистке Excel: {e}")
-            return False
+            self.total_quantity_var.set("")    
         
     def set_show_manufacturer(self, show):
         """Устанавливает видимость производителя извне"""

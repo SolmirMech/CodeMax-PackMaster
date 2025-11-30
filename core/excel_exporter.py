@@ -6,12 +6,35 @@ from openpyxl.styles import Alignment
 class WeightOrdersExporter:
     """Экспортер данных в Excel файл для весовых заказов"""
 
-    def __init__(self, excel_file_path, roll_module, preview_module):
+    def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None):
         self.excel_file_path = excel_file_path
         self.roll_module = roll_module
-        self.preview_module = preview_module        
+        self.preview_module = preview_module
+        self.coordinator = coordinator       
+        # Подписываемся на координатор если он есть
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)
+            
         self.wb = None
         self.ws = None
+        
+    def on_settings_changed(self):
+        """Обработчик изменений настроек от координатора"""
+        # При изменении цеха можно обновить путь к файлу
+        if hasattr(self, 'coordinator') and self.coordinator:
+            workshop = self.coordinator.get_workshop()
+            print(f"Экспортер: получен цех {workshop}")
+            
+    def get_excel_file_path(self):
+        """Возвращает путь к Excel файлу в зависимости от цеха"""
+        if hasattr(self, 'coordinator') and self.coordinator:
+            workshop = self.coordinator.get_workshop()
+            if workshop == "2":
+                # Для цеха 2 используем второй файл
+                base_path = self.excel_file_path
+                if "weight_orders.xlsx" in base_path:
+                    return base_path.replace("weight_orders.xlsx", "weight_orders_2.xlsx")
+        return self.excel_file_path        
         
     def export_to_multitype_sheet(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' с пересчетом с нуля"""

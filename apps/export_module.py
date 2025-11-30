@@ -276,25 +276,84 @@ class ExportModule:
             self.excel_file_path = ""
 
     def export_to_excel(self):
-        """Экспортирует данные в Excel через подключенный модуль ролика"""
+        """Экспортирует данные в Excel"""
         try:
-            result = self.call_roll_module_method('export_box_to_excel')
-            if result and result.get('success'):
+            # 1. Проверяем, что модуль ролика подключен
+            if not self.connected_roll_module:
+                self.export_status_label.config(text="Модуль ролика не подключен", foreground="red")
+                return
+                
+            # 2. Проверяем, что все необходимые данные заполнены
+            if not self.connected_roll_module.rolls_count_var.get() or not self.connected_roll_module.order_number.get():
+                self.export_status_label.config(text="Введите количество роликов и номер заказа", foreground="red")
+                return
+
+            # 3. Проверяем путь к Excel файлу
+            if not self.excel_file_path:
+                self.load_excel_folder_path()
+                
+            if not self.excel_file_path:
+                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                return
+
+            if not os.path.exists(self.excel_file_path):
+                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                return
+
+            # Создаем экспортер с координатором
+            exporter = WeightOrdersExporter(
+                excel_file_path=self.excel_file_path,
+                roll_module=self.connected_roll_module,
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
+            )
+            
+            result = exporter.export_data(enable_pallet=False)
+            
+            if result['success']:
                 self.export_status_label.config(text="Данные отправлены в коробку", foreground="green")
             else:
-                error_msg = result.get('error', 'Неизвестная ошибка') if result else 'Ошибка экспорта'
+                error_msg = result.get('error', 'Неизвестная ошибка')
                 self.export_status_label.config(text=f"Ошибка: {error_msg}", foreground="red")
+                
         except Exception as e:
             self.export_status_label.config(text=f"Ошибка экспорта: {str(e)}", foreground="red")
 
     def clear_excel_data(self):
-        """Очищает данные Excel через подключенный модуль ролика"""
+        """Очищает данные Excel"""
         try:
-            success = self.call_roll_module_method('clear_box_excel_data')
+            # 1. Проверяем, что модуль ролика подключен
+            if not self.connected_roll_module:
+                self.export_status_label.config(text="Модуль ролика не подключен", foreground="red")
+                return
+
+            # 2. Проверяем путь к Excel файлу
+            if not self.excel_file_path:
+                self.load_excel_folder_path()
+                
+            if not self.excel_file_path:
+                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                return
+
+            if not os.path.exists(self.excel_file_path):
+                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                return
+
+            # Создаем экспортер с координатором
+            exporter = WeightOrdersExporter(
+                excel_file_path=self.excel_file_path,
+                roll_module=self.connected_roll_module,
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
+            )
+            
+            success = exporter.clear_all_rolls(enable_pallet=False)
+            
             if success:
                 self.export_status_label.config(text="Данные коробки очищены", foreground="green")
             else:
                 self.export_status_label.config(text="Ошибка очистки коробки", foreground="red")
+                
         except Exception as e:
             self.export_status_label.config(text=f"Ошибка очистки: {str(e)}", foreground="red")
 
@@ -332,7 +391,8 @@ class ExportModule:
             exporter = WeightOrdersExporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
-                preview_module=self
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
             )
             
             result = exporter.export_data(enable_pallet=True, pallet_data=pallet_data)
@@ -382,7 +442,8 @@ class ExportModule:
             exporter = WeightOrdersExporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
-                preview_module=self
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
             )
             
             success = exporter.clear_all_rolls(enable_pallet=True)
