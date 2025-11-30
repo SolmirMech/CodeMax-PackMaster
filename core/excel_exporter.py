@@ -236,7 +236,7 @@ class WeightOrdersExporter:
             
             # Определяем имя листа в зависимости от файла и режима
             if enable_pallet:
-                sheet_name = "Паллета" if self._is_second_file() else "Лист для паллеты"
+                sheet_name = "Поддон" if self._is_second_file() else "Лист для паллеты"
             else:
                 sheet_name = "Коробка" if self._is_second_file() else "Лист для коробки"
                 
@@ -308,14 +308,42 @@ class WeightOrdersExporter:
             # Экспортируем базовую информацию (как для коробки)
             self._export_basic_info()
             
-            # Тип упаковки (поддон) в D6
+            # Тип упаковки (поддон)
             if pallet_data and pallet_data.get("pallet_type"):
-                self._set_cell_value('D6', pallet_data["pallet_type"])
+                if self._is_second_file():
+                    self._set_cell_value('D3', pallet_data["pallet_type"])  # Для 2 цеха
+                else:
+                    self._set_cell_value('D6', pallet_data["pallet_type"])  # Для 1 цеха
             
-            # Вес поддона в K2 - Преобразуем в число
+            # Вес поддона - для 2 цеха в H3, для 1 цеха в K2
             if pallet_data and pallet_data.get("pallet_weight"):
                 pallet_weight = self._convert_to_number_if_possible(pallet_data["pallet_weight"])
-                self._set_cell_value('K2', pallet_weight)
+                if self._is_second_file():
+                    self._set_cell_value('H3', pallet_weight)  # Для 2 цеха
+                else:
+                    self._set_cell_value('K2', pallet_weight)  # Для 1 цеха
+            
+            # ДЛЯ 2 ЦЕХА - добавляем специфичные поля
+            if self._is_second_file():
+                # Вес втулки (конвертация из граммов в кг)
+                sleeve_weight_g = self._convert_to_number_if_possible(self.roll_module.sleeve_weight_var.get())
+                if sleeve_weight_g:
+                    sleeve_weight_kg = sleeve_weight_g / 1000
+                    self._set_cell_value('D4', sleeve_weight_kg)
+                
+                # Диаметр втулки
+                sleeve_diameter = self._convert_to_number_if_possible(self.roll_module.sleeve_diameter_var.get())
+                if sleeve_diameter:
+                    self._set_cell_value('G4', sleeve_diameter)
+                
+                # Тип продукта
+                if hasattr(self.roll_module, 'product_type_var'):
+                    product_type = self.roll_module.product_type_var.get()
+                    self._set_cell_value('E39', product_type)
+                
+                # TU номер
+                tu_number = self._get_tu_number()
+                self._set_cell_value('A39', tu_number)
             
             # Экспортируем данные коробок и возвращаем информацию о переполнении
             return self._export_boxes_to_empty_cells(pallet_data)
@@ -420,53 +448,107 @@ class WeightOrdersExporter:
             net_weight = self._convert_to_number_if_possible(self.roll_module.total_net_var.get())
             quantity = self._convert_to_number_if_possible(self.roll_module.total_quantity_var.get())
             
-            # Находим пустые ячейки и заполняем их (аналогично роликам)
-            empty_cells_found = 0
-            
-            # Заполняем левую часть (B14-B28, C14-C28, D14-D28)
-            for row in range(14, 29):
-                if empty_cells_found >= boxes_count:
-                    break
-                    
-                # Проверяем, пуста ли строка для записи
-                if (self.ws[f'B{row}'].value is None and 
-                    self.ws[f'C{row}'].value is None and 
-                    self.ws[f'D{row}'].value is None):
-                    
-                    if gross_weight:
-                        self._set_cell_value(f'B{row}', gross_weight)
-                    if net_weight:
-                        self._set_cell_value(f'C{row}', net_weight)
-                    if quantity:
-                        self._set_cell_value(f'D{row}', quantity)
-                    
-                    empty_cells_found += 1
-            
-            # Если нужно больше - заполняем правую часть (F14-F28, G14-G28, H14-H28)
-            for row in range(14, 29):
-                if empty_cells_found >= boxes_count:
-                    break
-                    
-                # Проверяем, пуста ли строка для записи
-                if (self.ws[f'F{row}'].value is None and 
-                    self.ws[f'G{row}'].value is None and 
-                    self.ws[f'H{row}'].value is None):
-                    
-                    if gross_weight:
-                        self._set_cell_value(f'F{row}', gross_weight)
-                    if net_weight:
-                        self._set_cell_value(f'G{row}', net_weight)
-                    if quantity:
-                        self._set_cell_value(f'H{row}', quantity)
-                    
-                    empty_cells_found += 1
-            
-            # Возвращаем True если все коробки поместились, False если нет
-            return empty_cells_found >= boxes_count
+            # ЛОГИКА ДЛЯ 2 ЦЕХА - структура как в "Коробка"
+            if self._is_second_file():
+                return self._export_boxes_for_second_workshop(boxes_count, net_weight, quantity)
+            else:
+                # ЛОГИКА ДЛЯ 1 ЦЕХА - старая структура
+                return self._export_boxes_for_first_workshop(boxes_count, gross_weight, net_weight, quantity)
                 
         except Exception as e:
             print(f"Ошибка при экспорте данных коробок: {e}")
             return True
+
+    def _export_boxes_for_second_workshop(self, boxes_count, net_weight, quantity):
+        """Экспортирует коробки для поддона во 2 цехе (структура как в 'Коробка')"""
+        empty_cells_found = 0
+        
+        # Заполняем первую колонку (B и C) - коробки 1-20
+        for row in range(10, 30):  # строки 10-29
+            if empty_cells_found >= boxes_count:
+                break
+                
+            # Проверяем, что ОБЕ ячейки этой пары пустые
+            if (self.ws[f'B{row}'].value is None and 
+                self.ws[f'C{row}'].value is None):
+                
+                if net_weight:
+                    self._set_cell_value(f'B{row}', net_weight)
+                if quantity:
+                    self._set_cell_value(f'C{row}', quantity)
+                empty_cells_found += 1
+        
+        # Заполняем вторую колонку (E и F) - коробки 21-40
+        for row in range(10, 30):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            # Проверяем, что ОБЕ ячейки этой пары пустые
+            if (self.ws[f'E{row}'].value is None and 
+                self.ws[f'F{row}'].value is None):
+                
+                if net_weight:
+                    self._set_cell_value(f'E{row}', net_weight)
+                if quantity:
+                    self._set_cell_value(f'F{row}', quantity)
+                empty_cells_found += 1
+        
+        # Заполняем третью колонку (H и I) - коробки 41-60
+        for row in range(10, 30):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            # Проверяем, что ОБЕ ячейки этой пары пустые
+            if (self.ws[f'H{row}'].value is None and 
+                self.ws[f'I{row}'].value is None):
+                
+                if net_weight:
+                    self._set_cell_value(f'H{row}', net_weight)
+                if quantity:
+                    self._set_cell_value(f'I{row}', quantity)
+                empty_cells_found += 1
+        
+        return empty_cells_found >= boxes_count
+
+    def _export_boxes_for_first_workshop(self, boxes_count, gross_weight, net_weight, quantity):
+        """Экспортирует коробки для поддона в 1 цехе (старая структура)"""
+        empty_cells_found = 0
+        
+        # Заполняем левую часть (B14-B28, C14-C28, D14-D28)
+        for row in range(14, 29):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            if (self.ws[f'B{row}'].value is None and 
+                self.ws[f'C{row}'].value is None and 
+                self.ws[f'D{row}'].value is None):
+                
+                if gross_weight:
+                    self._set_cell_value(f'B{row}', gross_weight)
+                if net_weight:
+                    self._set_cell_value(f'C{row}', net_weight)
+                if quantity:
+                    self._set_cell_value(f'D{row}', quantity)
+                empty_cells_found += 1
+        
+        # Заполняем правую часть (F14-F28, G14-G28, H14-H28)
+        for row in range(14, 29):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            if (self.ws[f'F{row}'].value is None and 
+                self.ws[f'G{row}'].value is None and 
+                self.ws[f'H{row}'].value is None):
+                
+                if gross_weight:
+                    self._set_cell_value(f'F{row}', gross_weight)
+                if net_weight:
+                    self._set_cell_value(f'G{row}', net_weight)
+                if quantity:
+                    self._set_cell_value(f'H{row}', quantity)
+                empty_cells_found += 1
+        
+        return empty_cells_found >= boxes_count
 
     def _export_rolls_to_empty_cells(self):
         """Экспортирует данные роликов в пустые ячейки"""
@@ -494,78 +576,79 @@ class WeightOrdersExporter:
             quantity = self._convert_to_number_if_possible(self.roll_module.quantity_var.get())
             roll_length = self._convert_to_number_if_possible(self.roll_module.roll_length.get())  # Длина ролика
             
-            # Определяем диапазоны ячеек в зависимости от файла
-            if is_second_file:
-                # Для второго файла
-                start_row = 10
-                end_row = 29
-            else:
-                # Для первого файла
-                gross_weight_cols = ['B', 'F']      # вес брутто
-                net_weight_cols = ['C', 'G']        # вес нетто  
-                quantity_cols = ['D', 'H']          # количество
-                start_row = 14
-                end_row = 28
-            
             # Находим пустые ячейки и заполняем их
             empty_cells_found = 0
             
             if is_second_file:
-                # Для второго файла - заполняем вес, количество и длину
-                l_row_counter = 10  # начальная строка для столбца L (L10)
-                
-                # Заполняем первую колонку (B и C)
-                for row in range(start_row, end_row + 1):
-                    if empty_cells_found >= rolls_count:
-                        break
-                        
-                    # Проверяем, пуста ли строка в колонке B
-                    if self.ws[f'B{row}'].value is None:
-                        if net_weight:
-                            self._set_cell_value(f'B{row}', net_weight)
-                        if quantity:
-                            self._set_cell_value(f'C{row}', quantity)
-                        if roll_length:
-                            self._set_cell_value(f'L{l_row_counter}', roll_length)
-                        
-                        l_row_counter += 1
-                        empty_cells_found += 1
-                
-                # Заполняем вторую колонку (E и F)
-                for row in range(start_row, end_row + 1):
-                    if empty_cells_found >= rolls_count:
-                        break
-                        
-                    if self.ws[f'E{row}'].value is None:
-                        if net_weight:
-                            self._set_cell_value(f'E{row}', net_weight)
-                        if quantity:
-                            self._set_cell_value(f'F{row}', quantity)
-                        if roll_length:
-                            self._set_cell_value(f'L{l_row_counter}', roll_length)
-                        
-                        l_row_counter += 1
-                        empty_cells_found += 1
-                
-                # Заполняем третью колонку (H и I)
-                for row in range(start_row, end_row + 1):
-                    if empty_cells_found >= rolls_count:
-                        break
-                        
-                    if self.ws[f'H{row}'].value is None:
-                        if net_weight:
-                            self._set_cell_value(f'H{row}', net_weight)
-                        if quantity:
-                            self._set_cell_value(f'I{row}', quantity)
-                        if roll_length:
-                            self._set_cell_value(f'L{l_row_counter}', roll_length)
-                        
-                        l_row_counter += 1
-                        empty_cells_found += 1
-                        
+                # ДЛЯ 2 ЦЕХА - проверяем ВСЕ колонки коробки на пустоту
+                l_row_counter = 1  # начальная строка для столбца L              
+
+            # Заполняем первую колонку (B и C) - ролики 1-20
+            for row in range(10, 30):
+                if empty_cells_found >= rolls_count:
+                    break
+                    
+                # Проверяем только пару B,C
+                if (self.ws[f'B{row}'].value is None and 
+                    self.ws[f'C{row}'].value is None):
+                    
+                    # Соответствующий слот в L: для строки 10 -> L10, строки 11 -> L11 и т.д.
+                    l_slot = row  # для первой колонки
+                    
+                    if net_weight:
+                        self._set_cell_value(f'B{row}', net_weight)
+                    if quantity:
+                        self._set_cell_value(f'C{row}', quantity)
+                    if roll_length:
+                        self._set_cell_value(f'L{l_slot}', roll_length)
+                    
+                    empty_cells_found += 1
+
+            # Заполняем вторую колонку (E и F) - ролики 21-40  
+            for row in range(10, 30):
+                if empty_cells_found >= rolls_count:
+                    break
+                    
+                # Проверяем только пару E,F
+                if (self.ws[f'E{row}'].value is None and 
+                    self.ws[f'F{row}'].value is None):
+                    
+                    # Соответствующий слот в L: для строки 10 -> L30, строки 11 -> L31 и т.д.
+                    l_slot = row + 20  # для второй колонки
+                    
+                    if net_weight:
+                        self._set_cell_value(f'E{row}', net_weight)
+                    if quantity:
+                        self._set_cell_value(f'F{row}', quantity)
+                    if roll_length:
+                        self._set_cell_value(f'L{l_slot}', roll_length)
+                    
+                    empty_cells_found += 1
+
+            # Заполняем третью колонку (H и I) - ролики 41-60
+            for row in range(10, 30):
+                if empty_cells_found >= rolls_count:
+                    break
+                    
+                # Проверяем только пару H,I
+                if (self.ws[f'H{row}'].value is None and 
+                    self.ws[f'I{row}'].value is None):
+                    
+                    # Соответствующий слот в L: для строки 10 -> L50, строки 11 -> L51 и т.д.
+                    l_slot = row + 40  # для третьей колонки
+                    
+                    if net_weight:
+                        self._set_cell_value(f'H{row}', net_weight)
+                    if quantity:
+                        self._set_cell_value(f'I{row}', quantity)
+                    if roll_length:
+                        self._set_cell_value(f'L{l_slot}', roll_length)
+                    
+                    empty_cells_found += 1
+                            
             else:
-                # Для первого файла - старый код
-                for row in range(start_row, end_row + 1):
+                # Для первого файла - старый код (уже правильный)
+                for row in range(14, 29):
                     if empty_cells_found >= rolls_count:
                         break
                         
@@ -582,7 +665,7 @@ class WeightOrdersExporter:
                         
                         empty_cells_found += 1
                 
-                for row in range(start_row, end_row + 1):
+                for row in range(14, 29):
                     if empty_cells_found >= rolls_count:
                         break
                         
@@ -622,7 +705,7 @@ class WeightOrdersExporter:
             is_second_file = self._is_second_file()
             
             if enable_pallet:
-                sheet_name = "Паллета" if is_second_file else "Лист для паллеты"
+                sheet_name = "Поддон" if is_second_file else "Лист для паллеты"
             else:
                 sheet_name = "Коробка" if is_second_file else "Лист для коробки"
                 
@@ -635,31 +718,44 @@ class WeightOrdersExporter:
             cleared_items = 0
             
             if is_second_file:
-                # Для второго файла - очищаем ВСЕ 60 роликов
-                
-                # 1. Очищаем колонки B,C,E,F,H,I (3 колонки × 20 строк = 60 роликов)
-                rows_range = range(10, 30)  # строки 10-29
-                weight_quantity_cols = ['B', 'C', 'E', 'F', 'H', 'I']  # вес нетто и количество
-                
-                for row in rows_range:
-                    for col in weight_quantity_cols:
+                if enable_pallet:
+                    # ДЛЯ ПОДДОНА 2 ЦЕХА - очищаем колонки коробок (B,C,E,F,H,I)
+                    rows_range = range(10, 30)  # строки 10-29
+                    weight_quantity_cols = ['B', 'C', 'E', 'F', 'H', 'I']
+                    
+                    for row in rows_range:
+                        for col in weight_quantity_cols:
+                            try:
+                                cell = self.ws[f'{col}{row}']
+                                cell.value = None
+                                cell.alignment = Alignment(horizontal='general', vertical='center')
+                                cleared_items += 1
+                            except Exception as e:
+                                print(f"Не удалось очистить ячейку {col}{row}: {e}")
+                else:
+                    # Для коробки 2 цеха - очищаем ВСЕ 60 роликов
+                    rows_range = range(10, 30)  # строки 10-29
+                    weight_quantity_cols = ['B', 'C', 'E', 'F', 'H', 'I']
+                    
+                    for row in rows_range:
+                        for col in weight_quantity_cols:
+                            try:
+                                cell = self.ws[f'{col}{row}']
+                                cell.value = None
+                                cell.alignment = Alignment(horizontal='general', vertical='center')
+                                cleared_items += 1
+                            except Exception as e:
+                                print(f"Не удалось очистить ячейку {col}{row}: {e}")
+                    
+                    # Очищаем столбец L для 60 роликов (строки 10-69)
+                    for row in range(10, 70):
                         try:
-                            cell = self.ws[f'{col}{row}']
+                            cell = self.ws[f'L{row}']
                             cell.value = None
                             cell.alignment = Alignment(horizontal='general', vertical='center')
                             cleared_items += 1
                         except Exception as e:
-                            print(f"Не удалось очистить ячейку {col}{row}: {e}")
-                
-                # 2. ОТДЕЛЬНО очищаем столбец L для 60 роликов (строки 10-69)
-                for row in range(10, 70):  # строки 10-69 = 60 роликов
-                    try:
-                        cell = self.ws[f'L{row}']
-                        cell.value = None
-                        cell.alignment = Alignment(horizontal='general', vertical='center')
-                        cleared_items += 1
-                    except Exception as e:
-                        print(f"Не удалось очистить ячейку L{row}: {e}")
+                            print(f"Не удалось очистить ячейку L{row}: {e}")
                         
             else:
                 # Для первого файла  
@@ -678,9 +774,16 @@ class WeightOrdersExporter:
             
             # Очищаем базовую информацию
             if is_second_file:
-                basic_info_cells = ['D7', 'D3', 'D6', 'D8', 'D37', 'E41', 'H3', 
-                                    'D4', 'G4', 'E39', 'A39'
-                ]
+                if enable_pallet:
+                    # ДЛЯ ПОДДОНА 2 ЦЕХА - очищаем специфичные поля поддона
+                    basic_info_cells = ['D7', 'D3', 'D6', 'D8', 'D37', 'E41', 'H3', 
+                                        'D4', 'G4', 'E39', 'A39'
+                    ]
+                else:
+                    # Для коробки 2 цеха
+                    basic_info_cells = ['D7', 'D3', 'D6', 'D8', 'D37', 'E41', 'H3', 
+                                        'D4', 'G4', 'E39', 'A39'
+                    ]
             else:
                 basic_info_cells = ['D5', 'D6', 'D8', 'D10', 'F37', 'E41', 'K2']
             
