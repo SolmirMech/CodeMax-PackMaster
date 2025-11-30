@@ -142,10 +142,24 @@ class WeightOrdersApp:
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         self.preview_module = RollPreview(preview_frame, self.coordinator)
         
-        # Правая часть - PreviewExport (справа)
-        export_frame = ttk.Frame(right_frame)
-        export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
-        self.export_module = PreviewExport(export_frame, self.preview_module, self.coordinator)
+        # Правая часть - PrintModule и ExportModule (справа)
+        print_export_frame = ttk.Frame(right_frame)
+        print_export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
+
+        # Вертикальное разделение Печать/Экспорт
+        print_export_frame.columnconfigure(0, weight=1)
+        print_export_frame.rowconfigure(0, weight=1)  # Печать (верх)
+        print_export_frame.rowconfigure(1, weight=1)  # Экспорт (низ)
+
+        # Модуль Печати (верх)
+        print_frame = ttk.Frame(print_export_frame)
+        print_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
+        self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator)
+
+        # Модуль Экспорта (низ)
+        export_frame = ttk.Frame(print_export_frame)
+        export_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
+        self.export_module = ExportModule(export_frame, self.preview_module, self.coordinator)
 
         self.setup_module_connections()
 
@@ -161,13 +175,20 @@ class WeightOrdersApp:
         
         self.order_data_module.set_preview_module(self.preview_module)
         
-        # Связь между модулем экспорта и ролика
+        # Связи между новыми модулями и роликом
+        self.print_module.set_roll_module(self.roll_module)
         self.export_module.set_roll_module(self.roll_module)
-        
-        # Связь между preview и export для статуса Excel
-        self.preview_module.export_module = self.export_module
-        self.order_data_module.export_module = self.export_module
+
+        # Связи для данных заказов
+        self.print_module.set_order_data_module(self.order_data_module)
         self.export_module.set_order_data_module(self.order_data_module)
+        
+        # Связь между preview и print_module для обработки Enter
+        self.preview_module.print_module = self.print_module
+
+        # Связи для статусов (разделяем по назначению)
+        self.preview_module.export_module = self.export_module  # только для экспорта
+        self.order_data_module.export_module = self.export_module  # только для экспорта
 
     def center_window(self):
         self.root.update_idletasks()
@@ -185,7 +206,8 @@ if __name__ == "__main__":
     from apps.order_data_processor import OrderDataProcessor
     from apps.weight_roll_printer import RollLabelPrinter
     from apps.roll_preview import RollPreview
-    from apps.preview_export import PreviewExport
+    from apps.print_module import PrintModule
+    from apps.export_module import ExportModule
 
     root = tk.Tk()
     app = WeightOrdersApp(root)

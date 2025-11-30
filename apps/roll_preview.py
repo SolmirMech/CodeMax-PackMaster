@@ -109,9 +109,9 @@ class RollPreview:
         self.check_templates()  # Перезагружаем и проверяем шаблоны      
         
     def print_selected_preview(self):
-        """Печатает выбранное превью через export_module"""
-        if hasattr(self, 'export_module') and self.export_module:
-            self.export_module.print_label()
+        """Печатает выбранное превью через print_module"""
+        if hasattr(self, 'print_module') and self.print_module:
+            self.print_module.print_label()
         else:
             self.status_label.config(text="Модуль печати не подключен", foreground="red")
         
@@ -242,9 +242,9 @@ class RollPreview:
             
             # Обновляем статус Excel в export_module если он есть
             if hasattr(self, 'export_module') and self.export_module:
-                self.export_module.excel_status_label.config(
-                    text="Внимание, закройте файл Excel перед экспортом!",
-                    foreground="red"
+                self.export_module.export_status_label.config(
+                    text="",
+                    foreground="green"
                 )
             
         except Exception as e:
@@ -316,8 +316,8 @@ class RollPreview:
         self.selected_preview = preview_type
         
         # Синхронизируем выбор с preview_export модулем
-        if hasattr(self, 'export_module') and self.export_module:
-            self.export_module.selected_preview = preview_type
+        if hasattr(self, 'print_module') and self.print_module:
+            self.print_module.selected_preview = preview_type
         
         # Визуальное выделение выбранного превью красной рамкой
         if preview_type == "roll":
@@ -374,7 +374,7 @@ class RollPreview:
     def _get_regular_manufacturer_data(self, order_number: str) -> dict:
         """Получает данные изготовителя из выпадающих списков или автоматически"""
         try:
-            # Если есть подключенный модуль ролика И ВЫБРАНЫ ЗНАЧЕНИЯ (не пустые)
+            # Если есть подключенный модуль ролика
             if (self.connected_roll_module and 
                 self.connected_roll_module.manufacturer_var.get() and 
                 self.connected_roll_module.product_type_var.get()):
