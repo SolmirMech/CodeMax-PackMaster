@@ -354,29 +354,40 @@ class SettingsDialog:
             return
         
         try:
-            # Используем config_manager для получения пути к файлу
-            assets_file = self.config_manager.get_asset_path("weight_orders.xlsx")
+            # Копируем ОБА файла - для 1 и 2 цеха
+            files_to_copy = [
+                ("weight_orders.xlsx", "weight_orders.xlsx"),
+                ("weight_orders_2.xlsx", "weight_orders_2.xlsx")
+            ]
             
-            # Проверяем существование файла
-            if not os.path.exists(assets_file):
-                messagebox.showerror("Ошибка", 
-                    f"Файл weight_orders.xlsx не найден по пути:\n{assets_file}")
+            copied_files = []
+            
+            for assets_filename, target_filename in files_to_copy:
+                assets_file = self.config_manager.get_asset_path(assets_filename)
+                
+                if not os.path.exists(assets_file):
+                    messagebox.showwarning("Внимание", 
+                        f"Файл {assets_filename} не найден в assets, пропускаем")
+                    continue
+                
+                target_file = os.path.join(folder_path, target_filename)
+                shutil.copy2(assets_file, target_file)
+                copied_files.append(target_filename)
+            
+            if not copied_files:
+                messagebox.showerror("Ошибка", "Не удалось скопировать ни один файл Excel")
                 return
-            
-            # Путь к целевому файлу
-            target_file = os.path.join(folder_path, "weight_orders.xlsx")
-            
-            # Копируем файл (перезаписываем если существует)
-            shutil.copy2(assets_file, target_file)
             
             # Сохраняем путь к папке
             self.excel_folder_path = folder_path
             self.save_excel_folder_path()
+            
             folder_name = os.path.basename(folder_path)
-            if not folder_name:  # Если корневой диск
+            if not folder_name:
                 folder_name = folder_path.rstrip('/\\')
             
-            self.status_var.set(f"✅ Файл Excel скопирован в: {folder_name}")
+            files_list = ", ".join(copied_files)
+            self.status_var.set(f"✅ Файлы {files_list} скопированы в: {folder_name}")
             
         except Exception as e:
             self.status_var.set(f"❌ Ошибка копирования: {str(e)}")

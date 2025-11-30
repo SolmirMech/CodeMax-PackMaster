@@ -30,12 +30,40 @@ class WeightOrdersExporter:
         if hasattr(self, 'coordinator') and self.coordinator:
             workshop = self.coordinator.get_workshop()
             if workshop == "2":
-                # Для цеха 2 используем второй файл
-                base_path = self.excel_file_path
-                # Берем директорию и меняем имя файла
-                directory = os.path.dirname(base_path)
-                return os.path.join(directory, "weight_orders_2.xlsx")
+                # Для цеха 2 используем ТОЛЬКО weight_orders_2.xlsx
+                directory = os.path.dirname(self.excel_file_path)
+                second_file_path = os.path.join(directory, "weight_orders_2.xlsx")
+                
+                # Если файл для 2 цеха не существует - копируем из assets
+                if not os.path.exists(second_file_path):
+                    self._copy_excel_file_from_assets("weight_orders_2.xlsx", second_file_path)
+                
+                return second_file_path
+        
+        # Для цеха 1 используем ТОЛЬКО weight_orders.xlsx
+        # Проверяем существование основного файла
+        if not os.path.exists(self.excel_file_path):
+            self._copy_excel_file_from_assets("weight_orders.xlsx", self.excel_file_path)
+        
         return self.excel_file_path
+
+    def _copy_excel_file_from_assets(self, assets_filename, target_path):
+        """Копирует файл Excel из assets в целевую папку"""
+        try:
+            from core.config_manager import ConfigManager
+            config_manager = ConfigManager()
+            assets_file = config_manager.get_asset_path(assets_filename)
+            
+            if os.path.exists(assets_file):
+                import shutil
+                shutil.copy2(assets_file, target_path)
+                print(f"Файл {assets_filename} скопирован из assets в {target_path}")
+            else:
+                raise FileNotFoundError(f"Файл {assets_filename} не найден в assets")
+                
+        except Exception as e:
+            print(f"Ошибка копирования файла {assets_filename}: {e}")
+            raise
         
     def _is_second_file(self):
         """Проверяет, используется ли второй файл"""
@@ -354,6 +382,17 @@ class WeightOrdersExporter:
                 packer = self.roll_module.packer_var.get()
                 packer_cell = 'E41'  # одинаковый для обоих файлов
                 self._set_cell_value(packer_cell, packer)
+                
+            # ДЛЯ 2 ЦЕХА - добавляем тип продукта и TU номер
+            if is_second_file:
+                # Тип продукта в E39
+                if self.roll_module and hasattr(self.roll_module, 'product_type_var'):
+                    product_type = self.roll_module.product_type_var.get()
+                    self._set_cell_value('E39', product_type)
+                
+                # TU номер в A39
+                tu_number = self._get_tu_number()
+                self._set_cell_value('A39', tu_number)
                     
         except Exception as e:
             print(f"Ошибка при экспорте базовой информации: {e}")                   
@@ -453,16 +492,15 @@ class WeightOrdersExporter:
             gross_weight = self._convert_to_number_if_possible(self.roll_module.gross_weight_kg_var.get())
             net_weight = self._convert_to_number_if_possible(self.roll_module.net_weight_kg_var.get())
             quantity = self._convert_to_number_if_possible(self.roll_module.quantity_var.get())
+            roll_length = self._convert_to_number_if_possible(self.roll_module.roll_length.get())  # Длина ролика
             
             # Определяем диапазоны ячеек в зависимости от файла
             if is_second_file:
-                # Для второго файла: вес нетто и количество в разных колонках
-                net_weight_cols = ['B', 'E', 'H']  # вес нетто
-                quantity_cols = ['C', 'F', 'I']     # количество
+                # Для второго файла
                 start_row = 10
                 end_row = 29
             else:
-                # Для первого файла: стандартные колонки
+                # Для первого файла
                 gross_weight_cols = ['B', 'F']      # вес брутто
                 net_weight_cols = ['C', 'G']        # вес нетто  
                 quantity_cols = ['D', 'H']          # количество
@@ -473,35 +511,60 @@ class WeightOrdersExporter:
             empty_cells_found = 0
             
             if is_second_file:
-                # Заполнение для второго файла (только нетто и количество)
+                # Для второго файла - заполняем вес, количество и длину
+                l_row_counter = 10  # начальная строка для столбца L (L10)
+                
+                # Заполняем первую колонку (B и C)
                 for row in range(start_row, end_row + 1):
                     if empty_cells_found >= rolls_count:
                         break
                         
-                    # Проверяем, пуста ли строка для записи (проверяем первую колонку веса нетто)
+                    # Проверяем, пуста ли строка в колонке B
                     if self.ws[f'B{row}'].value is None:
                         if net_weight:
                             self._set_cell_value(f'B{row}', net_weight)
                         if quantity:
                             self._set_cell_value(f'C{row}', quantity)
+                        if roll_length:
+                            self._set_cell_value(f'L{l_row_counter}', roll_length)
                         
+                        l_row_counter += 1
                         empty_cells_found += 1
                 
-                # Если нужно больше - заполняем следующие колонки
-                for col in ['E', 'H']:
-                    for row in range(start_row, end_row + 1):
-                        if empty_cells_found >= rolls_count:
-                            break
-                            
-                        if self.ws[f'{col}{row}'].value is None:
-                            if net_weight:
-                                self._set_cell_value(f'{col}{row}', net_weight)
-                            if quantity:
-                                self._set_cell_value(f'{chr(ord(col) + 1)}{row}', quantity)
-                            
-                            empty_cells_found += 1
+                # Заполняем вторую колонку (E и F)
+                for row in range(start_row, end_row + 1):
+                    if empty_cells_found >= rolls_count:
+                        break
+                        
+                    if self.ws[f'E{row}'].value is None:
+                        if net_weight:
+                            self._set_cell_value(f'E{row}', net_weight)
+                        if quantity:
+                            self._set_cell_value(f'F{row}', quantity)
+                        if roll_length:
+                            self._set_cell_value(f'L{l_row_counter}', roll_length)
+                        
+                        l_row_counter += 1
+                        empty_cells_found += 1
+                
+                # Заполняем третью колонку (H и I)
+                for row in range(start_row, end_row + 1):
+                    if empty_cells_found >= rolls_count:
+                        break
+                        
+                    if self.ws[f'H{row}'].value is None:
+                        if net_weight:
+                            self._set_cell_value(f'H{row}', net_weight)
+                        if quantity:
+                            self._set_cell_value(f'I{row}', quantity)
+                        if roll_length:
+                            self._set_cell_value(f'L{l_row_counter}', roll_length)
+                        
+                        l_row_counter += 1
+                        empty_cells_found += 1
+                        
             else:
-                # Заполнение для первого файла (стандартное)
+                # Для первого файла - старый код
                 for row in range(start_row, end_row + 1):
                     if empty_cells_found >= rolls_count:
                         break
@@ -535,7 +598,7 @@ class WeightOrdersExporter:
                             self._set_cell_value(f'H{row}', quantity)
                         
                         empty_cells_found += 1
-            
+                
             return empty_cells_found >= rolls_count
                 
         except Exception as e:
@@ -572,35 +635,58 @@ class WeightOrdersExporter:
             cleared_items = 0
             
             if is_second_file:
-                # Для второго файла
+                # Для второго файла - очищаем ВСЕ 60 роликов
+                
+                # 1. Очищаем колонки B,C,E,F,H,I (3 колонки × 20 строк = 60 роликов)
                 rows_range = range(10, 30)  # строки 10-29
-                cols_to_clear = ['B', 'C', 'E', 'F', 'H', 'I', 'L']  # вес нетто, количество, длина
+                weight_quantity_cols = ['B', 'C', 'E', 'F', 'H', 'I']  # вес нетто и количество
+                
+                for row in rows_range:
+                    for col in weight_quantity_cols:
+                        try:
+                            cell = self.ws[f'{col}{row}']
+                            cell.value = None
+                            cell.alignment = Alignment(horizontal='general', vertical='center')
+                            cleared_items += 1
+                        except Exception as e:
+                            print(f"Не удалось очистить ячейку {col}{row}: {e}")
+                
+                # 2. ОТДЕЛЬНО очищаем столбец L для 60 роликов (строки 10-69)
+                for row in range(10, 70):  # строки 10-69 = 60 роликов
+                    try:
+                        cell = self.ws[f'L{row}']
+                        cell.value = None
+                        cell.alignment = Alignment(horizontal='general', vertical='center')
+                        cleared_items += 1
+                    except Exception as e:
+                        print(f"Не удалось очистить ячейку L{row}: {e}")
+                        
             else:
                 # Для первого файла  
                 rows_range = range(14, 29)  # строки 14-28
                 cols_to_clear = ['B', 'C', 'D', 'F', 'G', 'H']  # стандартные колонки
             
-            for row in rows_range:
-                for col in cols_to_clear:
-                    try:
-                        # Прямой доступ к ячейке как в оригинальном коде
-                        cell = self.ws[f'{col}{row}']
-                        cell.value = None
-                        cell.alignment = Alignment(horizontal='general', vertical='center')
-                        cleared_items += 1
-                    except Exception as e:
-                        print(f"Не удалось очистить ячейку {col}{row}: {e}")
+                for row in rows_range:
+                    for col in cols_to_clear:
+                        try:
+                            cell = self.ws[f'{col}{row}']
+                            cell.value = None
+                            cell.alignment = Alignment(horizontal='general', vertical='center')
+                            cleared_items += 1
+                        except Exception as e:
+                            print(f"Не удалось очистить ячейку {col}{row}: {e}")
             
             # Очищаем базовую информацию
             if is_second_file:
-                basic_info_cells = ['D7', 'D3', 'D6', 'D8', 'D37', 'E41', 'H3', 'D4', 'G4']
+                basic_info_cells = ['D7', 'D3', 'D6', 'D8', 'D37', 'E41', 'H3', 
+                                    'D4', 'G4', 'E39', 'A39'
+                ]
             else:
                 basic_info_cells = ['D5', 'D6', 'D8', 'D10', 'F37', 'E41', 'K2']
             
             cleared_basic = 0
             for cell_address in basic_info_cells:
                 try:
-                    # Прямой доступ к ячейке как в оригинальном коде
                     cell = self.ws[cell_address]
                     cell.value = None
                     cell.alignment = Alignment(horizontal='general', vertical='center')
@@ -623,7 +709,36 @@ class WeightOrdersExporter:
             return False
         finally:
             if self.wb:
-                self.wb.close()          
+                self.wb.close()
+                
+    def _get_tu_number(self):
+        """Получает TU номер на основе выбранных manufacturer_var и product_type_var"""
+        try:
+            if not self.roll_module:
+                return ""
+                
+            manufacturer = self.roll_module.manufacturer_var.get()
+            product_type = self.roll_module.product_type_var.get()
+            
+            if not manufacturer or not product_type:
+                return ""
+            
+            # Используем config_manager из roll_module
+            config_manager = self.roll_module.config_manager
+            
+            # Ищем точное соответствие в packaging_tu.json
+            packaging_data = config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            for spec in technical_specs:
+                if (spec["manufacturer"]["name"] == manufacturer and 
+                    spec["product"]["name"] == product_type):
+                    return spec["product"]["tu_number"]
+                    
+        except Exception as e:
+            print(f"Ошибка получения TU номера: {e}")
+        
+        return "ТУ 9570-001-26604209-2014"  # Fallback
             
     def _is_file_locked(self, filepath):
         """Проверяет, открыт ли файл в другом процессе (например, в Excel)"""
