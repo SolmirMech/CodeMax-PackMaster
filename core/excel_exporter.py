@@ -1135,10 +1135,8 @@ class WeightOrdersExporter:
     def _export_to_multitype_sheet_first_workshop(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' с пересчетом с нуля"""
         try: 
-            if not self.excel_file_path or not os.path.exists(self.excel_file_path):
-                return {'success': False, 'error': 'Файл не найден'}
-            
-            workbook = load_workbook(self.excel_file_path)
+            actual_file_path = self.get_excel_file_path()
+            workbook = load_workbook(actual_file_path)
             pallet_sheet = workbook["Лист для паллеты"]
             
             boxes_count = 0
@@ -1221,7 +1219,7 @@ class WeightOrdersExporter:
             if original_ws:
                 self.ws = original_ws
             
-            workbook.save(self.excel_file_path)
+            workbook.save(actual_file_path)
             workbook.close()
             
             return {'success': True, 'row_used': target_row}
@@ -1282,10 +1280,8 @@ class WeightOrdersExporter:
     def _export_to_multitype_sheet_for_second_workshop(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' для цеха 2"""      
         try: 
-            actual_file_path = self.get_excel_file_path()
-            
-            workbook = load_workbook(actual_file_path)
-            
+            actual_file_path = self.get_excel_file_path()           
+            workbook = load_workbook(actual_file_path)           
             list_sheet = workbook["Список поддонов"]
             
             pallets_count = 0
@@ -1356,7 +1352,7 @@ class WeightOrdersExporter:
             if original_ws:
                 self.ws = original_ws
             
-            workbook.save(self.excel_file_path)
+            workbook.save(actual_file_path)
             workbook.close()
             
             return {'success': True, 'row_used': target_row}
