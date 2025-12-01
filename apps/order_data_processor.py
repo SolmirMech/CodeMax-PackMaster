@@ -185,7 +185,8 @@ class OrderDataProcessor:
             exporter = WeightOrdersExporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.roll_module,
-                preview_module=self.preview_module
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
             )
             
             success = exporter.clear_multitype_sheet()
@@ -267,10 +268,11 @@ class OrderDataProcessor:
             exporter = WeightOrdersExporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.roll_module,
-                preview_module=self.preview_module
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
             )
             
-            result = exporter.export_to_multitype_sheet(pallet_data)
+            result = exporter.export_data(multitype_mode=True, pallet_data=pallet_data)
             
             if result['success']:
                 self.multitype_status_label.config(

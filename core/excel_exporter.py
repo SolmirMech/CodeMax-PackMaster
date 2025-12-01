@@ -39,17 +39,17 @@ class WeightOrdersExporter:
             is_second_file = self._is_second_file()
             
             # Ветвление по цехам и режимам
-            if multitype_mode:
+            if multitype_mode:                             
                 # Режим много-видового листа
                 if is_second_file:
                     # Цех 2 + много видов
-                    result = self.export_to_multitype_sheet_for_second_workshop(pallet_data)
-                    self.wb.close()
+                    self.ws = self.wb["Много видов"]
+                    result = self._export_to_multitype_sheet_for_second_workshop(pallet_data)
                     return result
                 else:
                     # Цех 1 + много видов
-                    result = self.export_to_multitype_sheet(pallet_data)
-                    self.wb.close()
+                    self.ws = self.wb["Лист много видов"]
+                    result = self._export_to_multitype_sheet_first_workshop(pallet_data)
                     return result
             
             # Стандартный режим (коробка/поддон)
@@ -751,8 +751,13 @@ class WeightOrdersExporter:
             raise
         
     def _is_second_file(self):
-        """Проверяет, используется ли второй файл"""
         file_path = self.get_excel_file_path()
+        print(f"🔍 _is_second_file ВНУТРИ:")
+        print(f"  self.excel_file_path: {self.excel_file_path}")
+        print(f"  get_excel_file_path(): {file_path}")
+        print(f"  self.coordinator: {self.coordinator}")
+        if hasattr(self, 'coordinator') and self.coordinator:
+            print(f"  coordinator.get_workshop(): {self.coordinator.get_workshop()}")
         return "weight_orders_2.xlsx" in file_path
     
     def clear_all_rolls(self, enable_pallet=False):
@@ -1127,7 +1132,7 @@ class WeightOrdersExporter:
             workshop = self.coordinator.get_workshop()
             print(f"Экспортер: получен цех {workshop}")
             
-    def export_to_multitype_sheet(self, pallet_data):
+    def _export_to_multitype_sheet_first_workshop(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' с пересчетом с нуля"""
         try: 
             if not self.excel_file_path or not os.path.exists(self.excel_file_path):
@@ -1163,7 +1168,7 @@ class WeightOrdersExporter:
                         
             if boxes_count == 0:
                 workbook.close()
-                return {'success': False, 'error': 'Нет данных для экспорта (лист поддона пуст)'}
+                return {'success': False, 'error': 'Лист поддона 1 цеха пуст'}
             
             pallet_weight = self._convert_to_number_if_possible(pallet_data.get("pallet_weight", 0))
             gross_total_with_pallet = gross_total + pallet_weight
@@ -1222,7 +1227,7 @@ class WeightOrdersExporter:
             return {'success': True, 'row_used': target_row}
             
         except Exception as e:
-            print(f"Ошибка экспорта в много-видовой лист: {e}")
+            print(f"Ошибка экспорта: {e}")
             try:
                 workbook.close()
             except:
@@ -1232,8 +1237,6 @@ class WeightOrdersExporter:
     def clear_multitype_sheet(self):
         """Очищает ВСЕ данные в листе 'Много видов', которые заполняет export_to_multitype_sheet"""
         try:
-            if not os.path.exists(self.excel_file_path):
-                return False
                 
             self.wb = load_workbook(self.excel_file_path)
             
@@ -1276,124 +1279,87 @@ class WeightOrdersExporter:
                 pass
             return False
             
-    def export_to_multitype_sheet_for_second_workshop(self, pallet_data):
-        """Экспортирует данные в лист 'Много видов' для цеха 2 (аналогично цеху 1)"""
+    def _export_to_multitype_sheet_for_second_workshop(self, pallet_data):
+        """Экспортирует данные в лист 'Много видов' для цеха 2"""      
         try: 
             actual_file_path = self.get_excel_file_path()
-            if not os.path.exists(actual_file_path):
-                return {'success': False, 'error': 'Файл не найден'}
             
             workbook = load_workbook(actual_file_path)
             
-            # 1. Читаем данные из "Список поддонов"
-            if "Список поддонов" not in workbook.sheetnames:
-                workbook.close()
-                return {'success': False, 'error': 'Лист "Список поддонов" не найден'}
-            
             list_sheet = workbook["Список поддонов"]
             
-            # 2. Получаем наименование продукта из pallet_data (КАК В ЦЕХЕ 1!)
-            product_name = pallet_data.get('product_name', '')
-            if not product_name and self.roll_module and hasattr(self.roll_module, 'product_text'):
-                # Fallback: из UI (как в цехе 1)
-                product_name = self.roll_module.product_text.get("1.0", "end-1c").strip()
+            pallets_count = 0
+            weight_total = 0
+            quantity_total = 0
+            length_total = 0
             
-            if not product_name:
-                workbook.close()
-                return {'success': False, 'error': 'Нет наименования продукции'}
-            
-            # 3. Суммируем все строки 10-29 как ОДИН продукт
-            total_count = 0      # A: кол-во поддонов
-            total_weight = 0     # H: вес нетто
-            total_quantity = 0   # I: кол-во этикеток
-            total_length = 0     # L: сумма длин
-            
-            for row in range(10, 30):  # строки 10-29 в "Список поддонов"
-                # Считаем только заполненные строки (есть вес или количество)
-                weight = list_sheet[f'F{row}'].value
-                quantity = list_sheet[f'H{row}'].value
-                
-                if weight is not None or quantity is not None:
-                    total_count += 1  # один поддон
-                    total_weight += (weight or 0)
-                    total_quantity += (quantity or 0)
+            for row in range(10, 30):
+                if (list_sheet[f'F{row}'].value is not None or 
+                    list_sheet[f'H{row}'].value is not None):
                     
-                    # Длина из столбца L
+                    pallets_count += 1
+                    weight_total += list_sheet[f'F{row}'].value or 0
+                    quantity_total += list_sheet[f'H{row}'].value or 0
+                    
                     length = list_sheet[f'L{row}'].value
                     if length is not None:
-                        total_length += length
+                        length_total += length         
             
-            if total_count == 0:
+            if pallets_count == 0:
                 workbook.close()
-                return {'success': False, 'error': 'Нет данных поддонов для агрегации'}
-            
-            # 4. Работаем с листом "Много видов"
-            if "Много видов" not in workbook.sheetnames:
-                workbook.close()
-                return {'success': False, 'error': 'Лист "Много видов" не найден'}
+                return {'success': False, 'error': 'Лист поддона 2 цеха пуст'}
             
             multitype_sheet = workbook["Много видов"]
             
-            # 4. Очищаем старые данные этого продукта (как в цехе 1)
-            current_product_name = pallet_data.get('product_name', '')
-            if current_product_name:
+            product_name = pallet_data.get('product_name', '')         
+            target_row = None
+            
+            for row in range(10, 30):
+                if multitype_sheet[f'B{row}'].value == product_name:
+                    target_row = row
+                    break
+            
+            if target_row is not None:
+                multitype_sheet[f'A{target_row}'].value = None
+                multitype_sheet[f'H{target_row}'].value = None
+                multitype_sheet[f'I{target_row}'].value = None
+                multitype_sheet[f'L{target_row}'].value = None
+            
+            if target_row is None:
                 for row in range(10, 30):
-                    if multitype_sheet[f'B{row}'].value == current_product_name:
-                        multitype_sheet[f'A{row}'].value = None
-                        multitype_sheet[f'H{row}'].value = None
-                        multitype_sheet[f'I{row}'].value = None
-                        multitype_sheet[f'L{row}'].value = None
+                    if multitype_sheet[f'A{row}'].value is None:
+                        target_row = row
+                        break
             
-            # 5. Заполняем базовую информацию (без наименования в D8)
+            if target_row is None:
+                workbook.close()
+                return {'success': False, 'error': 'Лист переполнен'}
+            
             original_ws = getattr(self, 'ws', None)
-            original_wb = getattr(self, 'wb', None)
             self.ws = multitype_sheet
-            self.wb = workbook
             
+            #  Вызов базовой информации
             self._export_basic_info_for_second_workshop(skip_product_name=True)
+            self._export_box_data_for_second_workshop()
             
-            # Вес поддона из pallet_data в H3
             pallet_weight = self._convert_to_number_if_possible(pallet_data.get("pallet_weight", 0))
             self._set_cell_value('H3', pallet_weight)
             
-            # 6. Заполняем агрегированные данные (строки 10-29)
-            for product_name, data in products_data.items():
-                # Ищем строку для этого продукта
-                target_row = None
-                
-                # Сначала ищем существующую
-                for row in range(10, 30):
-                    if multitype_sheet[f'B{row}'].value == product_name:
-                        target_row = row
-                        break
-                
-                # Если нет - ищем пустую
-                if target_row is None:
-                    for row in range(10, 30):
-                        if multitype_sheet[f'B{row}'].value is None:
-                            target_row = row
-                            break
-                
-                if target_row is None:
-                    continue  # нет места
-                
-                # Заполняем данные
-                self._set_cell_value(f'A{target_row}', data['count'])  # кол-во поддонов
-                self._set_cell_value(f'B{target_row}', product_name)   # наименование
-                self._set_cell_value(f'H{target_row}', data['weight']) # вес нетто
-                self._set_cell_value(f'I{target_row}', data['quantity']) # кол-во
-                self._set_cell_value(f'L{target_row}', data['length'])  # сумма длин
+            # запись данных
+            self._set_cell_value(f'A{target_row}', pallets_count)
+            self._set_cell_value(f'B{target_row}', product_name)
+            self._set_cell_value(f'H{target_row}', weight_total)
+            self._set_cell_value(f'I{target_row}', quantity_total)
+            self._set_cell_value(f'L{target_row}', length_total)
             
             # Восстанавливаем
             if original_ws:
                 self.ws = original_ws
-            if original_wb:
-                self.wb = original_wb
             
-            workbook.save(actual_file_path)
+            workbook.save(self.excel_file_path)
             workbook.close()
             
-            return {'success': True}
+            return {'success': True, 'row_used': target_row}
             
         except Exception as e:
             print(f"Ошибка экспорта в много-видовой лист для цеха 2: {e}")
