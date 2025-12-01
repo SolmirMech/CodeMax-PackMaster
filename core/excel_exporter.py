@@ -893,44 +893,72 @@ class WeightOrdersExporter:
             print(f"Не удалось установить значение {value} в ячейку {cell_address}: {e}")
             
     def _update_manufacturer_info(self):
-        """Обновляет информацию об изготовителе только в первом листе"""
+        """Обновляет информацию об изготовителе в первом листе файла для обоих цехов"""
         try:
-            # Получаем значение Изготовителя
+            # Получаем значение чекбокса "Без изготовителя" из UI
+            # True = чекбокс отмечен = "Без производителя" = НЕ показывать
             show_manufacturer = True
 
             if hasattr(self.roll_module, 'show_manufacturer_var'):
                 # ИНВЕРТИРУЕМ логику: True = "Без Производителя" = не показывать
                 show_manufacturer = not self.roll_module.show_manufacturer_var.get()
 
-            # Получаем актуального изготовителя из config_manager
+            # Получаем выбранного производителя ИЗ UI (комбобокс)
             manufacturer_name = ""
-            if hasattr(self.roll_module, 'config_manager'):
-                manufacturer_name = self.roll_module.config_manager.get_manufacturer()
+            if hasattr(self.roll_module, 'manufacturer_var'):
+                manufacturer_name = self.roll_module.manufacturer_var.get()
             
-            # Формируем текст для отображения с проверкой на Ремас
+            # Формируем текст для отображения
             display_text = ""
+            
+            # Если чекбокс "Без изготовителя" НЕ отмечен (show_manufacturer=True) 
+            # И есть выбранный производитель в UI
             if show_manufacturer and manufacturer_name:
-                if "Ремас" in manufacturer_name or "Ремас-Флексо" in manufacturer_name:
-                    display_text = 'ООО "Ремас-Флексо" , Россия, 426039, Удмуртская Республика, Ижевск, ул.Воткинское шоссе, 186.'
+                # Адрес для указанных производителей
+                address = 'Россия, 426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1'
+                
+                if "Ремас" in manufacturer_name:
+                    display_text = f'ООО "Ремас-Флексо", {address}'
+                elif "Зюдин" in manufacturer_name:
+                    display_text = f'ИП Зюдин В.Г., {address}'
                 else:
-                    # Для других изготовителей - только название
+                    # Для других изготовителей - только название из UI
                     display_text = manufacturer_name
             
-            # Обновляем только первый лист
-            if "Лист для коробки" in self.wb.sheetnames:
-                sheet = self.wb["Лист для коробки"]
-                sheet['B1'] = display_text
-                
-                # Выравнивание по центру и перенос текста
-                sheet['B1'].alignment = Alignment(
-                    horizontal='center', 
-                    vertical='center',
-                    wrap_text=True
-                )
+            # Определяем, какой файл используется
+            is_second_file = self._is_second_file()
             
+            # Обновляем лист в зависимости от цеха
+            if is_second_file:
+                # Для 2 цеха: обновляем лист "Коробка" ячейка A1
+                if "Коробка" in self.wb.sheetnames:
+                    sheet = self.wb["Коробка"]
+                    sheet['A1'] = display_text
+                    
+                    # Выравнивание по центру и перенос текста
+                    sheet['A1'].alignment = Alignment(
+                        horizontal='center', 
+                        vertical='center',
+                        wrap_text=True
+                    )
+                    print(f"Обновлен производитель для 2 цеха в ячейке A1: {display_text}")
+            else:
+                # Для 1 цеха: обновляем лист "Лист для коробки" ячейка B1
+                if "Лист для коробки" in self.wb.sheetnames:
+                    sheet = self.wb["Лист для коробки"]
+                    sheet['B1'] = display_text
+                    
+                    # Выравнивание по центру и перенос текста
+                    sheet['B1'].alignment = Alignment(
+                        horizontal='center', 
+                        vertical='center',
+                        wrap_text=True
+                    )
+                    print(f"Обновлен производитель для 1 цеха в ячейке B1: {display_text}")
+                
         except Exception as e:
             print(f"Ошибка при обновлении информации об изготовителе: {e}")
-                
+        
     def _convert_to_number_if_possible(self, value):
         """Пытается преобразовать строку в число"""
         if value is None:
