@@ -2,6 +2,7 @@ import tkinter as tk
 import os
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
+from core.config_manager import ConfigManager
 
 class WeightOrdersExporter:
     """Экспортер данных в Excel файл для весовых заказов"""
@@ -10,13 +11,119 @@ class WeightOrdersExporter:
         self.excel_file_path = excel_file_path
         self.roll_module = roll_module
         self.preview_module = preview_module
-        self.coordinator = coordinator       
+        self.config_manager = ConfigManager()
+        self.coordinator = coordinator
         # Подписываемся на координатор если он есть
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             
         self.wb = None
         self.ws = None
+        
+    def _archive_pallet_for_second_workshop(self):
+        """Архивирует поддон для 2 цеха (лист 'Коробка' -> архив)"""
+        try:
+            actual_file_path = self.get_excel_file_path()
+            workbook = load_workbook(actual_file_path)
+            
+            if "Коробка" not in workbook.sheetnames:
+                workbook.close()
+                return {'success': False, 'error': 'Лист "Коробка" не найден'}
+            
+            sheet = workbook["Коробка"]
+            
+            # 1. Собираем ВСЕ данные для архива
+            archive_data = self._extract_all_data_for_archive(sheet)
+            
+            # 2. Сохраняем в архив через ConfigManager
+            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)
+            
+            # 3. Увеличиваем номер поддона в D5
+            current_number = sheet['D5'].value
+            if current_number is None:
+                sheet['D5'] = pallet_number + 1
+            else:
+                sheet['D5'] = current_number + 1
+            
+            # 4. Очищаем лист (кроме D5)
+            workbook.save(actual_file_path)
+            workbook.close()
+            
+            # Очищаем через существующий метод
+            self.clear_all_rolls(enable_pallet=False)
+            
+            return {'success': True, 'pallet_number': pallet_number}
+            
+        except Exception as e:
+            print(f"Ошибка архивации поддона: {e}")
+            return {'success': False, 'error': str(e)}
+            
+    def _extract_all_data_for_archive(self, sheet):
+        """Извлекает ВСЕ данные из листа 'Коробка' для архивации"""
+        from datetime import datetime
+        
+        # Базовые поля из листа
+        basic_fields = {
+            "D7": sheet['D7'].value,  # Заказчик
+            "D3": sheet['D3'].value,  # Тип упаковки
+            "D6": sheet['D6'].value,  # Номер заказа
+            "D8": sheet['D8'].value,  # Изделие (может быть многострочным)
+            "D37": sheet['D37'].value,  # Дата упаковки
+            "E41": sheet['E41'].value,  # Упаковщик
+            "H3": sheet['H3'].value,  # Вес поддона
+            "D4": sheet['D4'].value,  # Вес втулки (кг)
+            "G4": sheet['G4'].value,  # Диаметр втулки
+            "E39": sheet['E39'].value,  # Тип продукта
+            "A39": sheet['A39'].value,  # TU номер
+            "D5": sheet['D5'].value   # Текущий номер поддона
+        }
+        
+        # Извлекаем данные роликов
+        rolls = self._extract_rolls_data_from_sheet(sheet)
+        
+        # Собираем полные данные для архива
+        archive_data = {
+            "workshop": "2",
+            "basic_fields": basic_fields,
+            "rolls": rolls,
+            "extraction_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        return archive_data
+        
+    def _extract_rolls_data_from_sheet(self, sheet):
+        """Извлекает данные роликов из листа"""
+        rolls = []
+        
+        # Пары колонок и соответствующие смещения для длины в L
+        column_pairs = [
+            ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
+            ('E', 'F', 20),  # E,F - длина в L со смещением +20
+            ('H', 'I', 40)   # H,I - длина в L со смещением +40
+        ]
+        
+        for weight_col, qty_col, l_offset in column_pairs:
+            for row in range(10, 30):  # строки 10-29
+                weight = sheet[f'{weight_col}{row}'].value
+                quantity = sheet[f'{qty_col}{row}'].value
+                
+                if weight is not None or quantity is not None:
+                    # Получаем длину из столбца L
+                    length_row = row + l_offset
+                    length = sheet[f'L{length_row}'].value
+                    
+                    rolls.append({
+                        'position': f'{weight_col}{row}',
+                        'weight_col': weight_col,
+                        'quantity_col': qty_col,
+                        'row': row,
+                        'weight': weight,
+                        'quantity': quantity,
+                        'length': length,
+                        'length_position': f'L{length_row}'
+                    })
+        
+        return rolls
         
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
@@ -50,9 +157,7 @@ class WeightOrdersExporter:
     def _copy_excel_file_from_assets(self, assets_filename, target_path):
         """Копирует файл Excel из assets в целевую папку"""
         try:
-            from core.config_manager import ConfigManager
-            config_manager = ConfigManager()
-            assets_file = config_manager.get_asset_path(assets_filename)
+            assets_file = self.config_manager.get_asset_path(assets_filename)
             
             if os.path.exists(assets_file):
                 import shutil
@@ -234,6 +339,13 @@ class WeightOrdersExporter:
             # Проверяем изготовителя
             self._update_manufacturer_info()
             
+            # Особая логика для 2 цеха и поддона
+            if enable_pallet and self._is_second_file():
+                # Для 2 цеха при экспорте поддона - архивируем текущий
+                result = self._archive_pallet_for_second_workshop()
+                return result
+            
+            # Существующая логика для остальных случаев
             # Определяем имя листа в зависимости от файла и режима
             if enable_pallet:
                 sheet_name = "Поддон" if self._is_second_file() else "Лист для паллеты"
@@ -264,7 +376,7 @@ class WeightOrdersExporter:
             
         except Exception as e:
             print(f"Ошибка экспорта в Excel: {e}")
-            return {'success': False, 'all_fitted': True}
+            return {'success': False, 'error': str(e)}
         finally:
             if self.wb:
                 self.wb.close()
@@ -824,13 +936,10 @@ class WeightOrdersExporter:
             product_type = self.roll_module.product_type_var.get()
             
             if not manufacturer or not product_type:
-                return ""
-            
-            # Используем config_manager из roll_module
-            config_manager = self.roll_module.config_manager
+                return ""          
             
             # Ищем точное соответствие в packaging_tu.json
-            packaging_data = config_manager.load_json_settings("packaging_tu.json")
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             technical_specs = packaging_data.get("technical_specifications", [])
             
             for spec in technical_specs:

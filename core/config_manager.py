@@ -25,6 +25,54 @@ class ConfigManager:
         # Список упаковщиков по умолчанию
         self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]
         
+    # Архивация 2 цех
+    def get_pallet_archive(self):
+        """Загружает архив поддонов из файла"""
+        archive = self.load_json_settings("archive_pallets.json")
+        if not archive:
+            # Если файла нет, создаем структуру
+            archive = {
+                "archive_version": "1.0",
+                "workshop": "2",  # архив только для 2 цеха
+                "last_pallet_number": 0,
+                "pallets": []
+            }
+        return archive
+
+    def save_pallet_archive(self, archive_data):
+        """Сохраняет архив поддонов в файл"""
+        return self.save_json_settings("archive_pallets.json", archive_data)
+
+    def add_pallet_to_archive(self, pallet_data):
+        """Добавляет поддон в архив и возвращает его номер"""
+        archive = self.get_pallet_archive()
+        
+        # Генерируем номер поддона
+        pallet_number = archive.get("last_pallet_number", 0) + 1
+        
+        # Добавляем номер в данные
+        pallet_data["pallet_number"] = pallet_number
+        pallet_data["id"] = pallet_number  # дублируем для совместимости
+        
+        # Добавляем метаданные
+        from datetime import datetime
+        import getpass
+        pallet_data["archive_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        pallet_data["archive_user"] = getpass.getuser()
+        
+        # Добавляем в архив
+        archive["pallets"].append(pallet_data)
+        archive["last_pallet_number"] = pallet_number
+        
+        # Сохраняем
+        self.save_pallet_archive(archive)
+        return pallet_number
+
+    def get_next_pallet_number(self):
+        """Возвращает следующий номер поддона для ячейки D5"""
+        archive = self.get_pallet_archive()
+        return archive.get("last_pallet_number", 0) + 1        
+        
     def get_asset_path(self, filename):
         """Возвращает полный путь к файлу в папке assets для бинарника и исходника"""
         if hasattr(sys, '_MEIPASS'):
