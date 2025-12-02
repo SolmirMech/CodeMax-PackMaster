@@ -499,7 +499,6 @@ class WeightOrdersExporter:
             return True
 
     # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
-    # (остаются без изменений)
     
     def _archive_pallet_for_second_workshop(self):
         """Полная архивация для 2 цеха: копирование в 'Список поддонов' + JSON-архив"""
@@ -509,49 +508,43 @@ class WeightOrdersExporter:
             
             if "Поддон" not in workbook.sheetnames:
                 workbook.close()
-                return {'success': False, 'error': 'Лист "Поддон" не найден'}
+                return {'success': False, 'error': 'Лист "Поддон" не найден', 'all_fitted': False}
             
             pallet_sheet = workbook["Поддон"]
             
-            # 1. Копируем данные в "Список поддонов"
+            # Копируем данные в "Список поддонов"
             list_result = self._add_to_pallet_list_sheet(workbook, pallet_sheet)
             if not list_result.get('success'):
                 workbook.close()
-                return list_result
+                return {'success': False, 'error': list_result.get('error'), 'all_fitted': False}
             
-            # 2. Сохраняем в архив через ConfigManager
+            # Сохраняем в архив через ConfigManager
             archive_data = self._extract_all_data_for_archive(pallet_sheet)
-            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)
+            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)         
             
-            # 3. Увеличиваем номер поддона в D5
-            current_number = pallet_sheet['D5'].value
-            if current_number is None:
-                pallet_sheet['D5'] = pallet_number + 1
-            else:
-                pallet_sheet['D5'] = current_number + 1
-            
-            # 4. Сохраняем Excel с обновленным D5
+            # Сохраняем Excel
             workbook.save(actual_file_path)
             workbook.close()
             
-            # 5. Очищаем лист "Поддон" (кроме D5)
+            # Очищаем лист "Поддон"
             # self.clear_all_rolls(enable_pallet=False)
             
             return {
                 'success': True, 
                 'pallet_number': pallet_number,
-                'list_row': list_result.get('row_used')
+                'list_row': list_result.get('row_used'),
+                'all_fitted': True
             }
             
         except Exception as e:
             print(f"Ошибка архивации поддона: {e}")
-            return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': str(e), 'all_fitted': False}
     
     def _add_to_pallet_list_sheet(self, workbook, pallet_sheet):
         """Добавляет данные из листа 'Поддон' в 'Список поддонов'"""
         try:
             if "Список поддонов" not in workbook.sheetnames:
-                return {'success': False, 'error': 'Лист "Список поддонов" не найден'}
+                return {'success': False, 'error': 'Лист "Список поддонов" не найден', 'all_fitted': False}
             
             list_sheet = workbook["Список поддонов"]
             
@@ -566,7 +559,7 @@ class WeightOrdersExporter:
                     break
             
             if target_row is None:
-                return {'success': False, 'error': 'Лист "Список поддонов" переполнен (нет свободных строк 10-29)'}
+                return {'success': False, 'error': 'Лист "Список поддонов" переполнен (нет свободных строк 10-29)', 'all_fitted': False}
             
             # 2. Сохраняем текущий ws и временно переключаем на list_sheet
             original_ws = getattr(self, 'ws', None)
@@ -599,11 +592,11 @@ class WeightOrdersExporter:
             if original_wb:
                 self.wb = original_wb
             
-            return {'success': True, 'row_used': target_row}
+            return {'success': True, 'row_used': target_row, 'all_fitted': True}
             
         except Exception as e:
             print(f"Ошибка добавления в список поддонов: {e}")
-            return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': str(e), 'all_fitted': False}
 
     def _calculate_pallet_totals(self, pallet_sheet):
         """Вычисляет итоги по поддону из листа 'Поддон'"""
@@ -713,26 +706,41 @@ class WeightOrdersExporter:
         return rolls
     
     def get_excel_file_path(self):
-        """Возвращает путь к Excel файлу в зависимости от цеха"""
-        if hasattr(self, 'coordinator') and self.coordinator:
-            workshop = self.coordinator.get_workshop()
-            if workshop == "2":
-                # Для цеха 2 используем ТОЛЬКО weight_orders_2.xlsx
-                directory = os.path.dirname(self.excel_file_path)
-                second_file_path = os.path.join(directory, "weight_orders_2.xlsx")
-                
-                # Если файл для 2 цеха не существует - копируем из assets
-                if not os.path.exists(second_file_path):
-                    self._copy_excel_file_from_assets("weight_orders_2.xlsx", second_file_path)
-                
-                return second_file_path
-        
-        # Для цеха 1 используем ТОЛЬКО weight_orders.xlsx
-        # Проверяем существование основного файла
-        if not os.path.exists(self.excel_file_path):
-            self._copy_excel_file_from_assets("weight_orders.xlsx", self.excel_file_path)
-        
-        return self.excel_file_path
+        """Возвращает путь к Excel файлу в зависимости от цеха и настроек"""
+        try:
+            # Получаем путь из настроек (shared_utils.json)
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            excel_folder = settings.get("weight_orders_xlsx", "")
+            
+            if not excel_folder:
+                # Если папка не выбрана в настройках, используем исходный путь
+                excel_folder = os.path.dirname(self.excel_file_path)
+            
+            # Определяем имя файла в зависимости от цеха
+            workshop = "1"
+            if hasattr(self, 'coordinator') and self.coordinator:
+                workshop = self.coordinator.get_workshop()
+            
+            filename = "weight_orders.xlsx" if workshop == "1" else "weight_orders_2.xlsx"
+            full_path = os.path.join(excel_folder, filename)
+            
+            # Проверяем существование файла
+            if not os.path.exists(full_path):
+                # Копируем из assets
+                assets_file = self.config_manager.get_asset_path(filename)
+                if os.path.exists(assets_file):
+                    import shutil
+                    shutil.copy2(assets_file, full_path)
+                    print(f"Файл {filename} скопирован в {full_path}")
+                else:
+                    raise FileNotFoundError(f"Файл {filename} не найден в assets")
+            
+            return full_path
+            
+        except Exception as e:
+            print(f"Ошибка получения пути к Excel файлу: {e}")
+            # Fallback: возвращаем исходный путь
+            return self.excel_file_path
 
     def _copy_excel_file_from_assets(self, assets_filename, target_path):
         """Копирует файл Excel из assets в целевую папку"""
@@ -751,16 +759,14 @@ class WeightOrdersExporter:
             raise
         
     def _is_second_file(self):
+        """Проверяет, является ли файл вторым файлом (weight_orders_2.xlsx)"""
         file_path = self.get_excel_file_path()
-        print(f"🔍 _is_second_file ВНУТРИ:")
-        print(f"  self.excel_file_path: {self.excel_file_path}")
-        print(f"  get_excel_file_path(): {file_path}")
-        print(f"  self.coordinator: {self.coordinator}")
-        if hasattr(self, 'coordinator') and self.coordinator:
-            print(f"  coordinator.get_workshop(): {self.coordinator.get_workshop()}")
-        return "weight_orders_2.xlsx" in file_path
+        if not file_path:
+            return False
+        # Просто проверяем имя файла, координатор уже учтен в get_excel_file_path
+        return "weight_orders_2.xlsx" in os.path.basename(file_path)
     
-    def clear_all_rolls(self, enable_pallet=False):
+    def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
         """Основной метод очистки - вызывает соответствующие под-методы"""
         try:
             actual_file_path = self.get_excel_file_path()
@@ -776,19 +782,30 @@ class WeightOrdersExporter:
             
             is_second_file = self._is_second_file()
             
-            if is_second_file:
-                if enable_pallet:
-                    # Для 2 цеха, режим поддона: очищаем "Список поддонов"
-                    self._clear_pallet_list_sheet()
+            # Ветвление по режимам
+            if multitype_mode:
+                # Много-видовой режим
+                if is_second_file:
+                    # Цех 2: очищаем "Много видов"
+                    self._clear_multitype_sheet_second_workshop()
                 else:
-                    # Для 2 цеха, режим коробки: очищаем только "Поддон"
-                    self._clear_pallet_sheet_second_workshop()
+                    # Цех 1: очищаем "Лист много видов"
+                    self._clear_multitype_sheet_first_workshop()
             else:
-                # Для 1 цеха
-                if enable_pallet:
-                    self._clear_pallet_sheet_first_workshop()
+                # Стандартный режим (коробка/поддон)
+                if is_second_file:
+                    if enable_pallet:
+                        # Для 2 цеха, режим поддона: очищаем "Список поддонов"
+                        self._clear_pallet_list_sheet()
+                    else:
+                        # Для 2 цеха, режим коробки: очищаем только "Поддон"
+                        self._clear_pallet_sheet_second_workshop()
                 else:
-                    self._clear_box_sheet_first_workshop()
+                    # Для 1 цеха
+                    if enable_pallet:
+                        self._clear_pallet_sheet_first_workshop()
+                    else:
+                        self._clear_box_sheet_first_workshop()
             
             # Сохраняем изменения
             self.wb.save(actual_file_path)
@@ -806,6 +823,69 @@ class WeightOrdersExporter:
         finally:
             if self.wb:
                 self.wb.close()
+                
+    def _clear_multitype_sheet_first_workshop(self):
+        """Очищает лист 'Лист много видов' для цеха 1"""
+        if "Лист много видов" not in self.wb.sheetnames:
+            return False
+            
+        self.ws = self.wb["Лист много видов"]
+        
+        # 1. Очищаем базовую информацию (как в clear_multitype_sheet)
+        basic_info_cells = ['D5', 'D6', 'D8', 'F37', 'E41', 'K2', 'E39', 'A39']
+        
+        for cell_address in basic_info_cells:
+            try:
+                cell = self.ws[cell_address]
+                cell.value = None
+                cell.alignment = Alignment(horizontal='general', vertical='center')
+            except Exception as e:
+                print(f"Не удалось очистить ячейку {cell_address}: {e}")
+        
+        # 2. Очищаем данные продуктов (строки 11-28)
+        for row in range(11, 29):
+            for col in ['A', 'B', 'F', 'G', 'H']:
+                try:
+                    cell = self.ws[f'{col}{row}']
+                    cell.value = None
+                    cell.alignment = Alignment(horizontal='general', vertical='center')
+                except Exception as e:
+                    print(f"Не удалось очистить ячейку {col}{row}: {e}")
+        
+        return True
+
+    def _clear_multitype_sheet_second_workshop(self):
+        """Очищает лист 'Много видов' для цеха 2"""
+        if "Много видов" not in self.wb.sheetnames:
+            return False
+            
+        self.ws = self.wb["Много видов"]
+        
+        # 1. Очищаем базовую информацию
+        basic_info_cells = [
+            'D7', 'D3', 'D6', 'D37', 'E41', 'H3', 
+            'D4', 'G4', 'E39', 'A39'
+        ]
+        
+        for cell_address in basic_info_cells:
+            try:
+                cell = self.ws[cell_address]
+                cell.value = None
+                cell.alignment = Alignment(horizontal='general', vertical='center')
+            except Exception as e:
+                print(f"Не удалось очистить ячейку {cell_address}: {e}")
+        
+        # 2. Очищаем данные продуктов (строки 10-29)
+        for row in range(10, 30):
+            for col in ['A', 'B', 'H', 'I', 'L']:
+                try:
+                    cell = self.ws[f'{col}{row}']
+                    cell.value = None
+                    cell.alignment = Alignment(horizontal='general', vertical='center')
+                except Exception as e:
+                    print(f"Не удалось очистить ячейку {col}{row}: {e}")
+        
+        return True
 
     def _clear_pallet_sheet_second_workshop(self):
         """Очищает лист 'Поддон' для 2 цеха"""
@@ -1032,7 +1112,7 @@ class WeightOrdersExporter:
             show_manufacturer = True
 
             if hasattr(self.roll_module, 'show_manufacturer_var'):
-                # ИНВЕРТИРУЕМ логику: True = "Без Производителя" = не показывать
+                # Инвертируем логику: True = "Без Производителя" = не показывать
                 show_manufacturer = not self.roll_module.show_manufacturer_var.get()
 
             # Получаем выбранного производителя ИЗ UI (комбобокс)
@@ -1130,7 +1210,6 @@ class WeightOrdersExporter:
         # При изменении цеха можно обновить путь к файлу
         if hasattr(self, 'coordinator') and self.coordinator:
             workshop = self.coordinator.get_workshop()
-            print(f"Экспортер: получен цех {workshop}")
             
     def _export_to_multitype_sheet_first_workshop(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' с пересчетом с нуля"""
@@ -1230,52 +1309,7 @@ class WeightOrdersExporter:
                 workbook.close()
             except:
                 pass
-            return {'success': False, 'error': str(e)}
-            
-    def clear_multitype_sheet(self):
-        """Очищает ВСЕ данные в листе 'Много видов', которые заполняет export_to_multitype_sheet"""
-        try:
-                
-            self.wb = load_workbook(self.excel_file_path)
-            
-            if "Лист много видов" not in self.wb.sheetnames:
-                return False
-                
-            self.ws = self.wb["Лист много видов"]
-            
-            # 1. Очищаем базовую информацию
-            basic_info_cells = ['D5', 'D6', 'D8', 'F37', 'E41', 'K2', 'E39', 'A39']
-            
-            for cell_address in basic_info_cells:
-                try:
-                    cell = self.ws[cell_address]
-                    cell.value = None
-                    cell.alignment = Alignment(horizontal='general', vertical='center')
-                except Exception as e:
-                    print(f"Не удалось очистить ячейку {cell_address}: {e}")
-            
-            # 2. Очищаем данные продуктов (строки 11-28)
-            for row in range(11, 29):
-                for col in ['A', 'B', 'F', 'G', 'H']:
-                    try:
-                        cell = self.ws[f'{col}{row}']
-                        cell.value = None
-                        cell.alignment = Alignment(horizontal='general', vertical='center')
-                    except Exception as e:
-                        print(f"Не удалось очистить ячейку {col}{row}: {e}")
-            
-            self.wb.save(self.excel_file_path)
-            self.wb.close()
-            return True
-            
-        except Exception as e:
-            print(f"Ошибка очистки листа 'Много видов': {e}")
-            try:
-                if self.wb:
-                    self.wb.close()
-            except:
-                pass
-            return False
+            return {'success': False, 'error': str(e)}          
             
     def _export_to_multitype_sheet_for_second_workshop(self, pallet_data):
         """Экспортирует данные в лист 'Много видов' для цеха 2"""      

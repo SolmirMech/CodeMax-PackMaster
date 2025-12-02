@@ -189,7 +189,7 @@ class OrderDataProcessor:
                 coordinator=self.coordinator
             )
             
-            success = exporter.clear_multitype_sheet()
+            success = exporter.clear_all_rolls(multitype_mode=True)
             
             if success:
                 self.multitype_status_label.config(

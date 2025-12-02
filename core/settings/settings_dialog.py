@@ -398,6 +398,11 @@ class SettingsDialog:
             settings = self.config_manager.load_json_settings("shared_utils.json")
             settings["weight_orders_xlsx"] = self.excel_folder_path
             self.config_manager.save_json_settings("shared_utils.json", settings)
+            
+            # Можно добавить нотификацию
+            if hasattr(self, 'coordinator') and self.coordinator:
+                self.coordinator._notify_subscribers()
+                
         except Exception as e:
             print(f"Ошибка сохранения пути к папке Excel: {e}")
 

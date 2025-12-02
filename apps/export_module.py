@@ -311,7 +311,11 @@ class ExportModule:
             result = exporter.export_data(enable_pallet=False)
             
             if result['success']:
-                self.export_status_label.config(text="Данные отправлены в коробку", foreground="green")
+                all_fitted = result.get('all_fitted', True)
+                if all_fitted:
+                    self.set_status("Данные отправлены в коробку", "green")
+                else:
+                    self.set_status("Лист переполнен! Не все ролики поместились", "orange")
             else:
                 error_msg = result.get('error', 'Неизвестная ошибка')
                 self.export_status_label.config(text=f"Ошибка: {error_msg}", foreground="red")
@@ -401,21 +405,12 @@ class ExportModule:
                 # Проверяем поместились ли все коробки
                 all_fitted = result.get('all_fitted', True)
                 if all_fitted:
-                    self.export_status_label.config(
-                        text="Данные поддона экспортированы", 
-                        foreground="green"
-                    )
+                    self.set_status("Данные поддона экспортированы", "green")
                 else:
-                    self.export_status_label.config(
-                        text="Лист переполнен!", 
-                        foreground="orange"
-                    )
+                    self.set_status("Лист переполнен!", "orange")
             else:
-                self.export_status_label.config(
-                    text="Ошибка при экспорте данных", 
-                    foreground="red"
-                )
-            
+                self.set_status(f"Ошибка: {result.get('error')}", "red")  # Другие ошибки
+    
         except Exception as e:
             self.export_status_label.config(
                 text=f"Ошибка экспорта: {str(e)}", 
