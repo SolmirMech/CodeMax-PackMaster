@@ -25,7 +25,7 @@ class ExportModule:
         # Переменные для поддона
         self.pallet_weight_var = tk.StringVar(value="0.0")
         self.pallet_size_var = tk.StringVar(value="")
-        self.boxes_count_var = tk.StringVar(value="")
+        self.boxes_count_var = tk.StringVar(value="1")
         
         # Переменные для пути Excel
         self.excel_file_path = None
