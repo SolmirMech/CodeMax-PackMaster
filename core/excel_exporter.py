@@ -3,6 +3,7 @@ import os
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from core.config_manager import ConfigManager
+from core.archive.archive_manager import ArchiveManager
 
 class WeightOrdersExporter:
     """Экспортер данных в Excel файл для весовых заказов"""
@@ -12,6 +13,7 @@ class WeightOrdersExporter:
         self.roll_module = roll_module
         self.preview_module = preview_module
         self.config_manager = ConfigManager()
+        self.archive_manager = ArchiveManager()
         self.coordinator = coordinator
         # Подписываемся на координатор если он есть
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -512,21 +514,21 @@ class WeightOrdersExporter:
             
             pallet_sheet = workbook["Поддон"]
             
-            # Копируем данные в "Список поддонов"
+            # 1. Архивируем через ArchiveManager
+            archive_data = self.archive_manager.extract_pallet_data(actual_file_path)
+            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)
+            
+            # 2. Копируем данные в "Список поддонов" (старая логика экспорта)
             list_result = self._add_to_pallet_list_sheet(workbook, pallet_sheet)
             if not list_result.get('success'):
                 workbook.close()
                 return {'success': False, 'error': list_result.get('error'), 'all_fitted': False}
             
-            # Сохраняем в архив через ConfigManager
-            archive_data = self._extract_all_data_for_archive(pallet_sheet)
-            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)         
-            
-            # Сохраняем Excel
+            # 3. Сохраняем Excel
             workbook.save(actual_file_path)
             workbook.close()
             
-            # Очищаем лист "Поддон"
+            # 4. Очищаем лист "Поддон" (опционально, по желанию)
             # self.clear_all_rolls(enable_pallet=False)
             
             return {
@@ -637,73 +639,6 @@ class WeightOrdersExporter:
             'total_quantity': total_quantity,
             'total_length': total_length
         }
-    
-    def _extract_all_data_for_archive(self, sheet):
-        """Извлекает ВСЕ данные из листа 'Поддон' для архивации"""
-        from datetime import datetime
-        
-        # Базовые поля из листа
-        basic_fields = {
-            "D7": sheet['D7'].value,  # Заказчик
-            "D3": sheet['D3'].value,  # Тип упаковки
-            "D6": sheet['D6'].value,  # Номер заказа
-            "D8": sheet['D8'].value,  # Изделие (может быть многострочным)
-            "D37": sheet['D37'].value,  # Дата упаковки
-            "E41": sheet['E41'].value,  # Упаковщик
-            "H3": sheet['H3'].value,  # Вес поддона
-            "D4": sheet['D4'].value,  # Вес втулки (кг)
-            "G4": sheet['G4'].value,  # Диаметр втулки
-            "E39": sheet['E39'].value,  # Тип продукта
-            "A39": sheet['A39'].value,  # TU номер
-            "D5": sheet['D5'].value   # Текущий номер поддона
-        }
-        
-        # Извлекаем данные роликов
-        rolls = self._extract_rolls_data_from_sheet(sheet)
-        
-        # Собираем полные данные для архива
-        archive_data = {
-            "workshop": "2",
-            "basic_fields": basic_fields,
-            "rolls": rolls,
-            "extraction_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        return archive_data
-        
-    def _extract_rolls_data_from_sheet(self, sheet):
-        """Извлекает данные роликов из листа"""
-        rolls = []
-        
-        # Пары колонок и соответствующие смещения для длины в L
-        column_pairs = [
-            ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
-            ('E', 'F', 20),  # E,F - длина в L со смещением +20
-            ('H', 'I', 40)   # H,I - длина в L со смещением +40
-        ]
-        
-        for weight_col, qty_col, l_offset in column_pairs:
-            for row in range(10, 30):  # строки 10-29
-                weight = sheet[f'{weight_col}{row}'].value
-                quantity = sheet[f'{qty_col}{row}'].value
-                
-                if weight is not None or quantity is not None:
-                    # Получаем длину из столбца L
-                    length_row = row + l_offset
-                    length = sheet[f'L{length_row}'].value
-                    
-                    rolls.append({
-                        'position': f'{weight_col}{row}',
-                        'weight_col': weight_col,
-                        'quantity_col': qty_col,
-                        'row': row,
-                        'weight': weight,
-                        'quantity': quantity,
-                        'length': length,
-                        'length_position': f'L{length_row}'
-                    })
-        
-        return rolls
     
     def get_excel_file_path(self):
         """Возвращает путь к Excel файлу в зависимости от цеха и настроек"""

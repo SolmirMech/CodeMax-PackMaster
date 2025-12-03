@@ -64,6 +64,16 @@ class OrderDataProcessor:
         detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=10)
         detail_num_entry.grid(row=0, column=0, padx=(130, 0), pady=5, sticky="w")
         detail_num_entry.bind("<Return>", lambda e: self.get_product_name())
+        
+        # Кнопка поиска архива
+        archive_frame = ttk.Frame(xml_frame)
+        archive_frame.grid(row=0, column=1, sticky="w", pady=5)
+
+        ttk.Button(
+            archive_frame, 
+            text="🔍 Найти архив", 
+            command=self.open_archive_search_window
+        ).pack(side=tk.LEFT, padx=10)
 
         # Строка статуса парсинга
         self.parse_status = ttk.Label(xml_frame, text="", foreground="black", font=("Arial", 14))
@@ -111,6 +121,14 @@ class OrderDataProcessor:
         
         # Инициализируем статусы
         self.reset_status_messages()
+        
+    def open_archive_search_window(self):
+        """Открывает окно поиска архивных поддонов"""
+        try:
+            from core.archive.archive_search_window import ArchiveSearchWindow
+            ArchiveSearchWindow(self.parent, self)
+        except Exception as e:
+            self.multitype_status_label.config(text="Не удалось открыть окно поиска: {str(e)}", foreground="red")
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем превью для получения настроек экспорта"""
