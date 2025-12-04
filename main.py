@@ -205,7 +205,7 @@ if __name__ == "__main__":
         
     from apps.order_data_processor import OrderDataProcessor
     from apps.weight_roll_printer import RollLabelPrinter
-    from apps.roll_preview import RollPreview
+    from apps.preview.roll_preview import RollPreview
     from apps.print_module import PrintModule
     from apps.export_module import ExportModule
 

@@ -85,6 +85,17 @@ class WeightOrdersExporter:
             # Сохраняем изменения
             self.wb.save(actual_file_path)
             
+            # УНИВЕРСАЛЬНОЕ уведомление для ЛЮБОГО успешного экспорта
+            if self.coordinator and hasattr(self.coordinator, 'notify'):
+                sheet_name = self.ws.title if self.ws else "Неизвестный лист"
+                self.coordinator.notify("excel_exported", {
+                    'file_path': actual_file_path,
+                    'sheet_name': sheet_name,
+                    'enable_pallet': enable_pallet,
+                    'multitype_mode': multitype_mode,
+                    'workshop': '2' if is_second_file else '1'
+                })
+            
             # Возвращаем словарь с результатами
             return {
                 'success': True,
@@ -744,6 +755,15 @@ class WeightOrdersExporter:
             
             # Сохраняем изменения
             self.wb.save(actual_file_path)
+            
+            # УНИВЕРСАЛЬНОЕ уведомление для ЛЮБОЙ успешной очистки
+            if self.coordinator and hasattr(self.coordinator, 'notify'):
+                self.coordinator.notify("excel_cleared", {
+                    'file_path': actual_file_path,
+                    'enable_pallet': enable_pallet,
+                    'multitype_mode': multitype_mode,
+                    'workshop': '2' if is_second_file else '1'
+                })
             return True
             
         except PermissionError as e:

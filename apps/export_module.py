@@ -106,6 +106,14 @@ class ExportModule:
             label="Очистить коробку", 
             command=self.clear_excel_data
         )
+        
+        # Кнопка предпросмотра
+        if not hasattr(self, 'excel_preview_module'):
+            from apps.preview.excel_preview_module import ExcelPreviewModule
+            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+        
+        btn_preview = self.excel_preview_module.create_preview_button(box_frame)
+        btn_preview.grid(row=2, column=0, padx=5, pady=10, sticky="w")
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
