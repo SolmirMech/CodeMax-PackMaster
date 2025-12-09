@@ -111,9 +111,17 @@ class ExportModule:
         if not hasattr(self, 'excel_preview_module'):
             from apps.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
-        
-        btn_preview = self.excel_preview_module.create_preview_button(box_frame)
-        btn_preview.grid(row=2, column=0, padx=5, pady=10, sticky="w")
+
+        # Создаем кнопку полностью в модуле экспорта
+        btn_preview = ttk.Button(
+            box_frame,
+            text="👁️ Просмотр Excel",
+            width=18,
+            command=self.excel_preview_module.get_preview_function(),  # Функция из модуля
+            style="Accent.TButton"      # Любые другие параметры стиля
+        )
+
+        btn_preview.grid(row=2, column=0, pady=10, sticky="w")
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
