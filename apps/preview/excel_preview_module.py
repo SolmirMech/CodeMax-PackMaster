@@ -22,9 +22,25 @@ class ExcelPreviewModule:
         self.scrollbar = None
         self.preview_window = None
         
+        # Переменные для печати
+        self.printer1_var = tk.StringVar()
+        self.printer2_var = tk.StringVar()
+        self.copies_var = tk.IntVar(value=1)
+        self.print_status_var = tk.StringVar(value="")
+        
         # Подписка на координатор
         if coordinator and hasattr(coordinator, 'subscribe'):
             coordinator.subscribe(self.on_excel_exported)
+            
+    def _get_system_printers(self):
+        """Получает список системных принтеров"""
+        try:
+            import win32print
+            printers = win32print.EnumPrinters(2)
+            return [p[2] for p in printers]
+        except Exception as e:
+            print(f"Ошибка получения принтеров: {e}")
+            return []
     
     def _get_excel_path(self):
         """Получает путь к Excel файлу из настроек"""
@@ -204,7 +220,7 @@ class ExcelPreviewModule:
         self.preview_window = tk.Toplevel(self.parent)
         self.preview_window.title("Предпросмотр Excel - Лист для коробки")
         
-        # ======== РАЗМЕРЫ A4 (чуть больше) ========
+        # ======== Размеры ========
         window_width = 650
         window_height = 900
         
@@ -249,6 +265,14 @@ class ExcelPreviewModule:
         control_frame = ttk.Frame(main_frame)
         control_frame.pack(fill=tk.X, pady=(10, 0))
         
+        # Загружаем сохраненные настройки принтеров
+        saved_printers = self.config_manager.get_preview_printers()
+        self.printer1_var.set(saved_printers.get("printer1", ""))
+        self.printer2_var.set(saved_printers.get("printer2", ""))
+        
+        # Получаем список системных принтеров
+        system_printers = self._get_system_printers()
+        
         # Кнопка обновления
         btn_refresh = ttk.Button(
             control_frame,
@@ -256,27 +280,73 @@ class ExcelPreviewModule:
             command=lambda: [self.preview_window.destroy(), self.show_preview_window()],
             width=12
         )
-        btn_refresh.pack(side=tk.LEFT, padx=(0, 10))
+        btn_refresh.grid(row=0, column=0, padx=(0, 10), sticky='w')
+        
+        # Кнопка печати
+        btn_print = ttk.Button(
+            control_frame,
+            text="🖨️ Печать",
+            command=self._on_print_clicked,
+            width=12
+        )
+        btn_print.grid(row=0, column=1, padx=(0, 10), sticky='w')
+        
+        # Загружаем сохраненные настройки принтеров
+        saved_printers = self.config_manager.get_preview_printers()
+        self.printer1_var.set(saved_printers.get("printer1", ""))
+        self.printer2_var.set(saved_printers.get("printer2", ""))
+        
+        # Получаем список системных принтеров + опция "Без принтера"
+        system_printers = self._get_system_printers()
+        printer_values = [""] + system_printers        
+        
+        # Принтер 1
+        printer1_combo = ttk.Combobox(
+            control_frame,
+            textvariable=self.printer1_var,
+            values=printer_values,
+            width=25,
+            state='readonly'
+        )
+        printer1_combo.grid(row=1, column=0, padx=(0, 10), sticky='w')
+        printer1_combo.bind('<<ComboboxSelected>>', lambda e: self._save_printer_settings())
+        
+        # Принтер 2
+        printer2_combo = ttk.Combobox(
+            control_frame,
+            textvariable=self.printer2_var,
+            values=printer_values,
+            width=25,
+            state='readonly'
+        )
+        printer2_combo.grid(row=1, column=1, padx=(0, 10), sticky='w')
+        printer2_combo.bind('<<ComboboxSelected>>', lambda e: self._save_printer_settings())
+        
+        # Количество копий
+        ttk.Label(control_frame, text="Копий:").grid(row=0, column=2, padx=(0, 5), sticky='w')
+        copies_spinbox = ttk.Spinbox(
+            control_frame,
+            from_=1,
+            to=10,
+            textvariable=self.copies_var,
+            width=5
+        )
+        copies_spinbox.grid(row=0, column=3, padx=(0, 10), sticky='w')
         
         # Метка статуса
-        self.status_label = ttk.Label(control_frame, text="Загрузка...", foreground="blue")
-        self.status_label.pack(side=tk.LEFT)
+        self.status_label = ttk.Label(control_frame, text="", foreground="blue")
+        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=2)      
         
-        # Кнопка закрытия справа
-        btn_close = ttk.Button(
-            control_frame,
-            text="Закрыть",
-            command=self.on_close_preview,
-            width=10
-        )
-        btn_close.pack(side=tk.RIGHT)
+        # Настроить веса колонок для правильного растяжения
+        control_frame.columnconfigure(3, weight=1)  # Статус растягивается
         
         # Обработка закрытия окна
         self.preview_window.protocol("WM_DELETE_WINDOW", self.on_close_preview)
         
         # Привязка горячих клавиш
+        # Привязка горячих клавиш
         self.preview_window.bind('<Escape>', lambda e: self.on_close_preview())
-        self.preview_window.bind('<Return>', lambda e: self.reload_window())
+        self.preview_window.bind('<Return>', lambda e: self._on_print_clicked())
         self.preview_window.bind('<F5>', lambda e: self.reload_window())
         
         # Загружаем предпросмотр
@@ -284,7 +354,205 @@ class ExcelPreviewModule:
         self.preview_window.after(100, lambda: [
             self.preview_window.lift(), 
             self.preview_window.focus_force()
-        ])     
+        ])
+        
+    def _save_printer_settings(self):
+        """Сохраняет выбранные принтеры в настройки"""
+        try:
+            printer1 = self.printer1_var.get().strip()
+            printer2 = self.printer2_var.get().strip()
+            
+            # Сохраняем через ConfigManager
+            success = self.config_manager.save_preview_printers(printer1, printer2)
+            
+            if success:
+                # Временно показываем статус
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(
+                        text="Настройки печати сохранены", 
+                        foreground="green"
+                    )
+                    # Возвращаем исходный статус через 3 секунды
+                    self.preview_window.after(3000, self._restore_status)
+            else:
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(
+                        text="Ошибка сохранения настроек", 
+                        foreground="red"
+                    )
+                    
+        except Exception as e:
+            print(f"Ошибка сохранения принтеров: {e}")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(
+                    text=f"Ошибка: {str(e)[:30]}", 
+                    foreground="red"
+                )
+    
+    def _restore_status(self):
+        """Восстанавливает исходный статус если нет ошибок"""
+        if hasattr(self, 'status_label'):
+            current_text = self.status_label.cget("text")
+            # Восстанавливаем только если это был временный статус сохранения
+            if "Настройки печати сохранены" in current_text:
+                self.status_label.config(
+                    text="Готово", 
+                    foreground="green"
+                )
+    
+    def _on_print_clicked(self):
+        """Обработчик клика по кнопке печати"""
+        printer1 = self.printer1_var.get().strip()
+        printer2 = self.printer2_var.get().strip()
+        copies = self.copies_var.get()
+        
+        # Проверка: хотя бы один принтер должен быть выбран
+        if not printer1 and not printer2:
+            self.status_label.config(
+                text="Выберите хотя бы один принтер", 
+                foreground="red"
+            )
+            return
+            
+        # Проверка существования файла
+        if not self.excel_path or not os.path.exists(self.excel_path):
+            self.status_label.config(
+                text="Файл Excel не найден", 
+                foreground="red"
+            )
+            return
+            
+        # Запускаем печать в отдельном потоке
+        self._start_printing(printer1, printer2, copies)
+        
+    def _format_printer_for_excel(self, printer_name, excel_app=None):
+        """Преобразует имя принтера в формат, который понимает Excel"""
+        if not printer_name:
+            return ""
+        
+        # Если передан экземпляр Excel, берем порт из его ActivePrinter
+        if excel_app:
+            try:
+                current = excel_app.ActivePrinter
+                print(f"Текущий ActivePrinter для парсинга: '{current}'")
+                
+                # Парсим: "Xprinter XP-420B (Ne00:)"
+                # Находим последнюю открывающую скобку
+                bracket_pos = current.rfind(" (")
+                if bracket_pos != -1:
+                    # Извлекаем все после скобки до конца
+                    port_part = current[bracket_pos:]  # " (Ne00:)"
+                    return f"{printer_name}{port_part}"
+            except Exception as e:
+                print(f"Ошибка парсинга ActivePrinter: {e}")
+        
+        # Запасной вариант
+        return f"{printer_name} (Ne00:)"
+    
+    def _start_printing(self, printer1, printer2, copies):
+        """Запускает процесс печати"""
+        # Обновляем статус
+        self.status_label.config(
+            text="Подготовка к печати...", 
+            foreground="blue"
+        )
+        
+        # Запускаем в отдельном потоке чтобы не блокировать GUI
+        import threading
+        thread = threading.Thread(
+            target=self._print_excel_area,
+            args=(printer1, printer2, copies),
+            daemon=True
+        )
+        thread.start()
+        
+    def _print_excel_area(self, printer1, printer2, copies):
+        """Печатает область печати Excel файла на выбранные принтеры"""
+        try:
+            self.preview_window.after(0, lambda: self.status_label.config(
+                text="Подготовка Excel...", 
+                foreground="blue"
+            ))
+            
+            import win32com.client
+            import pythoncom
+            import time
+            import win32print  # Для дебага
+            
+            print(f"\n=== ДЕБАГ ПЕЧАТИ ===")
+            print(f"Принтер 1: '{printer1}', Принтер 2: '{printer2}', Копий: {copies}")
+            
+            pythoncom.CoInitialize()
+            
+            excel = win32com.client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            excel.ScreenUpdating = False
+            
+            print(f"ActivePrinter до: {excel.ActivePrinter}")
+            
+            wb = excel.Workbooks.Open(self.excel_path)
+            
+            try:
+                ws = wb.Sheets(self.sheet_name)
+            except:
+                ws = wb.Sheets(1)
+            
+            ws.Activate()
+            
+            print_area = ws.Range(ws.PageSetup.PrintArea)
+            print_area.Select()
+            
+            time.sleep(0.5)
+            
+            # Печать на принтер 1
+            if printer1:
+                self.preview_window.after(0, lambda: self.status_label.config(
+                    text=f"Печать на {printer1[:20]}...", 
+                    foreground="blue"
+                ))
+                
+                excel_printer1 = self._format_printer_for_excel(printer1, excel)
+                print(f"Устанавливаю ActivePrinter = '{excel_printer1}'")
+                
+                excel.ActivePrinter = excel_printer1
+                ws.PrintOut(Copies=copies)
+                time.sleep(1)
+            
+            # Печать на принтер 2
+            if printer2 and printer2 != printer1:
+                self.preview_window.after(0, lambda: self.status_label.config(
+                    text=f"Печать на {printer2[:20]}...", 
+                    foreground="blue"
+                ))
+                
+                excel_printer2 = self._format_printer_for_excel(printer2, excel)
+                print(f"Устанавливаю ActivePrinter = '{excel_printer2}'")
+                
+                excel.ActivePrinter = excel_printer2
+                ws.PrintOut(Copies=copies)
+            
+            wb.Close(SaveChanges=False)
+            excel.Quit()
+            pythoncom.CoUninitialize()
+            
+            self.preview_window.after(0, lambda: self.status_label.config(
+                text="✅ Печать завершена", 
+                foreground="green"
+            ))
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Ошибка печати: {error_msg}")
+            self.preview_window.after(0, lambda: self.status_label.config(
+                text=f"❌ Ошибка: {error_msg[:50]}", 
+                foreground="red"
+            ))
+            
+            try:
+                pythoncom.CoUninitialize()
+            except:
+                pass
         
     def load_and_render_preview(self):
         """Загружает Excel и создает точный предпросмотр через win32com"""

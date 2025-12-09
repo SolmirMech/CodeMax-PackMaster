@@ -23,7 +23,31 @@ class ConfigManager:
         # Список резчиков по умолчанию
         self.default_cutters = ["Некрасов", "Смирнов", "Шамшурин"]
         # Список упаковщиков по умолчанию
-        self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]
+        self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]     
+
+    def get_preview_printers(self):
+        """Возвращает сохраненные принтеры для предпросмотра Excel"""
+        settings = self.load_json_settings("print_settings.json")
+        return settings.get("preview_printers", {"printer1": "", "printer2": ""})
+
+    def save_preview_printers(self, printer1, printer2):
+        """Сохраняет выбранные принтеры для предпросмотра Excel"""
+        settings = self.load_json_settings("print_settings.json")
+        settings["preview_printers"] = {
+            "printer1": printer1,
+            "printer2": printer2
+        }
+        return self.save_json_settings("print_settings.json", settings)
+        
+    def get_system_printers(self):
+        """Возвращает список системных принтеров"""
+        try:
+            import win32print
+            printers = win32print.EnumPrinters(2)  # PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS
+            return [p[2] for p in printers]  # Имя принтера
+        except Exception as e:
+            print(f"Ошибка получения списка принтеров: {e}")
+            return []
         
     # Архивация 2 цех
     def get_pallet_archive(self):
