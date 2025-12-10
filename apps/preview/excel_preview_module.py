@@ -134,7 +134,7 @@ class ExcelPreviewModule:
             title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
             
             # Делаем скриншот области таблицы
-            table_top = screen_rect[1] + title_height + 60
+            table_top = screen_rect[1] + title_height + 154
             table_bottom = table_top + 870  # небольшой отступ снизу
 
             # Примерная ширина области печати
@@ -477,10 +477,7 @@ class ExcelPreviewModule:
             import win32com.client
             import pythoncom
             import time
-            import win32print  # Для дебага
-            
-            print(f"\n=== ДЕБАГ ПЕЧАТИ ===")
-            print(f"Принтер 1: '{printer1}', Принтер 2: '{printer2}', Копий: {copies}")
+            import win32print  # Для дебага           
             
             pythoncom.CoInitialize()
             
@@ -513,7 +510,6 @@ class ExcelPreviewModule:
                 ))
                 
                 excel_printer1 = self._format_printer_for_excel(printer1, excel)
-                print(f"Устанавливаю ActivePrinter = '{excel_printer1}'")
                 
                 excel.ActivePrinter = excel_printer1
                 ws.PrintOut(Copies=copies)
@@ -527,7 +523,6 @@ class ExcelPreviewModule:
                 ))
                 
                 excel_printer2 = self._format_printer_for_excel(printer2, excel)
-                print(f"Устанавливаю ActivePrinter = '{excel_printer2}'")
                 
                 excel.ActivePrinter = excel_printer2
                 ws.PrintOut(Copies=copies)
