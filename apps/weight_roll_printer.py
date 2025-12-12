@@ -13,6 +13,7 @@ class RollLabelPrinter:
     def __init__(self, parent, coordinator=None):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator
 
         self.order_data_module = None

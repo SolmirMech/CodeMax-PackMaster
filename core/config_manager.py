@@ -122,6 +122,41 @@ class ConfigManager:
         # Если ничего нет, возвращаем пустой словарь
         return {}
         
+    def ensure_packaging_tu_exists(self):
+        """Обеспечивает наличие packaging_tu.json в data/"""
+        import shutil
+        
+        data_file = self.data_dir / "packaging_tu.json"
+        
+        # Если файл уже существует в data - проверяем валидность
+        if os.path.exists(data_file):
+            try:
+                with open(data_file, 'r', encoding='utf-8') as f:
+                    json.load(f)
+                return True  # Файл существует и валиден
+            except json.JSONDecodeError:
+                # Файл поврежден - будет пересоздан
+                print(f"Файл {data_file} поврежден, пересоздаю...")
+        
+        # Пробуем найти исходный файл в нескольких местах
+        source_paths = [
+            self.get_asset_path("packaging_tu.json"),           # assets/
+            os.path.join(self.core_dir, "packaging_tu.json"),   # core/
+            os.path.join(self.base_dir, "config", "packaging_tu.json"),  # config/
+        ]
+        
+        for source_path in source_paths:
+            if os.path.exists(source_path):
+                try:
+                    shutil.copy2(source_path, data_file)
+                    print(f"Скопировано: {source_path} -> {data_file}")
+                    return True
+                except Exception as e:
+                    print(f"Ошибка копирования {source_path}: {e}")
+        
+        print(f"ВНИМАНИЕ: packaging_tu.json не найден!")
+        return False
+        
     def reload_settings(self):
         """Перезагружает настройки из файлов"""
         try:
@@ -221,6 +256,10 @@ class ConfigManager:
 
     # Настройки принтеров
     def load_json_settings(self, filename):
+        # Для packaging_tu.json сначала обеспечиваем его наличие
+        if filename == "packaging_tu.json":
+            self.ensure_packaging_tu_exists()
+            
         path = self.get_settings_path(filename)
         if os.path.exists(path):
             try:
