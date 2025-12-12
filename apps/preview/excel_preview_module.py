@@ -153,7 +153,7 @@ class ExcelPreviewModule:
             except:
                 ws = wb.Sheets(1)
             
-            ws.Activate()
+            ws.Activate()         
             
             # 2. Используем заданную область печати
             print_area = ws.Range(ws.PageSetup.PrintArea)
@@ -208,10 +208,15 @@ class ExcelPreviewModule:
                 frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
                 
                 # Рассчитываем высоту заголовка и ленты Excel
-                title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
+                title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width               
+                
+                # Получаем настраиваемый отступ из shared_utils
+                settings = self.config_manager.load_json_settings("shared_utils.json")
+                preview_settings = settings.get("preview_settings", {})
+                top_offset = preview_settings.get("top_offset", 160)
                 
                 # Делаем скриншот области таблицы
-                table_top = screen_rect[1] + title_height + 154
+                table_top = screen_rect[1] + title_height + top_offset
                 table_bottom = table_top + 870
                 table_left = screen_rect[0] + frame_width + 20
                 table_right = table_left + 565
@@ -256,6 +261,42 @@ class ExcelPreviewModule:
                 pass
                 
             return None
+            
+    def _save_preview_settings(self):
+        """Сохраняет настройки предпросмотра в shared_utils.json"""
+        try:
+            # Загружаем текущие настройки shared_utils
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            
+            # Создаем или обновляем секцию preview_settings
+            if "preview_settings" not in settings:
+                settings["preview_settings"] = {}
+            
+            # Сохраняем отступ
+            settings["preview_settings"]["top_offset"] = self.top_offset_var.get()
+            
+            # Сохраняем обратно в shared_utils
+            success = self.config_manager.save_json_settings("shared_utils.json", settings)
+            
+            if success:
+                self.status_label.config(
+                    text="✓ Отступ сохранен", 
+                    foreground="green"
+                )
+                # Возвращаем исходный статус через 2 секунды
+                self.preview_window.after(2000, self._restore_status)
+            else:
+                self.status_label.config(
+                    text="✗ Ошибка сохранения", 
+                    foreground="red"
+                )
+                        
+        except Exception as e:
+            print(f"Ошибка сохранения настроек предпросмотра: {e}")
+            self.status_label.config(
+                text=f"✗ Ошибка: {str(e)[:30]}", 
+                foreground="red"
+            )
         
     def display_preview(self, image):
         """Отображает PIL Image с качественным увеличением"""
@@ -289,10 +330,6 @@ class ExcelPreviewModule:
                 fill='red',
                 font=('Arial', 10)
             )
-    
-    def get_preview_function(self):
-        """Возвращает функцию для предпросмотра"""
-        return self.show_preview_window
 
     def show_preview_window(self):
         """Открывает окно предпросмотра"""
@@ -428,6 +465,26 @@ class ExcelPreviewModule:
             width=5
         )
         copies_spinbox.grid(row=0, column=3, padx=(0, 10), sticky='w')
+        
+        # Загружаем сохраненное значение из shared_utils
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        preview_settings = settings.get("preview_settings", {})
+        default_offset = preview_settings.get("top_offset", 160)
+        
+        self.top_offset_var = tk.IntVar(value=default_offset)
+        
+        top_offset_spinbox = ttk.Spinbox(
+            control_frame,
+            from_=100,
+            to=250,
+            textvariable=self.top_offset_var,
+            width=5,
+            command=self._save_preview_settings
+        )
+        top_offset_spinbox.grid(row=0, column=5, padx=(0, 10), sticky='w')
+        
+        # Привязываем изменение
+        self.top_offset_var.trace_add("write", lambda *args: self._save_preview_settings())
         
         # Метка статуса
         self.status_label = ttk.Label(control_frame, text="", foreground="blue")
