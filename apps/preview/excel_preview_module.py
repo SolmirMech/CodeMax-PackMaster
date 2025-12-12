@@ -131,34 +131,31 @@ class ExcelPreviewModule:
                 self.update_preview()
 
     def excel_to_image_simple(self, excel_path, sheet_name):
-        """Скриншот ТОЛЬКО области печати Excel"""
+        """Скриншот области печати Excel"""
         try:
-            # Импорты
             import win32com.client
             import pythoncom
             from PIL import ImageGrab
             import time
             import win32gui
             
-            # Инициализация COM
             pythoncom.CoInitialize()
             
-            # Открываем excel
+            # 1. Открываем Excel видимым
             excel = win32com.client.DispatchEx("Excel.Application")
             excel.Visible = True
             excel.DisplayAlerts = False
             
             wb = excel.Workbooks.Open(excel_path)
             
-            # Получаем нужный лист
             try:
                 ws = wb.Sheets(sheet_name)
             except:
-                ws = wb.Sheets(1)  # Первый лист если не найден
+                ws = wb.Sheets(1)
             
-            ws.Activate()  # Активируем лист
+            ws.Activate()
             
-            # Используем заданную область печати
+            # 2. Используем заданную область печати
             print_area = ws.Range(ws.PageSetup.PrintArea)
             
             # Прокручиваем к началу области
@@ -168,61 +165,75 @@ class ExcelPreviewModule:
             # Выделяем область
             print_area.Select()
             
-            excel.ActiveWindow.Zoom = 90  # Фиксированный зум
+            excel.ActiveWindow.Zoom = 90
             
-            # Ждем отрисовки
-            time.sleep(1.0)
+            # 3. Минимальное время для отрисовки
+            time.sleep(0.3)  # Только 300 мс!
             
-            # Получаем окно excel
+            # 4. Свернуть окно excel сразу после настройки
+            excel.WindowState = -4140  # xlMinimized
+            
+            # 5. Получаем HWND свернутого окна
             excel_hwnd = None
+            excel_windows = []
             
             def find_excel_window(hwnd, results):
-                """Функция поиска окна Excel"""
                 if win32gui.IsWindowVisible(hwnd):
                     title = win32gui.GetWindowText(hwnd)
                     if title and ('Excel' in title or '.xlsx' in title):
                         results.append(hwnd)
                 return True
             
-            excel_windows = []
+            # Даем время на сворачивание
+            time.sleep(0.2)
             win32gui.EnumWindows(find_excel_window, excel_windows)
             
-            if not excel_windows:
+            if excel_windows:
+                excel_hwnd = excel_windows[0]
+                
+                # 6. Восстанавливаем окно на мгновение
+                # Сохраняем текущее положение
+                rect = win32gui.GetWindowRect(excel_hwnd)
+                # Восстанавливаем
+                excel.WindowState = -4137  # xlNormal
+                
+                # 7. Быстрый скриншот
+                time.sleep(0.2)  # Минимум для отрисовки
+                
+                # Пересчитываем координаты
+                screen_rect = win32gui.GetWindowRect(excel_hwnd)
+                client_rect = win32gui.GetClientRect(excel_hwnd)
+                
+                # Рассчитываем ширину рамок окна
+                frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
+                
+                # Рассчитываем высоту заголовка и ленты Excel
+                title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
+                
+                # Делаем скриншот области таблицы
+                table_top = screen_rect[1] + title_height + 154
+                table_bottom = table_top + 870
+                table_left = screen_rect[0] + frame_width + 20
+                table_right = table_left + 565
+
+                screenshot = ImageGrab.grab(bbox=(
+                    table_left,
+                    table_top,
+                    table_right,
+                    table_bottom
+                ))
+                
+                # 8. Сразу же снова сворачиваем
+                excel.WindowState = -4140
+                
+            else:
+                # Fallback: если не нашли окно
                 wb.Close(SaveChanges=False)
                 excel.Quit()
                 pythoncom.CoUninitialize()
                 return None
             
-            excel_hwnd = excel_windows[0]
-            win32gui.SetForegroundWindow(excel_hwnd)
-            time.sleep(0.3)
-            
-            # Вычисляем координаты окна
-            client_rect = win32gui.GetClientRect(excel_hwnd)      # Клиентская область (без рамок)
-            screen_rect = win32gui.GetWindowRect(excel_hwnd)      # Экранные координаты
-            
-            # Рассчитываем ширину рамок окна
-            frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
-            
-            # Рассчитываем высоту заголовка и ленты Excel
-            title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
-            
-            # Делаем скриншот области таблицы
-            table_top = screen_rect[1] + title_height + 154
-            table_bottom = table_top + 870  # небольшой отступ снизу
-
-            # Примерная ширина области печати
-            table_left = screen_rect[0] + frame_width + 20 # Небольшой отступ слева
-            table_right = table_left + 565 # отступ справа
-
-            screenshot = ImageGrab.grab(bbox=(
-                table_left,
-                table_top,
-                table_right,
-                table_bottom
-            ))         
-
-            # Закрываем excel
+            # 9. Закрываем Excel
             wb.Close(SaveChanges=False)
             excel.Quit()
             pythoncom.CoUninitialize()
@@ -233,6 +244,11 @@ class ExcelPreviewModule:
             print(f"Ошибка скриншота: {e}")
             import traceback
             traceback.print_exc()
+            
+            try:
+                excel.Quit()
+            except:
+                pass
             
             try:
                 pythoncom.CoUninitialize()
