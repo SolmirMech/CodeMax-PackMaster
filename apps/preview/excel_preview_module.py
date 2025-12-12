@@ -466,6 +466,7 @@ class ExcelPreviewModule:
         )
         copies_spinbox.grid(row=0, column=3, padx=(0, 10), sticky='w')
         
+        ttk.Label(control_frame, text="Отступ").grid(row=0, column=4, padx=(0, 5), sticky='w')
         # Загружаем сохраненное значение из shared_utils
         settings = self.config_manager.load_json_settings("shared_utils.json")
         preview_settings = settings.get("preview_settings", {})
@@ -473,22 +474,19 @@ class ExcelPreviewModule:
         
         self.top_offset_var = tk.IntVar(value=default_offset)
         
-        top_offset_spinbox = ttk.Spinbox(
+        top_offset_entry = ttk.Entry(
             control_frame,
-            from_=100,
-            to=250,
             textvariable=self.top_offset_var,
-            width=5,
-            command=self._save_preview_settings
+            width=5
         )
-        top_offset_spinbox.grid(row=0, column=5, padx=(0, 10), sticky='w')
+        top_offset_entry.grid(row=0, column=5, padx=(0, 10), sticky='w')
         
         # Привязываем изменение
-        self.top_offset_var.trace_add("write", lambda *args: self._save_preview_settings())
+        top_offset_entry.bind("<FocusOut>", lambda e: self._save_preview_settings())
         
         # Метка статуса
         self.status_label = ttk.Label(control_frame, text="", foreground="blue")
-        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=2)      
+        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=4)      
         
         # Настроить веса колонок для правильного растяжения
         control_frame.columnconfigure(3, weight=1)  # Статус растягивается
@@ -513,6 +511,12 @@ class ExcelPreviewModule:
         try:
             printer1 = self.printer1_var.get().strip()
             printer2 = self.printer2_var.get().strip()
+            
+            # Проверяем, не пустые ли строки
+            if printer1 == "":
+                printer1 = None
+            if printer2 == "":
+                printer2 = None
             
             # Сохраняем через ConfigManager
             success = self.config_manager.save_preview_printers(printer1, printer2)
