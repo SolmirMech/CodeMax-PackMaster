@@ -58,7 +58,7 @@ class WeightOrdersApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Упаковка")
-        self.root.geometry("1450x860")
+        self.root.geometry("1500x900")
         
         self.coordinator = SettingsCoordinator()
         

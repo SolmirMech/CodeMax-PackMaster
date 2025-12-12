@@ -15,7 +15,7 @@ class ExcelPreviewModule:
         
         # Переменные
         self.excel_path = None
-        self.sheet_name = "Лист для коробки"  # начальный лист
+        self.sheet_name = None  # Будет установлено динамически
         
         # GUI элементы
         self.preview_canvas = None
@@ -32,6 +32,23 @@ class ExcelPreviewModule:
         if coordinator and hasattr(coordinator, 'subscribe'):
             coordinator.subscribe(self.on_excel_exported)
             
+    def _get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
+        """Определяет лист для предпросмотра на основе контекста"""
+        if workshop == "1":
+            if multitype_mode:
+                return "Лист много видов"
+            elif enable_pallet:
+                return "Лист для паллеты"
+            else:
+                return "Лист для коробки"
+        else:  # workshop == "2"
+            if multitype_mode:
+                return "Много видов"
+            elif enable_pallet:
+                return "Список поддонов"
+            else:
+                return "Поддон"
+            
     def _get_system_printers(self):
         """Получает список системных принтеров"""
         try:
@@ -43,18 +60,75 @@ class ExcelPreviewModule:
             return []
     
     def _get_excel_path(self):
-        """Получает путь к Excel файлу из настроек"""
-        settings = self.config_manager.load_json_settings("shared_utils.json")
-        excel_folder = settings.get("weight_orders_xlsx", "")
-        filename = "weight_orders.xlsx"
-        return os.path.join(excel_folder, filename)
+        """Получает путь к Excel файлу из настроек с учетом цеха"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            excel_folder = settings.get("weight_orders_xlsx", "")
+            
+            if not excel_folder:
+                return None
+            
+            # Определяем цех
+            workshop = "1"
+            if hasattr(self, 'coordinator') and self.coordinator:
+                workshop = self.coordinator.get_workshop()
+            
+            # Выбираем файл в зависимости от цеха
+            filename = "weight_orders.xlsx" if workshop == "1" else "weight_orders_2.xlsx"
+            full_path = os.path.join(excel_folder, filename)
+            
+            return full_path
+            
+        except Exception as e:
+            print(f"Ошибка получения пути к Excel файлу: {e}")
+            return None
+            
+    def reload_window(self):
+        """Перезагружает окно предпросмотра"""
+        if (hasattr(self, 'preview_window') and 
+            self.preview_window is not None and 
+            self.preview_window.winfo_exists()):
+            
+            self.preview_window.destroy()
+            self.show_preview_window()
     
     def on_excel_exported(self, event_type=None, data=None):
-        """Обработчик событий от координатора"""
-        if event_type == "excel_exported" and data.get('sheet_name') == "Лист для коробки":
-            self.update_preview()  # Только для коробки
-        elif event_type == "excel_cleared" and data.get('sheet_name') == "Лист для коробки":
-            self.update_preview()  # Только для коробки  
+        """Обработчик событий от координатора для всех режимов"""
+        if event_type == "excel_exported":
+            # Получаем параметры из данных события
+            workshop = data.get('workshop', '1')
+            enable_pallet = data.get('enable_pallet', False)
+            multitype_mode = data.get('multitype_mode', False)
+            
+            # Определяем лист
+            self.sheet_name = self._get_sheet_for_preview(
+                workshop, enable_pallet, multitype_mode
+            )
+            
+            # Обновляем заголовок окна если оно открыто
+            if (hasattr(self, 'preview_window') and 
+                self.preview_window is not None and 
+                self.preview_window.winfo_exists()):
+                
+                self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
+                self.update_preview()
+        
+        elif event_type == "excel_cleared":
+            # Тоже обновляем для события очистки
+            workshop = data.get('workshop', '1')
+            enable_pallet = data.get('enable_pallet', False)
+            multitype_mode = data.get('multitype_mode', False)
+            
+            self.sheet_name = self._get_sheet_for_preview(
+                workshop, enable_pallet, multitype_mode
+            )
+            
+            if (hasattr(self, 'preview_window') and 
+                self.preview_window is not None and 
+                self.preview_window.winfo_exists()):
+                
+                self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
+                self.update_preview()
 
     def excel_to_image_simple(self, excel_path, sheet_name):
         """Скриншот ТОЛЬКО области печати Excel"""
@@ -216,9 +290,20 @@ class ExcelPreviewModule:
             self.update_preview()  # Обновляем данные
             return
         
+        # Определяем текущий цех
+        workshop = "1"
+        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
+            workshop = self.coordinator.get_workshop()      
+        
+        # Если sheet_name еще не установлен (например, при прямом вызове из UI)
+        if self.sheet_name is None:
+            # ТОЛЬКО тогда используем лист для коробки как fallback
+            self.sheet_name = self._get_sheet_for_preview(workshop, enable_pallet=False, multitype_mode=False)
+        # Иначе используем уже установленный sheet_name (из show_pallet_preview())
+        
         # Создаем новое окно предпросмотра
         self.preview_window = tk.Toplevel(self.parent)
-        self.preview_window.title("Предпросмотр Excel - Лист для коробки")
+        self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
         
         # ======== Размеры ========
         window_width = 650
@@ -291,11 +376,6 @@ class ExcelPreviewModule:
         )
         btn_print.grid(row=0, column=1, padx=(0, 10), sticky='w')
         
-        # Загружаем сохраненные настройки принтеров
-        saved_printers = self.config_manager.get_preview_printers()
-        self.printer1_var.set(saved_printers.get("printer1", ""))
-        self.printer2_var.set(saved_printers.get("printer2", ""))
-        
         # Получаем список системных принтеров + опция "Без принтера"
         system_printers = self._get_system_printers()
         printer_values = [""] + system_printers        
@@ -343,7 +423,6 @@ class ExcelPreviewModule:
         # Обработка закрытия окна
         self.preview_window.protocol("WM_DELETE_WINDOW", self.on_close_preview)
         
-        # Привязка горячих клавиш
         # Привязка горячих клавиш
         self.preview_window.bind('<Escape>', lambda e: self.on_close_preview())
         self.preview_window.bind('<Return>', lambda e: self._on_print_clicked())
@@ -578,6 +657,13 @@ class ExcelPreviewModule:
             
     def update_preview(self):
         """Обновляет предпросмотр"""
+        # Если sheet_name не установлен, используем лист для коробки цеха 1 как fallback
+        if self.sheet_name is None:
+            workshop = "1"
+            if hasattr(self, 'coordinator') and self.coordinator:
+                workshop = self.coordinator.get_workshop()
+            self.sheet_name = self._get_sheet_for_preview(workshop, False, False)
+        
         # Сбрасываем флаг увеличения
         if hasattr(self, '_already_scaled'):
             del self._already_scaled

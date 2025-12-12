@@ -107,18 +107,13 @@ class ExportModule:
             command=self.clear_excel_data
         )
         
-        # Кнопка предпросмотра
-        if not hasattr(self, 'excel_preview_module'):
-            from apps.preview.excel_preview_module import ExcelPreviewModule
-            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
-
-        # Создаем кнопку полностью в модуле экспорта
+        # Кнопка предпросмотра коробки
         btn_preview = ttk.Button(
             box_frame,
-            text="👁️ Просмотр Excel",
+            text="👁️ Просмотр",  # Уточняем название
             width=18,
-            command=self.excel_preview_module.get_preview_function(),  # Функция из модуля
-            style="Accent.TButton"      # Любые другие параметры стиля
+            command=self.show_box_preview,
+            style="Accent.TButton"
         )
 
         btn_preview.grid(row=2, column=0, pady=10, sticky="w")
@@ -165,6 +160,77 @@ class ExportModule:
             label="Очистить поддон", 
             command=self.clear_pallet_excel
         )
+        
+        # Кнопка предпросмотра поддона
+        ttk.Button(
+            pallet_frame,
+            text="👁️ Просмотр",
+            width=18,
+            command=self.show_pallet_preview,
+            style="Accent.TButton"
+        ).grid(row=3, column=0, columnspan=2, pady=(5, 0), sticky="w")
+        
+    def show_box_preview(self):
+        """Открывает предпросмотр для коробки"""
+        if not hasattr(self, 'excel_preview_module'):
+            from apps.preview.excel_preview_module import ExcelPreviewModule
+            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+        
+        # Определяем текущий цех
+        workshop = "1"
+        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
+            workshop = self.coordinator.get_workshop()
+        
+        # Устанавливаем контекст коробки перед открытием окна
+        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+            workshop, enable_pallet=False, multitype_mode=False
+        )
+        
+        # Обновляем заголовок окна если оно уже открыто
+        if (hasattr(self.excel_preview_module, 'preview_window') and 
+            self.excel_preview_module.preview_window is not None and 
+            self.excel_preview_module.preview_window.winfo_exists()):
+            
+            self.excel_preview_module.preview_window.title(
+                f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
+            )
+            self.excel_preview_module.update_preview()
+            self.excel_preview_module.preview_window.lift()
+            self.excel_preview_module.preview_window.focus_force()
+        else:
+            # Открываем новое окно
+            self.excel_preview_module.show_preview_window()
+        
+    def show_pallet_preview(self):
+        """Открывает предпросмотр для поддона"""
+        if not hasattr(self, 'excel_preview_module'):
+            from apps.preview.excel_preview_module import ExcelPreviewModule
+            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+        
+        # Определяем текущий цех
+        workshop = "1"
+        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
+            workshop = self.coordinator.get_workshop()
+        
+        # Устанавливаем контекст поддона перед открытием окна
+        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+            workshop, enable_pallet=True, multitype_mode=False
+        )
+        
+        # Обновляем заголовок окна если оно уже открыто
+        if (hasattr(self.excel_preview_module, 'preview_window') and 
+            self.excel_preview_module.preview_window is not None and 
+            self.excel_preview_module.preview_window.winfo_exists()):
+            
+            self.excel_preview_module.preview_window.title(
+                f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
+            )
+            self.excel_preview_module.update_preview()
+            self.excel_preview_module.preview_window.lift()
+            self.excel_preview_module.preview_window.focus_force()
+        else:
+            # Открываем новое окно
+            self.excel_preview_module.show_preview_window()
         
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""

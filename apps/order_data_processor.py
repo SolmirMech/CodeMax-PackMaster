@@ -6,6 +6,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from core.config_manager import ConfigManager
 from core.excel_exporter import WeightOrdersExporter
+from apps.preview.excel_preview_module import ExcelPreviewModule
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
@@ -28,6 +29,7 @@ class OrderDataProcessor:
         # Ссылки на другие модули
         self.roll_module = None
         self.preview_module = None
+        self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
         
         self.load_initial_settings()
         self.detail_num_search = StringVar(value="")
@@ -103,6 +105,17 @@ class OrderDataProcessor:
             label="Очистить Лист 'Много видов'", 
             command=self.clear_multitype_sheet
         )
+        
+        preview_frame = ttk.Frame(xml_frame)
+        preview_frame.grid(row=5, column=0, sticky="w", pady=(5, 5))
+
+        # Кнопка предпросмотра листа 'Много видов'
+        ttk.Button(
+            preview_frame,
+            text="👁️ Просмотр",
+            command=self.show_multitype_preview,
+            width=15
+        ).pack(side=tk.LEFT)        
 
         # Строка статуса для много видов
         self.multitype_status_label = tk.Label(
@@ -114,13 +127,28 @@ class OrderDataProcessor:
             justify=tk.CENTER,
             height=3
         )
-        self.multitype_status_label.grid(row=5, column=0, columnspan=2, sticky="w")
+        self.multitype_status_label.grid(row=6, column=0, columnspan=2, sticky="w")
 
         xml_frame.columnconfigure(0, weight=1)
         xml_frame.columnconfigure(1, weight=1)
         
         # Инициализируем статусы
         self.reset_status_messages()
+        
+    def show_multitype_preview(self):
+        """Открывает предпросмотр для листа 'Много видов'"""
+        # Определяем текущий цех
+        workshop = "1"
+        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
+            workshop = self.coordinator.get_workshop()
+        
+        # Устанавливаем контекст многовидового режима
+        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+            workshop, enable_pallet=False, multitype_mode=True
+        )
+        
+        # Открываем окно предпросмотра
+        self.excel_preview_module.show_preview_window()
         
     def open_archive_search_window(self):
         """Открывает окно поиска архивных поддонов"""
