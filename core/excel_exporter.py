@@ -3,7 +3,6 @@ import os
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from core.config_manager import ConfigManager
-from core.archive.archive_manager import ArchiveManager
 
 class WeightOrdersExporter:
     """Экспортер данных в Excel файл для весовых заказов"""
@@ -13,7 +12,6 @@ class WeightOrdersExporter:
         self.roll_module = roll_module
         self.preview_module = preview_module
         self.config_manager = ConfigManager()
-        self.archive_manager = ArchiveManager()
         self.coordinator = coordinator
         # Подписываемся на координатор если он есть
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -512,144 +510,6 @@ class WeightOrdersExporter:
             return True
 
     # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
-    
-    def _archive_pallet_for_second_workshop(self):
-        """Полная архивация для 2 цеха: копирование в 'Список поддонов' + JSON-архив"""
-        try:
-            actual_file_path = self.get_excel_file_path()
-            workbook = load_workbook(actual_file_path)
-            
-            if "Поддон" not in workbook.sheetnames:
-                workbook.close()
-                return {'success': False, 'error': 'Лист "Поддон" не найден', 'all_fitted': False}
-            
-            pallet_sheet = workbook["Поддон"]
-            
-            # 1. Архивируем через ArchiveManager
-            archive_data = self.archive_manager.extract_pallet_data(actual_file_path)
-            pallet_number = self.config_manager.add_pallet_to_archive(archive_data)
-            
-            # 2. Копируем данные в "Список поддонов" (старая логика экспорта)
-            list_result = self._add_to_pallet_list_sheet(workbook, pallet_sheet)
-            if not list_result.get('success'):
-                workbook.close()
-                return {'success': False, 'error': list_result.get('error'), 'all_fitted': False}
-            
-            # 3. Сохраняем Excel
-            workbook.save(actual_file_path)
-            workbook.close()
-            
-            # 4. Очищаем лист "Поддон" (опционально, по желанию)
-            # self.clear_all_rolls(enable_pallet=False)
-            
-            return {
-                'success': True, 
-                'pallet_number': pallet_number,
-                'list_row': list_result.get('row_used'),
-                'all_fitted': True
-            }
-            
-        except Exception as e:
-            print(f"Ошибка архивации поддона: {e}")
-            return {'success': False, 'error': str(e), 'all_fitted': False}
-    
-    def _add_to_pallet_list_sheet(self, workbook, pallet_sheet):
-        """Добавляет данные из листа 'Поддон' в 'Список поддонов'"""
-        try:
-            if "Список поддонов" not in workbook.sheetnames:
-                return {'success': False, 'error': 'Лист "Список поддонов" не найден', 'all_fitted': False}
-            
-            list_sheet = workbook["Список поддонов"]
-            
-            # 1. Найти свободную строку (10-29)
-            target_row = None
-            for row in range(10, 30):
-                if (list_sheet[f'D{row}'].value is None and 
-                    list_sheet[f'F{row}'].value is None and
-                    list_sheet[f'H{row}'].value is None and
-                    list_sheet[f'L{row}'].value is None):
-                    target_row = row
-                    break
-            
-            if target_row is None:
-                return {'success': False, 'error': 'Лист "Список поддонов" переполнен (нет свободных строк 10-29)', 'all_fitted': False}
-            
-            # 2. Сохраняем текущий ws и временно переключаем на list_sheet
-            original_ws = getattr(self, 'ws', None)
-            original_wb = getattr(self, 'wb', None)
-            self.ws = list_sheet
-            self.wb = workbook
-            
-            # 3. Заполняем базовую информацию
-            self._export_basic_info_for_second_workshop()
-            self._export_box_data_for_second_workshop()
-            
-            # 4. Вычисляем и заполняем данные поддона
-            totals = self._calculate_pallet_totals(pallet_sheet)
-            
-            # D - Кол-во роликов
-            self._set_cell_value(f'D{target_row}', totals['rolls_count'])
-            
-            # F - Вес нетто
-            self._set_cell_value(f'F{target_row}', totals['total_weight'])
-            
-            # H - Кол-во этикеток
-            self._set_cell_value(f'H{target_row}', totals['total_quantity'])
-            
-            # L - Сумма длин (для Excel формул)
-            self._set_cell_value(f'L{target_row}', totals['total_length'])
-            
-            # 5. Восстанавливаем рабочие листы
-            if original_ws:
-                self.ws = original_ws
-            if original_wb:
-                self.wb = original_wb
-            
-            return {'success': True, 'row_used': target_row, 'all_fitted': True}
-            
-        except Exception as e:
-            print(f"Ошибка добавления в список поддонов: {e}")
-            return {'success': False, 'error': str(e), 'all_fitted': False}
-
-    def _calculate_pallet_totals(self, pallet_sheet):
-        """Вычисляет итоги по поддону из листа 'Поддон'"""
-        total_quantity = 0
-        total_weight = 0
-        total_length = 0
-        rolls_count = 0
-        
-        # Пары колонок и соответствующие смещения для длины в L
-        column_pairs = [
-            ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
-            ('E', 'F', 20),  # E,F - длина в L со смещением +20
-            ('H', 'I', 40)   # H,I - длина в L со смещением +40
-        ]
-        
-        for weight_col, qty_col, l_offset in column_pairs:
-            for row in range(10, 30):  # строки 10-29
-                weight = pallet_sheet[f'{weight_col}{row}'].value
-                quantity = pallet_sheet[f'{qty_col}{row}'].value
-                
-                if weight is not None or quantity is not None:
-                    rolls_count += 1
-                    
-                    if weight is not None:
-                        total_weight += weight
-                    if quantity is not None:
-                        total_quantity += quantity
-                    
-                    # Длина из столбца L
-                    length_row = row + l_offset
-                    length = pallet_sheet[f'L{length_row}'].value
-                    if length is not None:
-                        total_length += length
-        
-        return {
-            'rolls_count': rolls_count,
-            'total_weight': total_weight,
-            'total_quantity': total_quantity,
-            'total_length': total_length
-        }
     
     def get_excel_file_path(self):
         """Возвращает путь к Excel файлу в зависимости от цеха и настроек"""
