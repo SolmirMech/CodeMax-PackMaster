@@ -192,7 +192,7 @@ class RollLabelPrinter:
         self.cutter_combo.grid(row=1, column=0, padx=(480, 5), pady=5, sticky="w")        
 
         # Загружаем опции
-        self.load_manufacturer_options()
+        self.load_manufacturer_options()        
 
         # Заказчик: Начало данных
         ttk.Label(data_frame, text="Заказчик:").grid(
@@ -334,6 +334,7 @@ class RollLabelPrinter:
             self.update_packers_list()
             self.update_cutters_list()
             self._update_cutter_visibility()
+            self.load_manufacturer_options()
         except Exception as e:
             print(f"Ошибка обновления списков после изменения настроек: {e}")
             
@@ -403,11 +404,17 @@ class RollLabelPrinter:
             print(f"Ошибка обновления списка резчиков: {e}")
         
         
-    def load_manufacturer_options(self):
-        """Загружает варианты производителей из packaging_tu.json"""
+    def load_manufacturer_options(self, event=None):
+        """Загружает варианты производителей и продуктов из packaging_tu.json"""
         try:
             packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             technical_specs = packaging_data.get("technical_specifications", [])
+            
+            # Если список не изменился - не обновляем UI
+            current_count = len(technical_specs)
+            if hasattr(self, 'last_tu_count') and self.last_tu_count == current_count:
+                return
+            self.last_tu_count = current_count
             
             # Собираем уникальных производителей
             manufacturers = set()
@@ -425,10 +432,36 @@ class RollLabelPrinter:
             self.manufacturer_options = sorted(manufacturers)
             self.manufacturer_products_map = manufacturer_products
             
+            # Сохраняем текущий выбор
+            current_manufacturer = self.manufacturer_var.get()
+            current_product = self.product_type_var.get()
+            
             # Устанавливаем комбобоксы
             self.manufacturer_combo['values'] = self.manufacturer_options
-            if self.manufacturer_options:
-                self.manufacturer_var.set("ООО \"Ремас-Флексо\"")  # По умолчанию
+            
+            # Восстанавливаем выбор если он есть в новом списке
+            if current_manufacturer in self.manufacturer_options:
+                self.manufacturer_var.set(current_manufacturer)
+                # Обновляем продукты для этого производителя
+                if current_manufacturer in manufacturer_products:
+                    products = manufacturer_products[current_manufacturer]
+                    self.product_combo['values'] = products
+                    if current_product in products:
+                        self.product_type_var.set(current_product)
+                    elif products:
+                        self.product_type_var.set(products[0])
+                else:
+                    self.product_combo['values'] = []
+                    self.product_type_var.set("")
+            elif self.manufacturer_options:
+                # Устанавливаем Ремас-Флексо по умолчанию если есть
+                default_manufacturer = "ООО \"Ремас-Флексо\""
+                if default_manufacturer in self.manufacturer_options:
+                    self.manufacturer_var.set(default_manufacturer)
+                else:
+                    # Иначе первый в списке
+                    self.manufacturer_var.set(self.manufacturer_options[0])
+                
                 self.update_product_options()
                 
         except Exception as e:

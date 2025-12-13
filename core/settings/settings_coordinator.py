@@ -70,6 +70,12 @@ class SettingsCoordinator:
                 callback()
             except Exception as e:
                 print(f"Ошибка уведомления подписчика: {e}")
+                
+    def notify_list_changed(self, list_name: str):
+        """Уведомляет об изменении списка"""
+        print(f"Список {list_name} изменен")
+        # Пока просто уведомляем всех подписчиков
+        self._notify_subscribers()                
     
     def set_workshop(self, workshop: str):
         if workshop not in ["1", "2"]:
