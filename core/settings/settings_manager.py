@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk
 from .settings_dialog import SettingsDialog
+from .lists_settings_dialog import ListsSettingsDialog
 from .font_settings_dialog import FontSettingsDialog
 
 
@@ -12,6 +13,7 @@ class SettingsManager:
         self.window = None
         self.status_callback = None
         self.general_dialog = None
+        self.lists_dialog = None
         self.font_dialog = None
         
     def set_status_callback(self, callback):
@@ -44,14 +46,25 @@ class SettingsManager:
         general_frame = ttk.Frame(notebook)
         notebook.add(general_frame, text="Общие настройки")
         
+        # Создаем две колонки в первой вкладке
+        left_frame = ttk.Frame(general_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        right_frame = ttk.Frame(general_frame)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))        
+        
         # Вкладка 2: Настройки шрифтов  
         font_frame = ttk.Frame(notebook)
         notebook.add(font_frame, text="Настройки шрифтов")
         
         # Инициализируем диалоги
-        self.general_dialog = SettingsDialog(general_frame, self.preview_export_module)
+        self.general_dialog = SettingsDialog(left_frame, self.preview_export_module)
         self.general_dialog.set_parent_manager(self)
         self.general_dialog.create_ui()
+        
+        self.lists_dialog = ListsSettingsDialog(right_frame, self.preview_export_module)
+        self.lists_dialog.set_parent_manager(self)
+        self.lists_dialog.create_ui()
         
         self.font_dialog = FontSettingsDialog(
             font_frame, 
@@ -80,12 +93,20 @@ class SettingsManager:
             current_tab = notebook.index(notebook.select())
             
             if current_tab == 0:  # Общие настройки
-                success = self.general_dialog.save_settings()
-                if success:
-                    self.update_status("✅ Общие настройки сохранены!", "green")
+                # Сохраняем обе колонки
+                success_general = self.general_dialog.save_settings()
+                success_lists = self.lists_dialog.save_settings()
+                
+                if success_general and success_lists:
+                    self.update_status("✅ Все настройки сохранены!", "green")
                     self.close()
                 else:
-                    self.update_status(self.general_dialog.last_status, "red")
+                    status_message = []
+                    if not success_general:
+                        status_message.append(self.general_dialog.last_status)
+                    if not success_lists:
+                        status_message.append(self.lists_dialog.last_status)
+                    self.update_status(" | ".join(status_message), "red")
             else:  # Настройки шрифтов
                 success = self.font_dialog.save_settings()
                 if success:
