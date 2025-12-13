@@ -2,6 +2,8 @@
 import tkinter as tk
 from tkinter import ttk, StringVar
 import os
+from core.archive.archive_manager import ArchiveManager
+from core.config_manager import ConfigManager
 
 class ArchiveSearchWindow:
     """Окно поиска и восстановления архивных поддонов"""
@@ -11,8 +13,6 @@ class ArchiveSearchWindow:
         self.order_processor = order_processor
         
         # Создаём менеджер архива
-        from core.archive.archive_manager import ArchiveManager
-        from core.config_manager import ConfigManager
         self.archive_manager = ArchiveManager(ConfigManager())
         
         self.selected_pallet = None
@@ -122,7 +122,7 @@ class ArchiveSearchWindow:
         )
         
         # Настраиваем колонку
-        self.tree.heading("display", text="Поддон | Заказ | Дата | Упаковщик | Изделие")
+        self.tree.heading("display", text="№ Заказа | № Поддона | Дата | Тип | Изделие")
         self.tree.column("display", width=800, stretch=True)
         
         # Скроллбар
@@ -185,7 +185,7 @@ class ArchiveSearchWindow:
             product = self.product_var.get().strip()
             
             # Выполняем поиск
-            results = self.archive_manager.search_pallets(order, pallet, product)
+            results = self._search_archives(order, pallet, product)
             
             # Очищаем таблицу
             for item in self.tree.get_children():
@@ -214,6 +214,92 @@ class ArchiveSearchWindow:
             
         except Exception as e:
             self.status_var.set(f"Ошибка поиска: {str(e)}")
+            
+    def _get_all_archives(self):
+        """Получает все архивы для отображения"""
+        archive = self.archive_manager.config.get_pallet_archive()
+        archives = archive.get("pallets", [])
+        
+        result = []
+        for archive_data in archives:
+            basic_fields = archive_data.get("basic_fields", {})
+            workshop = archive_data.get("workshop", "1")
+            archive_type = archive_data.get("archive_type", "box")
+            sheet_name = archive_data.get("sheet_name", "")
+            
+            # Определяем тип для отображения
+            type_display = self._get_archive_type_display(workshop, archive_type)
+            
+            if workshop == "1":
+                order_num = basic_fields.get("D8", "—")
+                product = basic_fields.get("D10", "—")
+                date = basic_fields.get("F37", "—")
+                pallet_num = "—"
+            else:
+                order_num = basic_fields.get("D6", "—")
+                product = basic_fields.get("D8", "—")
+                date = basic_fields.get("D37", "—")
+                pallet_num = basic_fields.get("D5", "—")
+            
+            product_preview = str(product)[:50] + "..." if len(str(product)) > 50 else str(product)
+            
+            # Формируем строку для отображения с информацией о листе
+            if pallet_num != "—":
+                display = f"{order_num} | №{pallet_num} | {date} | {type_display} | {product_preview}"
+            else:
+                display = f"{order_num} | {date} | {type_display} | {product_preview}"
+            
+            result.append({
+                "display": display,
+                "archive_data": archive_data,
+                "order_number": order_num,
+                "pallet_number": pallet_num,
+                "product_full": product,
+                "archive_type": archive_type,
+                "sheet_name": sheet_name,
+                "workshop": workshop,
+                "type_display": type_display
+            })
+        
+        return result
+
+    def _get_archive_type_display(self, workshop, archive_type):
+        """Возвращает понятное название типа архива"""
+        if workshop == "1":
+            if archive_type == "box":
+                return "Коробка (цех 1)"
+            elif archive_type == "pallet":
+                return "Поддон (цех 1)"
+            elif archive_type == "multitype":
+                return "Много видов (цех 1)"
+        else:  # workshop == "2"
+            if archive_type == "box":
+                return "Поддон (цех 2)"
+            elif archive_type == "pallet":
+                return "Список поддонов (цех 2)"
+            elif archive_type == "multitype":
+                return "Много видов (цех 2)"
+        
+        return f"{archive_type} (цех {workshop})"
+
+    def _search_archives(self, order="", pallet="", product=""):
+        """Поиск архивов"""
+        all_archives = self._get_all_archives()
+        
+        if not any([order, pallet, product]):
+            return all_archives
+        
+        filtered = []
+        for archive in all_archives:
+            match_order = not order or order.lower() in str(archive["order_number"]).lower()
+            match_pallet = not pallet or (archive["pallet_number"] != "—" and 
+                                         pallet.lower() in str(archive["pallet_number"]).lower())
+            match_product = not product or product.lower() in str(archive["product_full"]).lower()
+            
+            if match_order and match_pallet and match_product:
+                filtered.append(archive)
+        
+        return filtered
     
     def show_all(self):
         """Показывает все поддоны"""
@@ -243,7 +329,7 @@ class ArchiveSearchWindow:
         order = self.order_var.get().strip()
         pallet = self.pallet_var.get().strip()
         product = self.product_var.get().strip()
-        results = self.archive_manager.search_pallets(order, pallet, product)
+        results = self._search_archives(order, pallet, product)
         
         if 0 <= item_index < len(results):
             self.selected_pallet = results[item_index]
@@ -264,23 +350,60 @@ class ArchiveSearchWindow:
             return
         
         try:
-            # Получаем путь к Excel из order_processor
-            excel_path = self.order_processor.excel_file_path
-            if not excel_path or not os.path.exists(excel_path):
-                # Пробуем загрузить путь
-                self.order_processor.load_excel_folder_path()
-                excel_path = self.order_processor.excel_file_path
+            # Получаем данные архива
+            archive_data = self.selected_pallet["archive_data"]
             
+            # Получаем цех из архива
+            workshop = archive_data.get("workshop", "2")
+            
+            # Получаем правильный путь к файлу Excel для этого цеха
+            excel_path = self.archive_manager._get_excel_path(workshop)
+            
+            # Проверяем существование файла
             if not excel_path or not os.path.exists(excel_path):
-                self.status_var.set("❌ Файл Excel не найден. Проверьте настройки.")
-                return
+                # Пробуем получить путь через конфигурацию (аналогично экспортеру)
+                settings = self.archive_manager.config.load_json_settings("shared_utils.json")
+                excel_folder = settings.get("weight_orders_xlsx", "")
+                
+                if workshop == "2":
+                    filename = "weight_orders_2.xlsx"
+                else:
+                    filename = "weight_orders.xlsx"
+                
+                excel_path = os.path.join(excel_folder, filename)
+                
+                # Если файла нет, нужно скопировать из assets (как в экспортере)
+                if not os.path.exists(excel_path):
+                    self.status_var.set(f"❌ Файл не найден: {excel_path}")
+                    
+                    # Можно предложить создать файл или показать инструкцию
+                    response = tk.messagebox.askyesno(
+                        "Файл не найден",
+                        f"Файл {filename} не найден по пути:\n{excel_folder}\n\n"
+                        "Создать новый файл из шаблона?"
+                    )
+                    
+                    if response:
+                        config = ConfigManager()
+                        assets_file = config.get_asset_path(filename)
+                        
+                        if os.path.exists(assets_file):
+                            import shutil
+                            shutil.copy2(assets_file, excel_path)
+                            self.status_var.set(f"✅ Файл создан: {filename}")
+                        else:
+                            self.status_var.set(f"❌ Шаблон не найден в assets: {filename}")
+                            return
+                    else:
+                        return
             
             self.status_var.set("Восстанавливаю поддон...")
             self.window.update()
             
             # Восстанавливаем
-            result = self.archive_manager.restore_pallet_to_excel(
-                self.selected_pallet["pallet_data"]
+            result = self.archive_manager.restore_to_excel(
+                archive_data,
+                excel_path
             )
             
             if result["success"]:
@@ -305,44 +428,96 @@ class ArchiveSearchWindow:
                 
         except Exception as e:
             self.status_var.set(f"❌ Ошибка: {str(e)}")
+            
+    def _delete_archive(self, archive_data):
+        """Удаляет архив из JSON файла"""
+        try:
+            config = self.archive_manager.config
+            archive = config.get_pallet_archive()
+            pallets = archive.get("pallets", [])
+            
+            # Получаем полные данные выбранного архива
+            selected_basic = archive_data.get("basic_fields", {})
+            selected_workshop = archive_data.get("workshop", "1")
+            selected_archive_type = archive_data.get("archive_type", "box")
+            selected_sheet_name = archive_data.get("sheet_name", "")
+            selected_extraction_date = archive_data.get("extraction_date", "")
+            
+            new_pallets = []
+            deleted = False
+            
+            for pallet in pallets:
+                basic = pallet.get("basic_fields", {})
+                workshop = pallet.get("workshop", "1")
+                archive_type = pallet.get("archive_type", "box")
+                sheet_name = pallet.get("sheet_name", "")
+                extraction_date = pallet.get("extraction_date", "")
+                
+                # Сравниваем ВСЕ ключевые поля для точного совпадения
+                # 1. Сравниваем базовые поля (словари)
+                basic_match = basic == selected_basic
+                
+                # 2. Сравниваем остальные атрибуты
+                workshop_match = workshop == selected_workshop
+                type_match = archive_type == selected_archive_type
+                sheet_match = sheet_name == selected_sheet_name
+                
+                # Для большей точности можно сравнивать дату извлечения
+                date_match = extraction_date == selected_extraction_date
+                
+                # Если все ключевые поля совпадают - это тот самый архив
+                if (basic_match and workshop_match and type_match and 
+                    sheet_match and date_match):
+                    deleted = True
+                    continue  # пропускаем (удаляем)
+                
+                new_pallets.append(pallet)
+            
+            if deleted:
+                archive["pallets"] = new_pallets
+                config.save_pallet_archive(archive)
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            print(f"Ошибка удаления архива: {e}")
+            return False
     
     def delete_selected(self):
-        """Удаляет выбранный поддон из архива"""
+        """Удаляет выбранный архив"""
         if not self.selected_pallet:
-            self.status_var.set("❌ Не выбран поддон для удаления")
+            self.status_var.set("❌ Не выбран архив для удаления")
             return
         
-        # Подтверждение
+        archive_data = self.selected_pallet["archive_data"]
+        order_num = self.selected_pallet.get("order_number", "—")
         pallet_num = self.selected_pallet.get("pallet_number", "—")
-        order_num = self.selected_pallet.get("order", "—")
+        archive_type = self.selected_pallet.get("archive_type", "—")
+        sheet_name = self.selected_pallet.get("sheet_name", "—")
         
-        confirm = tk.messagebox.askyesno(
-            "Подтверждение удаления",
-            f"Удалить поддон №{pallet_num} (заказ: {order_num}) из архива?\n\n"
-            "Это действие нельзя отменить."
-        )
+        # Подтверждение (можно улучшить информацию)
+        if pallet_num != "—":
+            msg = f"Удалить архив: заказ {order_num}, поддон {pallet_num}?\nТип: {archive_type}, Лист: {sheet_name}"
+        else:
+            msg = f"Удалить архив: заказ {order_num}?\nТип: {archive_type}, Лист: {sheet_name}"
+        
+        confirm = tk.messagebox.askyesno("Подтверждение удаления", msg)
         
         if not confirm:
             return
         
         try:
-            success = self.archive_manager.delete_pallet_from_archive(
-                self.selected_pallet["pallet_data"]
-            )
+            success = self._delete_archive(archive_data)
             
             if success:
-                self.status_var.set(f"✅ Поддон №{pallet_num} удалён из архива")
-                
-                # Обновляем список
-                self.search()
-                
-                # Сбрасываем выбор
+                self.status_var.set(f"✅ Архив удалён")
+                self.search()  # Обновляем список
                 self.selected_pallet = None
                 self.restore_btn.config(state="disabled")
                 self.delete_btn.config(state="disabled")
-                
             else:
-                self.status_var.set(f"❌ Не удалось удалить поддон №{pallet_num}")
+                self.status_var.set(f"❌ Не удалось удалить архив")
                 
         except Exception as e:
             self.status_var.set(f"❌ Ошибка удаления: {str(e)}")

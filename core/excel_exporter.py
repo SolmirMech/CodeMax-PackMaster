@@ -56,8 +56,8 @@ class WeightOrdersExporter:
             if is_second_file:
                 # Цех 2
                 if enable_pallet:
-                    # Цех 2 + поддон: особая логика архивации
-                    result = self._archive_pallet_for_second_workshop()
+                    # Цех 2 + поддон:
+                    result = self.export_to_pallet_list_sheet()
                     self.wb.close()
                     return result
                 else:
@@ -510,6 +510,159 @@ class WeightOrdersExporter:
             return True
 
     # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+    
+    def export_to_pallet_list_sheet(self, excel_path=None, sheet_name=None):
+        """
+        Экспорт данных поддона в лист 'Список поддонов' без архивации
+        """
+        try:
+            if excel_path is None:
+                excel_path = self.get_excel_file_path()
+            
+            if sheet_name is None:
+                sheet_name = "Список поддонов"
+            
+            workbook = load_workbook(excel_path)
+            
+            # Проверяем листы
+            if "Поддон" not in workbook.sheetnames:
+                workbook.close()
+                return {'success': False, 'error': 'Лист "Поддон" не найден', 'all_fitted': False}
+            
+            if sheet_name not in workbook.sheetnames:
+                workbook.close()
+                return {'success': False, 'error': f'Лист "{sheet_name}" не найден', 'all_fitted': False}
+            
+            pallet_sheet = workbook["Поддон"]
+            list_sheet = workbook[sheet_name]
+            
+            # 1. Найти свободную строку (10-29)
+            target_row = None
+            for row in range(10, 30):
+                if (list_sheet[f'D{row}'].value is None and 
+                    list_sheet[f'F{row}'].value is None and
+                    list_sheet[f'H{row}'].value is None and
+                    list_sheet[f'L{row}'].value is None):
+                    target_row = row
+                    break
+            
+            if target_row is None:
+                workbook.close()
+                return {'success': False, 'error': f'Лист "{sheet_name}" переполнен (нет свободных строк 10-29)', 'all_fitted': False}
+            
+            # 2. Сохраняем текущие листы
+            original_ws = getattr(self, 'ws', None)
+            original_wb = getattr(self, 'wb', None)
+            original_sheet_name = getattr(self, 'sheet_name', None)
+            
+            # 3. Временно переключаемся на лист списка
+            self.wb = workbook
+            self.ws = list_sheet
+            self.sheet_name = sheet_name
+            
+            # 4. Копируем базовую информацию из "Поддона" в "Список поддонов"
+            # Заказчик
+            list_sheet["D7"] = pallet_sheet["D7"].value
+            # Тип упаковки
+            list_sheet["D3"] = pallet_sheet["D3"].value
+            # Номер заказа
+            list_sheet["D6"] = pallet_sheet["D6"].value
+            # Изделие
+            list_sheet["D8"] = pallet_sheet["D8"].value
+            # Дата упаковки
+            list_sheet["D37"] = pallet_sheet["D37"].value
+            # Упаковщик
+            list_sheet["E41"] = pallet_sheet["E41"].value
+            # Вес втулки (кг)
+            list_sheet["D4"] = pallet_sheet["D4"].value
+            # Диаметр втулки
+            list_sheet["G4"] = pallet_sheet["G4"].value
+            # Тип продукта
+            list_sheet["E39"] = pallet_sheet["E39"].value
+            # TU номер
+            list_sheet["A39"] = pallet_sheet["A39"].value
+            
+            # 5. Вычисляем и заполняем данные поддона
+            totals = self._calculate_pallet_totals(pallet_sheet)
+            
+            # D - Кол-во роликов
+            list_sheet[f'D{target_row}'] = totals['rolls_count']
+            
+            # F - Вес нетто
+            list_sheet[f'F{target_row}'] = totals['total_weight']
+            
+            # H - Кол-во этикеток
+            list_sheet[f'H{target_row}'] = totals['total_quantity']
+            
+            # L - Сумма длин
+            list_sheet[f'L{target_row}'] = totals['total_length']
+            
+            # 6. Вес поддона (рассчитывается автоматически формулой)
+            # В ячейке H3 уже должна быть формула
+            
+            # 7. Сохраняем файл
+            workbook.save(excel_path)
+            workbook.close()
+            
+            # 8. Восстанавливаем исходные листы
+            if original_wb:
+                self.wb = original_wb
+            if original_ws:
+                self.ws = original_ws
+            if original_sheet_name:
+                self.sheet_name = original_sheet_name
+            
+            return {
+                'success': True, 
+                'row_used': target_row,
+                'total_weight': totals['total_weight'],
+                'total_quantity': totals['total_quantity'],
+                'all_fitted': True
+            }
+            
+        except Exception as e:
+            print(f"Ошибка экспорта в список поддонов: {e}")
+            return {'success': False, 'error': str(e), 'all_fitted': False}
+
+    def _calculate_pallet_totals(self, pallet_sheet):
+        """Вычисляет итоги по поддону из листа 'Поддон'"""
+        total_quantity = 0
+        total_weight = 0
+        total_length = 0
+        rolls_count = 0
+        
+        # Пары колонок и соответствующие смещения для длины в L
+        column_pairs = [
+            ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
+            ('E', 'F', 20),  # E,F - длина в L со смещением +20
+            ('H', 'I', 40)   # H,I - длина в L со смещением +40
+        ]
+        
+        for weight_col, qty_col, l_offset in column_pairs:
+            for row in range(10, 30):  # строки 10-29
+                weight = pallet_sheet[f'{weight_col}{row}'].value
+                quantity = pallet_sheet[f'{qty_col}{row}'].value
+                
+                if weight is not None or quantity is not None:
+                    rolls_count += 1
+                    
+                    if weight is not None:
+                        total_weight += weight
+                    if quantity is not None:
+                        total_quantity += quantity
+                    
+                    # Длина из столбца L
+                    length_row = row + l_offset
+                    length = pallet_sheet[f'L{length_row}'].value
+                    if length is not None:
+                        total_length += length
+        
+        return {
+            'rolls_count': rolls_count,
+            'total_weight': total_weight,
+            'total_quantity': total_quantity,
+            'total_length': total_length
+        }
     
     def get_excel_file_path(self):
         """Возвращает путь к Excel файлу в зависимости от цеха и настроек"""

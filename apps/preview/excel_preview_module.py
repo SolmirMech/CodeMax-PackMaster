@@ -359,7 +359,7 @@ class ExcelPreviewModule:
         self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
         
         # ======== Размеры ========
-        window_width = 650
+        window_width = 800
         window_height = 900
         
         # Центрирование окна на экране
@@ -484,9 +484,17 @@ class ExcelPreviewModule:
         # Привязываем изменение
         top_offset_entry.bind("<FocusOut>", lambda e: self._save_preview_settings())
         
+        btn_archive = ttk.Button(
+            control_frame,
+            text="⏳ В архив",
+            command=self.archive_current_sheet,
+            width=10
+        )
+        btn_archive.grid(row=0, column=6, padx=(10, 10), sticky='w')        
+        
         # Метка статуса
         self.status_label = ttk.Label(control_frame, text="", foreground="blue")
-        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=4)      
+        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=4)
         
         # Настроить веса колонок для правильного растяжения
         control_frame.columnconfigure(3, weight=1)  # Статус растягивается
@@ -505,6 +513,56 @@ class ExcelPreviewModule:
             self.preview_window.lift(), 
             self.preview_window.focus_force()
         ])
+        
+    def archive_current_sheet(self):
+        """Архивирует текущий лист"""
+        if not self.excel_path or not os.path.exists(self.excel_path):
+            self.status_label.config(text="❌ Файл не найден", foreground="red")
+            return
+        
+        try:
+            # Определяем контекст по sheet_name
+            context = self._get_context_from_sheet_name(self.sheet_name)
+            
+            # Архивируем
+            from core.archive.archive_manager import ArchiveManager
+            archive_manager = ArchiveManager(self.config_manager, self.coordinator)
+            
+            result = archive_manager.extract_data_for_archive(
+                workshop=context["workshop"],
+                enable_pallet=context["enable_pallet"],
+                multitype_mode=context["multitype_mode"]
+            )
+            
+            if result["success"]:
+                # Сохраняем
+                success = self.config_manager.add_pallet_to_archive(result["archive_data"])
+                if success:
+                    self.status_label.config(text="✅ Архивировано", foreground="green")
+                else:
+                    self.status_label.config(text="❌ Ошибка сохранения", foreground="red")
+            else:
+                self.status_label.config(text=f"❌ {result.get('error')}", foreground="red")
+                
+        except Exception as e:
+            self.status_label.config(text=f"❌ {str(e)[:40]}", foreground="red")
+            
+    def _get_context_from_sheet_name(self, sheet_name):
+        """Определяет параметры архивации по названию листа"""
+        if sheet_name == "Лист для коробки":
+            return {"workshop": "1", "enable_pallet": False, "multitype_mode": False}
+        elif sheet_name == "Лист для паллеты":
+            return {"workshop": "1", "enable_pallet": True, "multitype_mode": False}
+        elif sheet_name == "Лист много видов":
+            return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}
+        elif sheet_name == "Поддон":
+            return {"workshop": "2", "enable_pallet": False, "multitype_mode": False}
+        elif sheet_name == "Список поддонов":
+            return {"workshop": "2", "enable_pallet": True, "multitype_mode": False}
+        elif sheet_name == "Много видов":
+            return {"workshop": "2", "enable_pallet": False, "multitype_mode": True}
+        else:
+            return {"workshop": "1", "enable_pallet": False, "multitype_mode": False}
         
     def _save_printer_settings(self):
         """Сохраняет выбранные принтеры в настройки"""

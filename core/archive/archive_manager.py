@@ -499,80 +499,7 @@ class ArchiveManager:
                     'length': length
                 })
         
-        return products       
-    
-    def get_all_pallets(self):
-        """Возвращает все поддоны из архива в формате для отображения"""
-        archive = self.config.get_pallet_archive()
-        pallets = archive.get("pallets", [])
-        
-        result = []
-        for pallet in pallets:
-            basic_fields = pallet.get("basic_fields", {})
-            
-            # Извлекаем данные для отображения
-            pallet_num = basic_fields.get("D5", "—")
-            order_num = basic_fields.get("D6", "—")
-            date = basic_fields.get("D37", "—")
-            packer = basic_fields.get("E41", "—")
-            product = basic_fields.get("D8", "—")
-            
-            # Обрезаем название продукции до 30 символов
-            product_preview = str(product)[:50] + "..." if len(str(product)) > 50 else str(product)
-            
-            # Формируем строку для отображения
-            display_text = f"№{pallet_num} | {order_num} | {date} | {packer} | {product_preview}"
-            
-            result.append({
-                "display": display_text,
-                "pallet_data": pallet,  # полные данные
-                "pallet_number": pallet_num,
-                "order": order_num,
-                "date": date,
-                "packer": packer,
-                "product_preview": product_preview
-            })
-        
-        return result
-    
-    def search_pallets(self, order_number="", pallet_number="", product_part=""):
-        """
-        Ищет поддоны по критериям (регистронезависимый поиск)
-        """
-        all_pallets = self.get_all_pallets()
-        
-        if not any([order_number, pallet_number, product_part]):
-            return all_pallets  # возвращаем все если нет критериев
-        
-        filtered = []
-        
-        for pallet in all_pallets:
-            matches = []
-            
-            # Поиск по номеру заказа (D6)
-            if order_number:
-                order = str(pallet.get("order", "")).lower()
-                if order_number.lower() in order:
-                    matches.append(True)
-            
-            # Поиск по номеру поддона (D5)
-            if pallet_number:
-                p_num = str(pallet.get("pallet_number", "")).lower()
-                if pallet_number.lower() in p_num:
-                    matches.append(True)
-            
-            # Поиск по части названия (D8)
-            if product_part:
-                product = str(pallet.get("product_preview", "")).lower()
-                if product_part.lower() in product:
-                    matches.append(True)
-            
-            # Если были критерии и все совпали (или критерий один и совпал)
-            criteria_count = sum([bool(order_number), bool(pallet_number), bool(product_part)])
-            if matches and len(matches) >= min(1, criteria_count):
-                filtered.append(pallet)
-        
-        return filtered
+        return products
         
     def restore_to_excel(self, archive_data, excel_path=None):
         """Восстанавливает данные из архива в Excel с учетом типа"""
@@ -603,21 +530,21 @@ class ArchiveManager:
         # Ветвление по типам
         if archive_type == "box":
             if workshop == "1":
-                return self._restore_box_sheet_first_workshop(archive_data, excel_path)
+                return self._restore_box_sheet_first_workshop(archive_data, excel_path, sheet_name)
             else:
-                return self._restore_pallet_sheet_second_workshop(archive_data, excel_path)
+                return self._restore_pallet_sheet_second_workshop(archive_data, excel_path, sheet_name)
         
         elif archive_type == "pallet":
             if workshop == "1":
-                return self._restore_pallet_sheet_first_workshop(archive_data, excel_path)
+                return self._restore_pallet_sheet_first_workshop(archive_data, excel_path, sheet_name)
             else:
-                return self._restore_pallet_list_sheet_second_workshop(archive_data, excel_path)
+                return self._restore_pallet_list_sheet_second_workshop(archive_data, excel_path, sheet_name)
         
         elif archive_type == "multitype":
             if workshop == "1":
-                return self._restore_multitype_sheet_first_workshop(archive_data, excel_path)
+                return self._restore_multitype_sheet_first_workshop(archive_data, excel_path, sheet_name)
             else:
-                return self._restore_multitype_sheet_second_workshop(archive_data, excel_path)
+                return self._restore_multitype_sheet_second_workshop(archive_data, excel_path, sheet_name)
         
         else:
             return {"success": False, "error": f"Неизвестный тип архива: {archive_type}"}
@@ -958,40 +885,3 @@ class ArchiveManager:
             
         except Exception as e:
             return {"success": False, "error": f"Ошибка восстановления цех 2, много видов: {str(e)}"}            
-    
-    def delete_pallet_from_archive(self, pallet_data):
-        """Удаляет поддон из архива"""
-        try:
-            archive = self.config.get_pallet_archive()
-            pallets = archive.get("pallets", [])
-            
-            # Находим и удаляем поддон
-            basic_to_remove = pallet_data.get("basic_fields", {})
-            d5_to_remove = basic_to_remove.get("D5")
-            d6_to_remove = basic_to_remove.get("D6")
-            
-            new_pallets = []
-            deleted = False
-            
-            for pallet in pallets:
-                basic = pallet.get("basic_fields", {})
-                d5 = basic.get("D5")
-                d6 = basic.get("D6")
-                
-                # Сравниваем по D5 и D6
-                if str(d5) == str(d5_to_remove) and str(d6) == str(d6_to_remove):
-                    deleted = True
-                    continue  # пропускаем (удаляем)
-                
-                new_pallets.append(pallet)
-            
-            if deleted:
-                archive["pallets"] = new_pallets
-                self.config.save_pallet_archive(archive)
-                return True
-            else:
-                return False
-                
-        except Exception as e:
-            print(f"Ошибка удаления поддона: {e}")
-            return False

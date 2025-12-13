@@ -110,8 +110,8 @@ class ExportModule:
         # Кнопка предпросмотра коробки
         btn_preview = ttk.Button(
             box_frame,
-            text="👁️ Просмотр",  # Уточняем название
-            width=18,
+            text="👀 Просмотр",
+            width=12,
             command=self.show_box_preview,
             style="Accent.TButton"
         )
@@ -164,11 +164,11 @@ class ExportModule:
         # Кнопка предпросмотра поддона
         ttk.Button(
             pallet_frame,
-            text="👁️ Просмотр",
-            width=18,
+            text="👀 Просмотр",
+            width=12,
             command=self.show_pallet_preview,
             style="Accent.TButton"
-        ).grid(row=3, column=0, columnspan=2, pady=(5, 0), sticky="w")
+        ).grid(row=3, column=0, pady=(5, 0), sticky="w")
         
     def show_box_preview(self):
         """Открывает предпросмотр для коробки"""

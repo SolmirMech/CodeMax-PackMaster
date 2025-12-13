@@ -112,7 +112,7 @@ class OrderDataProcessor:
         # Кнопка предпросмотра листа 'Много видов'
         ttk.Button(
             preview_frame,
-            text="👁️ Просмотр",
+            text="👀 Просмотр",
             command=self.show_multitype_preview,
             width=15
         ).pack(side=tk.LEFT)        
