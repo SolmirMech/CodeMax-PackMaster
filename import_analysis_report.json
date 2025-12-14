@@ -1,0 +1,289 @@
+{
+  "project_info": {
+    "path": "M:/CodeMax-PackMaster",
+    "name": "CodeMax-PackMaster",
+    "python_version": "3.12",
+    "analysis_date": "ImportCheckerGUI "
+  },
+  "modules_summary": {
+    "total_detected": 30,
+    "project_modules": 24,
+    "standard_modules": 16,
+    "external_dependencies": 6
+  },
+  "project_modules": [
+    "apps",
+    "archive",
+    "archive_manager",
+    "archive_search_window",
+    "config_manager",
+    "core",
+    "excel_exporter",
+    "excel_preview_module",
+    "export_module",
+    "font_settings_dialog",
+    "lists_settings_dialog",
+    "main",
+    "order_data_processor",
+    "pdf_utils",
+    "preview",
+    "print_module",
+    "roll_preview",
+    "settings",
+    "settings_coordinator",
+    "settings_dialog",
+    "settings_manager",
+    "shared_utils",
+    "weight_orders_printer",
+    "weight_roll_printer"
+  ],
+  "external_dependencies": [
+    "Pillow",
+    "PyMuPDF",
+    "chardet",
+    "openpyxl",
+    "pythoncom",
+    "pywin32"
+  ],
+  "all_detected_modules": [
+    "PIL",
+    "apps",
+    "chardet",
+    "configparser",
+    "core",
+    "datetime",
+    "fitz",
+    "font_settings_dialog",
+    "io",
+    "json",
+    "lists_settings_dialog",
+    "math",
+    "openpyxl",
+    "os",
+    "pathlib",
+    "pythoncom",
+    "re",
+    "settings_dialog",
+    "shutil",
+    "sys",
+    "threading",
+    "time",
+    "tkinter",
+    "traceback",
+    "typing",
+    "win32com",
+    "win32gui",
+    "win32print",
+    "win32ui",
+    "xml"
+  ],
+  "module_usage_details": {
+    "os": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\core\\pdf_utils.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\lists_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_coordinator.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py"
+    ],
+    "sys": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py"
+    ],
+    "tkinter": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\font_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\font_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\lists_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\lists_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_manager.py"
+    ],
+    "configparser": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py"
+    ],
+    "datetime": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py"
+    ],
+    "core": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\font_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\lists_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_coordinator.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py"
+    ],
+    "apps": [
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\main.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\export_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py"
+    ],
+    "shutil": [
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_search_window.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\lists_settings_dialog.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py"
+    ],
+    "xml": [
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py"
+    ],
+    "re": [
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py"
+    ],
+    "chardet": [
+      "M:\\CodeMax-PackMaster\\apps\\order_data_processor.py"
+    ],
+    "win32print": [
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\shared_utils.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py"
+    ],
+    "win32ui": [
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\weight_orders_printer.py",
+      "M:\\CodeMax-PackMaster\\core\\shared_utils.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_dialog.py"
+    ],
+    "PIL": [
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\print_module.py",
+      "M:\\CodeMax-PackMaster\\core\\pdf_utils.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py"
+    ],
+    "math": [
+      "M:\\CodeMax-PackMaster\\apps\\weight_roll_printer.py"
+    ],
+    "json": [
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py"
+    ],
+    "pathlib": [
+      "M:\\CodeMax-PackMaster\\core\\config_manager.py"
+    ],
+    "openpyxl": [
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\core\\excel_exporter.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py",
+      "M:\\CodeMax-PackMaster\\core\\archive\\archive_manager.py"
+    ],
+    "fitz": [
+      "M:\\CodeMax-PackMaster\\core\\pdf_utils.py"
+    ],
+    "typing": [
+      "M:\\CodeMax-PackMaster\\core\\pdf_utils.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\roll_preview.py",
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_coordinator.py"
+    ],
+    "io": [
+      "M:\\CodeMax-PackMaster\\core\\pdf_utils.py"
+    ],
+    "threading": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "win32com": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "pythoncom": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "time": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py",
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "win32gui": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "traceback": [
+      "M:\\CodeMax-PackMaster\\apps\\preview\\excel_preview_module.py"
+    ],
+    "settings_dialog": [
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_manager.py"
+    ],
+    "lists_settings_dialog": [
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_manager.py"
+    ],
+    "font_settings_dialog": [
+      "M:\\CodeMax-PackMaster\\core\\settings\\settings_manager.py"
+    ]
+  }
+}

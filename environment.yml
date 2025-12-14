@@ -11,3 +11,5 @@
   - pip:
     - Pillow
     - PyMuPDF
+    - chardet
+    - pythoncom

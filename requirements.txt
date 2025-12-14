@@ -1,8 +1,10 @@
 # Автоматически сгенерировано CodeMax Import Analyzer
 # Python 3.12
-# Project: CodeMax-CutMaster_Weight
+# Project: CodeMax-PackMaster
 
 Pillow
 PyMuPDF
+chardet
 openpyxl
+pythoncom
 pywin32
