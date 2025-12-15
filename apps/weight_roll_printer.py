@@ -6,7 +6,7 @@ import math
 from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
-
+from core.parse.xml_order_parser import XMLOrderParser
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
@@ -15,6 +15,7 @@ class RollLabelPrinter:
         self.config_manager = ConfigManager()
         self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator
+        self.xml_parser = XMLOrderParser()
 
         self.order_data_module = None
         self.preview_module = None
@@ -227,7 +228,7 @@ class RollLabelPrinter:
 
         entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
         entry_number.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
-        entry_number.bind("<Return>", lambda e: self.order_data_module.get_product_name())
+        entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
         entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")     
@@ -309,6 +310,100 @@ class RollLabelPrinter:
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
         self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
+        
+    def on_order_enter_pressed(self, event=None):
+        """Обрабатывает нажатие Enter в поле номера заказа."""
+        # 1. Автоматическое заполнение из XML
+        self.auto_fill_from_xml()
+        
+        # 2. Вызываем поиск в модуле order_data если он есть
+        if hasattr(self, 'order_data_module') and self.order_data_module:
+            self.order_data_module.get_product_name()
+        
+    def auto_fill_from_xml(self):
+        """Автоматически заполняет ТОЛЬКО технические поля из XML."""
+        order_number = self.order_number.get().strip()
+        if not order_number:
+            return
+        
+        try:
+            # Берем папку из настроек
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            folder_path = settings.get("weight_data_base", "")
+            
+            if not folder_path or not os.path.exists(folder_path):
+                return
+                
+            # Поиск файлов
+            xml_files = []
+            for filename in os.listdir(folder_path):
+                if filename.endswith('.xml') and order_number in filename:
+                    file_path = os.path.join(folder_path, filename)
+                    xml_files.append(file_path)
+            
+            if not xml_files:
+                return
+                
+            # Читаем и парсим первый файл
+            with open(xml_files[0], 'rb') as f:
+                raw_data = f.read()
+            
+            # Определяем кодировку
+            if raw_data.startswith(b'\xff\xfe'):
+                content = raw_data.decode('utf-16')
+            elif raw_data.startswith(b'\xfe\xff'):
+                content = raw_data.decode('utf-16')
+            else:
+                try:
+                    content = raw_data.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        import chardet
+                        encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
+                        content = raw_data.decode(encoding)
+                    except:
+                        content = raw_data.decode('utf-8', errors='ignore')
+            
+            # Парсим
+            parsed_result = self.xml_parser.parse(content)
+            
+            # ЗАПОЛНЯЕМ ТОЛЬКО ТЕХНИЧЕСКИЕ ПОЛЯ:
+            self._fill_technical_fields_only(parsed_result)
+            
+        except Exception as e:
+            print(f"Ошибка автозаполнения из XML: {e}")
+
+    def _fill_technical_fields_only(self, parsed_data: dict):
+        """Заполняет только технические поля (НЕ product_text!)."""
+        # 1. Заказчик
+        customer = parsed_data.get('customer', '')
+        if customer:
+            self.customer_var.set(customer)
+            self.check_manufacturer_visibility(customer)
+        
+        # 2. Дата эмиссии (берём из первого продукта если есть)
+        products = parsed_data.get('products', [])
+        if products:
+            date_emission = products[0].get('date_emission', '')
+            if date_emission:
+                self.date_emission_var.set(date_emission)
+        
+        # 3. Данные из операций
+        operations = parsed_data.get('operations', {})
+        
+        if operations.get('winding_scheme'):
+            self.winding_scheme_var.set(operations['winding_scheme'])
+        
+        if operations.get('sleeve_diameter'):
+            self.sleeve_diameter_var.set(operations['sleeve_diameter'])
+        
+        if operations.get('streams_count'):
+            self.streams_var.set(operations['streams_count'])
+        
+        if operations.get('label_length_with_gap'):
+            self.label_length_mm.set(operations['label_length_with_gap'])
+        
+        # product_text НЕ трогаем - его заполнит OrderDataProcessor
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""

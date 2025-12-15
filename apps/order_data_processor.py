@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from core.config_manager import ConfigManager
 from core.excel_exporter import WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
+from core.parse.xml_order_parser import XMLOrderParser
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
@@ -15,6 +16,7 @@ class OrderDataProcessor:
         self.parent = parent
         self.config_manager = ConfigManager()
         self.coordinator = coordinator
+        self.xml_parser = XMLOrderParser()
         
         # Переменные для парсинга
         self.folder_path = StringVar(value="")
@@ -383,17 +385,15 @@ class OrderDataProcessor:
                     with open(file_path, 'rb') as f:
                         raw_data = f.read()
                     
-                    # Определяем кодировку
+                    # Определяем кодировку (оставить как есть)
                     if raw_data.startswith(b'\xff\xfe'):  # UTF-16 LE BOM
                         content = raw_data.decode('utf-16')
                     elif raw_data.startswith(b'\xfe\xff'):  # UTF-16 BE BOM  
                         content = raw_data.decode('utf-16')
                     else:
-                        # Пробуем UTF-8, если не получается - пытаемся определить
                         try:
                             content = raw_data.decode('utf-8')
                         except UnicodeDecodeError:
-                            # Пытаемся определить кодировку
                             try:
                                 import chardet
                                 encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
@@ -401,154 +401,35 @@ class OrderDataProcessor:
                             except:
                                 content = raw_data.decode('utf-8', errors='ignore')
                     
-                    # Парсим XML из строки
-                    root = ET.fromstring(content)
+                    # Используем новый парсер вместо ручного парсинга
+                    parsed_result = self.xml_parser.parse(content)
                     
-                    # данные в атрибутах
-                    if self._is_attributes_format(root):
-                        parsed_item = self._parse_attributes_xml_format(root)
-                        if parsed_item:
-                            product_data.append(parsed_item)
-                        continue  # переходим к следующему файлу
-                    
-                    # для обычных XML
-                    customer = ""
-                    winding_scheme = ""
-                    sleeve_diameter = ""
-                    date_emission = ""   # дата эмиссии
-                    
-                    # Ищем заказчика в теге <customer>
-                    customer_elem = root.find('.//customer')
-                    if customer_elem is not None and customer_elem.text:
-                        customer = customer_elem.text.strip()
-                    
-                    # Ищем схему намотки в теге <winding_scheme>
-                    winding_scheme_elem = root.find('.//winding_scheme')
-                    if winding_scheme_elem is not None and winding_scheme_elem.text:
-                        winding_scheme = winding_scheme_elem.text.strip()
-                    
-                    # Ищем диаметр втулки в теге <sleeve_diameter>
-                    sleeve_diameter_elem = root.find('.//sleeve_diameter')
-                    if sleeve_diameter_elem is not None and sleeve_diameter_elem.text:
-                        sleeve_diameter = sleeve_diameter_elem.text.strip().replace(' мм', '')
-                    
-                    # Ищем дату эмиссии в теге <date_emission>
-                    date_emission_elem = root.find('.//date_emission')
-                    if date_emission_elem is not None and date_emission_elem.text:
-                        date_emission = date_emission_elem.text.strip()
-                    
-                    # Ищем sheet_name для извлечения номера тиража
-                    sheet_name_elem = root.find('.//sheet_name')
-                    sheet_name = sheet_name_elem.text if sheet_name_elem is not None else ""
-                    
-                    # Извлекаем номер из sheet_name (например "I-55876" -> "55876")
-                    sheet_number = ""
-                    if sheet_name:
-                        # Ищем паттерн "буква-цифры" в sheet_name
-                        import re
-                        match = re.search(r'[A-Za-zА-Яа-я]-?(\d+)', sheet_name)
-                        if match:
-                            sheet_number = match.group(1)
-                    
-                    # Парсим данные из объектов
-                    for obj_elem in root.findall('.//object'):
-                        detail_name_elem = obj_elem.find('detail_name')
-                        detail_num_elem = obj_elem.find('detail_num')
-                        gtin_elem = obj_elem.find('GTIN')
-                        stream_elem = obj_elem.find('stream')
+                    # Преобразуем в старый формат
+                    for product in parsed_result.get('products', []):
+                        product_dict = {
+                            'name': product.get('full_name', product.get('product_name', '')),
+                            'detail_num': product.get('detail_number', ''),
+                            'sheet_number': parsed_result.get('sheet_number', ''),
+                            'customer': parsed_result.get('customer', ''),
+                            'winding_scheme': parsed_result.get('operations', {}).get('winding_scheme', ''),
+                            'sleeve_diameter': parsed_result.get('operations', {}).get('sleeve_diameter', ''),
+                            'date_emission': product.get('date_emission', ''),
+                            'manufacturer': "",
+                            'gtin': product.get('gtin', ''),
+                            'tirazh': product.get('quantity', ''),
+                            'stream': '1'
+                        }
                         
-                        # Извлекаем detail_num
-                        detail_num = ""
-                        if detail_num_elem is not None and detail_num_elem.text:
-                            detail_num = detail_num_elem.text.strip()
-                        
-                        name = ""
-                        if detail_name_elem is not None and detail_name_elem.text:
-                            name = detail_name_elem.text.strip()
-                        
-                        # Объединяем detail_name и сокращенный GTIN
-                        if name and gtin_elem is not None and gtin_elem.text:
-                            gtin = gtin_elem.text.strip()
-                            if gtin and len(gtin) >= 4:
-                                # Берем последние 4 цифры GTIN и добавляем префикс "джит"
-                                short_gtin = gtin[-4:]
-                                name = f"{name} джит{short_gtin}"
-                        
-                        if name:  # Если есть название
-                            product_dict = {
-                                'name': name,
-                                'detail_num': detail_num,
-                                'sheet_number': sheet_number,  # номер тиража
-                                'customer': customer,
-                                'winding_scheme': winding_scheme,
-                                'sleeve_diameter': sleeve_diameter,
-                                'date_emission': date_emission,
-                                'manufacturer': "",
-                                'gtin': gtin if gtin_elem is not None and gtin_elem.text else '',
-                                'tirazh': '',
-                                'stream': stream_elem.text.strip() if stream_elem is not None and stream_elem.text else '1'
-                            }
+                        if not any(item['name'] == product_dict['name'] and 
+                                  item['detail_num'] == product_dict['detail_num'] 
+                                  for item in product_data):
+                            product_data.append(product_dict)
                             
-                            # Добавляем дополнительные данные из object
-                            tirazh_elem = obj_elem.find('tirazh_product')
-                            if tirazh_elem is not None and tirazh_elem.text:
-                                product_dict['tirazh'] = tirazh_elem.text.strip()
-                            
-                            # Добавляем только если такого названия еще нет
-                            if not any(item['name'] == name and item['detail_num'] == detail_num for item in product_data):
-                                product_data.append(product_dict)
-                                
                 except Exception as e:
                     print(f"Ошибка парсинга файла {filename}: {e}")
                     continue
 
         return product_data
-    
-    def _is_attributes_format(self, root):
-        """Проверяет, является ли XML форматом с данными в атрибутах (5208.xml)"""
-        try:
-            # Проверяем наличие характерных атрибутов формата 5208
-            if root.tag.endswith('Report'):
-                attributes = root.attrib
-                if 'Textbox1' in attributes and 'Textbox5' in attributes:
-                    return True
-        except:
-            pass
-        return False
-
-    def _parse_attributes_xml_format(self, root):
-        """Парсит XML формат с данными в атрибутах корневого элемента (5208.xml)"""
-        try:
-            attributes = root.attrib
-            
-            # Извлекаем данные из атрибутов
-            product_name = attributes.get('Textbox5', '').strip()  # название продукции
-            customer = attributes.get('Textbox1', '').strip()      # заказчик
-            winding_scheme = attributes.get('заказчик14', '').strip()  # схема намотки
-            sleeve_diameter = attributes.get('заказчик13', '').strip().replace(' мм', '')  # диаметр втулки
-            tirazh = attributes.get('заказчик20', '').strip()      # тираж
-            
-            # Если нет названия продукции - файл бесполезен
-            if not product_name:
-                return None
-                
-            # Формируем структуру данных как в обычном парсере
-            product_dict = {
-                'name': product_name,
-                'detail_num': "",  # в этом формате нет артикула
-                'customer': customer,
-                'winding_scheme': winding_scheme,
-                'sleeve_diameter': sleeve_diameter,
-                'manufacturer': "",
-                'gtin': '',
-                'tirazh': tirazh
-            }
-            
-            return product_dict
-            
-        except Exception as e:
-            print(f"Ошибка парсинга атрибутного формата XML: {e}")
-            return None
 
     def get_product_name(self):
         """Получает данные продукта из XML файлов с поддержкой поиска по detail_num и номеру тиража"""
@@ -581,7 +462,7 @@ class OrderDataProcessor:
             self.parse_status.config(text="Введите номер заказа", foreground="red")
             return
 
-        # Получаем данные продуктов (словари)
+        # Получаем данные продуктов (словари) - ТЕПЕРЬ ИСПОЛЬЗУЕТ НОВЫЙ ПАРСЕР
         self.parsed_data = self.parse_xml_for_product_names(order_num)
         
         if not self.parsed_data:
@@ -589,27 +470,14 @@ class OrderDataProcessor:
             return
             
         # Ищем конкретный вид или тираж
-        search_digits = self.detail_num_search.get().strip()            
-            
-        if self.parsed_data:
-            if search_digits:  # Если ищем по тиражу (sheet_number)
-                # Фильтруем только виды этого тиража
-                filtered_data = [
-                    item for item in self.parsed_data 
-                    if search_digits in item.get('sheet_number', '')
-                ]
-                self.parsed_names_list = [item['name'] for item in filtered_data]
-            else:
-                # Иначе берем все виды заказа
-                self.parsed_names_list = [item['name'] for item in self.parsed_data]
+        search_digits = self.detail_num_search.get().strip()
         
+        # ФИКС: нужно правильно обработать parsed_data после использования нового парсера
         if search_digits:
             found_products = []
             found_by = ""  # Для отображения по чему нашли
             
-            # Ищем продукты по двум критериям:
-            # 1. По detail_num (конкретный вид) - "Инд-044833"
-            # 2. По sheet_number (весь тираж) - "55876" из "I-55876"
+            # Ищем продукты по detail_num и sheet_number
             for product in self.parsed_data:
                 detail_num = product.get('detail_num', '')
                 sheet_number = product.get('sheet_number', '')
@@ -623,7 +491,7 @@ class OrderDataProcessor:
                         found_by = f"тираж I-{sheet_number}"
             
             if found_products:
-                
+                # Сохраняем отфильтрованные данные
                 self.filtered_parsed_data = found_products
                 self.parsed_names_list = [item['name'] for item in found_products]
                 
@@ -637,17 +505,23 @@ class OrderDataProcessor:
                     # Если несколько - показываем выбор
                     names_list = [item['name'] for item in found_products]
                     self.name_combobox['values'] = names_list
-                    self.parse_status.config(text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", foreground="orange")
+                    self.parse_status.config(
+                        text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", 
+                        foreground="orange"
+                    )
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
-                self.parse_status.config(text=f"Выберите название из списка. Всего: {len(names_list)} видов", foreground="orange")
+                self.parse_status.config(
+                    text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
+                    foreground="orange"
+                )
                 self.filtered_parsed_data = self.parsed_data
         
         else:
-            # Если поиск по коду не выполняется - старая логика
+            # Если поиск по коду не выполняется
             if len(self.parsed_data) == 1:
                 # Если данные одни - сразу отправляем
                 selected_data = self.parsed_data[0]
@@ -658,7 +532,10 @@ class OrderDataProcessor:
                 # Если несколько - показываем выбор
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
-                self.parse_status.config(text=f"Выберите название из списка. Всего: {len(names_list)} видов", foreground="orange")
+                self.parse_status.config(
+                    text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
+                    foreground="orange"
+                )
             
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""
@@ -683,23 +560,7 @@ class OrderDataProcessor:
             try:
                 # Заполняем название продукции (основное поле)
                 self.roll_module.product_text.delete("1.0", tk.END)
-                self.roll_module.product_text.insert("1.0", product_data['name'])
-                
-                # Заполняем заказчика
-                if product_data.get('customer'):
-                    self.roll_module.customer_var.set(product_data['customer'])
-                
-                # Заполняем схему намотки
-                if product_data.get('winding_scheme'):
-                    self.roll_module.winding_scheme_var.set(product_data['winding_scheme'])
-                
-                # Заполняем диаметр втулки
-                if product_data.get('sleeve_diameter'):
-                    self.roll_module.sleeve_diameter_var.set(product_data['sleeve_diameter'])
-                    
-                # Заполняем дату эмиссии
-                if product_data.get('date_emission') and hasattr(self.roll_module, 'date_emission_var'):
-                    self.roll_module.date_emission_var.set(product_data['date_emission'])
+                self.roll_module.product_text.insert("1.0", product_data['name'])              
                 
                 # Автоматически очищаем Excel данные при смене продукции
                 self.auto_clear_excel_data()
