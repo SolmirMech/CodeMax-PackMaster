@@ -254,7 +254,6 @@ class ExcelPreviewModule:
         try:
             import time
             import win32gui
-            import win32api
             from PIL import ImageGrab
             
             time.sleep(0.3)
@@ -269,16 +268,25 @@ class ExcelPreviewModule:
                 print("Окно Excel не найдено")
                 return None
             
+            # Получаем активный лист
+            ws = excel.ActiveSheet
+            
             # Восстанавливаем окно
             excel.WindowState = -4137  # xlNormal
             time.sleep(0.3)
             
-            # Рассчитываем координаты скриншота
-            screenshot_coords = self._calculate_screenshot_coordinates(excel_hwnd)
-            if not screenshot_coords:
-                return None
+            # ★★★★ НОВЫЙ СПОСОБ: получаем границы области печати ★★★★
+            print_area_bounds = self._get_print_area_pixel_bounds(excel, ws, excel_hwnd)
             
-            table_left, table_top, table_right, table_bottom = screenshot_coords
+            if print_area_bounds:
+                table_left, table_top, table_right, table_bottom = print_area_bounds
+                print(f"Границы области печати: {table_left},{table_top}-{table_right},{table_bottom}")
+            else:
+                # Fallback: старый метод
+                print_area_bounds = self._calculate_screenshot_coordinates(excel_hwnd)
+                if not print_area_bounds:
+                    return None
+                table_left, table_top, table_right, table_bottom = print_area_bounds
             
             # Делаем скриншот
             screenshot = ImageGrab.grab(bbox=(
@@ -293,6 +301,7 @@ class ExcelPreviewModule:
             return screenshot
             
         except Exception as e:
+            print(f"Ошибка захвата скриншота: {e}")
             return None
 
     def _calculate_screenshot_coordinates(self, excel_hwnd):
@@ -354,6 +363,87 @@ class ExcelPreviewModule:
             
         except Exception as e:
             print(f"Ошибка закрытия Excel: {e}")
+            
+    def _get_print_area_pixel_bounds(self, excel, worksheet, excel_hwnd):
+        """Возвращает границы области печати в пикселях экрана"""
+        try:
+            import win32com.client
+            import win32gui
+            import win32print
+            import win32con
+            
+            # Получаем область печати
+            print_area_str = worksheet.PageSetup.PrintArea
+            if not print_area_str:
+                print_area = worksheet.Range("A1:I45")
+            else:
+                print_area = worksheet.Range(print_area_str)
+            
+            # Получаем DPI экрана
+            hdc = win32gui.GetDC(0)
+            dpi_x = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSX)  # DPI по горизонтали
+            dpi_y = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSY)  # DPI по вертикали
+            win32gui.ReleaseDC(0, hdc)
+            
+            # Конвертируем точки в пиксели
+            # В Excel: 1 point = 1/72 дюйма
+            # Пиксели = (points / 72) * DPI
+            
+            left_points = print_area.Left
+            top_points = print_area.Top
+            width_points = print_area.Width
+            height_points = print_area.Height
+            
+            # Конвертация
+            left_px = int((left_points / 72) * dpi_x)
+            top_px = int((top_points / 72) * dpi_y)
+            width_px = int((width_points / 72) * dpi_x)
+            height_px = int((height_points / 72) * dpi_y)
+            
+            print(f"Points: L={left_points}, T={top_points}, W={width_points}, H={height_points}")
+            print(f"Pixels: L={left_px}, T={top_px}, W={width_px}, H={height_px}")
+            print(f"DPI: X={dpi_x}, Y={dpi_y}")
+            
+            # Получаем положение окна Excel
+            screen_rect = win32gui.GetWindowRect(excel_hwnd)
+            client_rect = win32gui.GetClientRect(excel_hwnd)
+            
+            # Рассчитываем рамки
+            frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
+            title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
+            
+            # Получаем отступ из настроек
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            preview_settings = settings.get("preview_settings", {})
+            top_offset = preview_settings.get("top_offset", 160)
+            
+            # Рассчитываем абсолютные координаты на экране
+            # Сейчас координаты relative to client area
+            # Нужно добавить сдвиг ленты Excel (около 150px)
+            excel_ribbon_height = 150  # Приблизительная высота ленты Excel
+            
+            table_left = screen_rect[0] + frame_width + left_px
+            table_top = screen_rect[1] + title_height + top_offset + top_px + excel_ribbon_height
+            table_right = table_left + width_px
+            table_bottom = table_top + height_px
+            
+            # Добавляем небольшой отступ
+            padding = 5
+            table_left = max(0, table_left - padding)
+            table_top = max(0, table_top - padding)
+            table_right = table_right + padding
+            table_bottom = table_bottom + padding
+            
+            print(f"Final bounds: {table_left},{table_top}-{table_right},{table_bottom}")
+            print(f"Size: {table_right-table_left}x{table_bottom-table_top}")
+            
+            return (table_left, table_top, table_right, table_bottom)
+            
+        except Exception as e:
+            print(f"Ошибка расчета границ области печати: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
             
     def _save_preview_settings(self):
         """Сохраняет настройки предпросмотра в shared_utils.json"""
@@ -453,7 +543,7 @@ class ExcelPreviewModule:
         self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
         
         # ======== Размеры ========
-        window_width = 650
+        window_width = 670
         window_height = 900
         
         # Центрирование окна на экране
