@@ -138,10 +138,40 @@ class ExcelPreviewModule:
             from PIL import ImageGrab
             import time
             import win32gui
+            import win32api
             
             pythoncom.CoInitialize()
             
-            # 1. Открываем Excel видимым
+            # Основной процесс
+            excel = self._open_excel_for_preview(excel_path, sheet_name)
+            if not excel:
+                return None
+                
+            screenshot = self._capture_excel_screenshot(excel, sheet_name)
+            
+            # Закрываем Excel
+            self._close_excel(excel)
+            pythoncom.CoUninitialize()
+            
+            return screenshot
+                
+        except Exception as e:
+            print(f"Ошибка скриншота: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            try:
+                pythoncom.CoUninitialize()
+            except:
+                pass
+                
+            return None
+
+    def _open_excel_for_preview(self, excel_path, sheet_name):
+        """Открывает Excel и подготавливает лист"""
+        try:
+            import win32com.client         
+            
             excel = win32com.client.DispatchEx("Excel.Application")
             excel.Visible = True
             excel.DisplayAlerts = False
@@ -153,10 +183,27 @@ class ExcelPreviewModule:
             except:
                 ws = wb.Sheets(1)
             
-            ws.Activate()         
+            ws.Activate()
             
-            # 2. Используем заданную область печати
-            print_area = ws.Range(ws.PageSetup.PrintArea)
+            # Настраиваем область печати
+            self._setup_print_area(excel, ws)
+            
+            return excel
+            
+        except Exception as e:
+            print(f"Ошибка открытия Excel: {e}")
+            return None
+
+    def _setup_print_area(self, excel, worksheet):
+        """Настраивает область печати и зум"""
+        try:
+            print_area_str = worksheet.PageSetup.PrintArea
+            
+            if not print_area_str:
+                print("ВНИМАНИЕ: PrintArea пустая! Ставим по умолчанию")
+                print_area = worksheet.Range("A1:I45")
+            else:
+                print_area = worksheet.Range(print_area_str)         
             
             # Прокручиваем к началу области
             excel.ActiveWindow.ScrollRow = print_area.Row
@@ -165,102 +212,148 @@ class ExcelPreviewModule:
             # Выделяем область
             print_area.Select()
             
-            excel.ActiveWindow.Zoom = 90
+            # Настраиваем зум
+            self._set_excel_zoom(excel)
             
-            # 3. Минимальное время для отрисовки
-            time.sleep(0.3)  # Только 300 мс!
-            
-            # 4. Свернуть окно excel сразу после настройки
-            excel.WindowState = -4140  # xlMinimized
-            
-            # 5. Получаем HWND свернутого окна
-            excel_hwnd = None
-            excel_windows = []
-            
-            def find_excel_window(hwnd, results):
-                if win32gui.IsWindowVisible(hwnd):
-                    title = win32gui.GetWindowText(hwnd)
-                    if title and ('Excel' in title or '.xlsx' in title):
-                        results.append(hwnd)
-                return True
-            
-            # Даем время на сворачивание
-            time.sleep(0.2)
-            win32gui.EnumWindows(find_excel_window, excel_windows)
-            
-            if excel_windows:
-                excel_hwnd = excel_windows[0]
-                
-                # 6. Восстанавливаем окно на мгновение
-                # Сохраняем текущее положение
-                rect = win32gui.GetWindowRect(excel_hwnd)
-                # Восстанавливаем
-                excel.WindowState = -4137  # xlNormal
-                
-                # 7. Быстрый скриншот
-                time.sleep(0.2)  # Минимум для отрисовки
-                
-                # Пересчитываем координаты
-                screen_rect = win32gui.GetWindowRect(excel_hwnd)
-                client_rect = win32gui.GetClientRect(excel_hwnd)
-                
-                # Рассчитываем ширину рамок окна
-                frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
-                
-                # Рассчитываем высоту заголовка и ленты Excel
-                title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width               
-                
-                # Получаем настраиваемый отступ из shared_utils
-                settings = self.config_manager.load_json_settings("shared_utils.json")
-                preview_settings = settings.get("preview_settings", {})
-                top_offset = preview_settings.get("top_offset", 160)
-                
-                # Делаем скриншот области таблицы
-                table_top = screen_rect[1] + title_height + top_offset
-                table_bottom = table_top + 870
-                table_left = screen_rect[0] + frame_width + 20
-                table_right = table_left + 565
+        except Exception as e:
+            print(f"Ошибка настройки области печати: {e}")
 
-                screenshot = ImageGrab.grab(bbox=(
-                    table_left,
-                    table_top,
-                    table_right,
-                    table_bottom
-                ))
-                
-                # 8. Сразу же снова сворачиваем
-                excel.WindowState = -4140
-                
-            else:
-                # Fallback: если не нашли окно
-                wb.Close(SaveChanges=False)
-                excel.Quit()
-                pythoncom.CoUninitialize()
+    def _set_excel_zoom(self, excel):
+        """Устанавливает зум для Excel"""
+        try:
+            import win32api
+            
+            # Получаем высоту экрана
+            screen_height = win32api.GetSystemMetrics(1)
+            
+            # Загружаем настройки
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            preview_settings = settings.get("preview_settings", {})
+            
+            # Если зум не задан в настройках - подбираем автоматически по высоте экрана
+            zoom_level = preview_settings.get("zoom_level")
+            if zoom_level is None:
+                # Автоматический подбор
+                if screen_height >= 1080:
+                    zoom_level = 90
+                elif screen_height >= 900:
+                    zoom_level = 80
+                elif screen_height >= 768:
+                    zoom_level = 70
+                else:
+                    zoom_level = 60
+            
+            # Устанавливаем зум
+            excel.ActiveWindow.Zoom = zoom_level
+            
+        except Exception as e:
+            excel.ActiveWindow.Zoom = 90  # fallback
+
+    def _capture_excel_screenshot(self, excel, sheet_name):
+        """Делает скриншот окна Excel"""
+        try:
+            import time
+            import win32gui
+            import win32api
+            from PIL import ImageGrab
+            
+            time.sleep(0.3)
+            
+            # Сворачиваем Excel для получения HWND
+            excel.WindowState = -4140  # xlMinimized
+            time.sleep(0.1)
+            
+            # Получаем HWND
+            excel_hwnd = excel.Hwnd
+            if not excel_hwnd or not win32gui.IsWindow(excel_hwnd):
+                print("Окно Excel не найдено")
                 return None
             
-            # 9. Закрываем Excel
-            wb.Close(SaveChanges=False)
-            excel.Quit()
-            pythoncom.CoUninitialize()
-
+            # Восстанавливаем окно
+            excel.WindowState = -4137  # xlNormal
+            time.sleep(0.3)
+            
+            # Рассчитываем координаты скриншота
+            screenshot_coords = self._calculate_screenshot_coordinates(excel_hwnd)
+            if not screenshot_coords:
+                return None
+            
+            table_left, table_top, table_right, table_bottom = screenshot_coords
+            
+            # Делаем скриншот
+            screenshot = ImageGrab.grab(bbox=(
+                max(0, table_left),
+                max(0, table_top),
+                table_right,
+                table_bottom
+            ))
+            
+            print(f"Скриншот создан, размер: {screenshot.size}")
+            
             return screenshot
-                
+            
         except Exception as e:
-            print(f"Ошибка скриншота: {e}")
-            import traceback
-            traceback.print_exc()
+            return None
+
+    def _calculate_screenshot_coordinates(self, excel_hwnd):
+        """Рассчитывает координаты для скриншота"""
+        try:
+            import win32gui
+            import win32api
             
-            try:
-                excel.Quit()
-            except:
-                pass
+            # Получаем размеры экрана
+            screen_width = win32api.GetSystemMetrics(0)
+            screen_height = win32api.GetSystemMetrics(1)
             
+            # Получаем размеры окна Excel
+            screen_rect = win32gui.GetWindowRect(excel_hwnd)
+            client_rect = win32gui.GetClientRect(excel_hwnd)
+            
+            # Рассчитываем ширину рамок окна
+            frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
+            
+            # Рассчитываем высоту заголовка и ленты Excel
+            title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
+            
+            # Получаем настраиваемый отступ из настроек
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            preview_settings = settings.get("preview_settings", {})
+            top_offset = preview_settings.get("top_offset", 160)
+            
+            # Рассчитываем координаты
+            table_left = screen_rect[0] + frame_width + 20
+            table_top = screen_rect[1] + title_height + top_offset
+            table_right = table_left + 565  # фиксированная ширина
+            
+            # Высота скриншота адаптируется под экран
+            available_height = screen_height - table_top - 50
+            table_bottom = table_top + min(1200, available_height)
+            
+            # Корректируем границы
+            table_right = min(screen_width, table_right)
+            table_bottom = min(screen_height, table_bottom)
+                        
+            return (table_left, table_top, table_right, table_bottom)
+            
+        except Exception as e:
+            return None
+
+    def _close_excel(self, excel):
+        """Закрывает Excel"""
+        try:
+            # Сворачиваем перед закрытием
+            excel.WindowState = -4140
+            
+            # Закрываем книгу без сохранения
             try:
-                pythoncom.CoUninitialize()
+                excel.Workbooks(1).Close(SaveChanges=False)
             except:
                 pass
                 
-            return None
+            excel.Quit()
+            
+        except Exception as e:
+            print(f"Ошибка закрытия Excel: {e}")
             
     def _save_preview_settings(self):
         """Сохраняет настройки предпросмотра в shared_utils.json"""
@@ -274,13 +367,14 @@ class ExcelPreviewModule:
             
             # Сохраняем отступ
             settings["preview_settings"]["top_offset"] = self.top_offset_var.get()
+            settings["preview_settings"]["zoom_level"] = self.zoom_var.get()
             
             # Сохраняем обратно в shared_utils
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
             
             if success:
                 self.status_label.config(
-                    text="✓ Отступ сохранен", 
+                    text="✓ Настройки сохранены", 
                     foreground="green"
                 )
                 # Возвращаем исходный статус через 2 секунды
@@ -359,7 +453,7 @@ class ExcelPreviewModule:
         self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
         
         # ======== Размеры ========
-        window_width = 800
+        window_width = 650
         window_height = 900
         
         # Центрирование окна на экране
@@ -464,10 +558,18 @@ class ExcelPreviewModule:
             textvariable=self.copies_var,
             width=5
         )
-        copies_spinbox.grid(row=0, column=3, padx=(0, 10), sticky='w')
+        copies_spinbox.grid(row=0, column=3, padx=5, sticky='w')
         
-        ttk.Label(control_frame, text="Отступ").grid(row=0, column=4, padx=(0, 5), sticky='w')
-        # Загружаем сохраненное значение из shared_utils
+        btn_archive = ttk.Button(
+            control_frame,
+            text="⏳ В архив",
+            command=self.archive_current_sheet,
+            width=10
+        )
+        btn_archive.grid(row=1, column=2, columnspan=2, padx=5, sticky='w')        
+        
+        # Отступ и зум
+        ttk.Label(control_frame, text="Отступ").grid(row=0, column=4, padx=(0, 5), sticky='w')       
         settings = self.config_manager.load_json_settings("shared_utils.json")
         preview_settings = settings.get("preview_settings", {})
         default_offset = preview_settings.get("top_offset", 160)
@@ -479,25 +581,26 @@ class ExcelPreviewModule:
             textvariable=self.top_offset_var,
             width=5
         )
-        top_offset_entry.grid(row=0, column=5, padx=(0, 10), sticky='w')
+        top_offset_entry.grid(row=0, column=5, sticky='w')
         
         # Привязываем изменение
         top_offset_entry.bind("<FocusOut>", lambda e: self._save_preview_settings())
         
-        btn_archive = ttk.Button(
+        default_zoom = preview_settings.get("zoom_level", 90)  # По умолчанию 90%
+        self.zoom_var = tk.IntVar(value=default_zoom)
+        
+        ttk.Label(control_frame, text="Зум (%)").grid(row=1, column=4, padx=(0, 5), sticky='w')
+        zoom_entry = ttk.Entry(
             control_frame,
-            text="⏳ В архив",
-            command=self.archive_current_sheet,
-            width=10
+            textvariable=self.zoom_var,
+            width=5
         )
-        btn_archive.grid(row=0, column=6, padx=(10, 10), sticky='w')        
+        zoom_entry.grid(row=1, column=5, sticky='w')
+        zoom_entry.bind("<FocusOut>", lambda e: self._save_preview_settings())        
         
         # Метка статуса
         self.status_label = ttk.Label(control_frame, text="", foreground="blue")
-        self.status_label.grid(row=1, column=2, padx=(10, 10), sticky='w', columnspan=4)
-        
-        # Настроить веса колонок для правильного растяжения
-        control_frame.columnconfigure(3, weight=1)  # Статус растягивается
+        self.status_label.grid(row=2, column=0, padx=10, sticky='w')      
         
         # Обработка закрытия окна
         self.preview_window.protocol("WM_DELETE_WINDOW", self.on_close_preview)

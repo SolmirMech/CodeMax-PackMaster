@@ -462,7 +462,7 @@ class OrderDataProcessor:
             self.parse_status.config(text="Введите номер заказа", foreground="red")
             return
 
-        # Получаем данные продуктов (словари) - ТЕПЕРЬ ИСПОЛЬЗУЕТ НОВЫЙ ПАРСЕР
+        # Получаем данные продуктов (словари)
         self.parsed_data = self.parse_xml_for_product_names(order_num)
         
         if not self.parsed_data:
