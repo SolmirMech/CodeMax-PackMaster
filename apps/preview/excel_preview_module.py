@@ -50,13 +50,14 @@ class ExcelPreviewModule:
                 return "Поддон"
             
     def _get_system_printers(self):
-        """Получает список системных принтеров"""
         try:
             import win32print
             printers = win32print.EnumPrinters(2)
-            return [p[2] for p in printers]
+            printer_names = [p[2] for p in printers]         
+            
+            return printer_names
         except Exception as e:
-            print(f"Ошибка получения принтеров: {e}")
+            print(f"[ERROR] Ошибка получения принтеров: {e}")
             return []
     
     def _get_excel_path(self):
@@ -200,7 +201,6 @@ class ExcelPreviewModule:
             print_area_str = worksheet.PageSetup.PrintArea
             
             if not print_area_str:
-                print("ВНИМАНИЕ: PrintArea пустая! Ставим по умолчанию")
                 print_area = worksheet.Range("A1:I45")
             else:
                 print_area = worksheet.Range(print_area_str)         
@@ -275,12 +275,11 @@ class ExcelPreviewModule:
             excel.WindowState = -4137  # xlNormal
             time.sleep(0.3)
             
-            # ★★★★ НОВЫЙ СПОСОБ: получаем границы области печати ★★★★
+            # Получаем границы области печати
             print_area_bounds = self._get_print_area_pixel_bounds(excel, ws, excel_hwnd)
             
             if print_area_bounds:
                 table_left, table_top, table_right, table_bottom = print_area_bounds
-                print(f"Границы области печати: {table_left},{table_top}-{table_right},{table_bottom}")
             else:
                 # Fallback: старый метод
                 print_area_bounds = self._calculate_screenshot_coordinates(excel_hwnd)
@@ -294,9 +293,7 @@ class ExcelPreviewModule:
                 max(0, table_top),
                 table_right,
                 table_bottom
-            ))
-            
-            print(f"Скриншот создан, размер: {screenshot.size}")
+            ))         
             
             return screenshot
             
@@ -398,11 +395,7 @@ class ExcelPreviewModule:
             left_px = int((left_points / 72) * dpi_x)
             top_px = int((top_points / 72) * dpi_y)
             width_px = int((width_points / 72) * dpi_x)
-            height_px = int((height_points / 72) * dpi_y)
-            
-            print(f"Points: L={left_points}, T={top_points}, W={width_points}, H={height_points}")
-            print(f"Pixels: L={left_px}, T={top_px}, W={width_px}, H={height_px}")
-            print(f"DPI: X={dpi_x}, Y={dpi_y}")
+            height_px = int((height_points / 72) * dpi_y)         
             
             # Получаем положение окна Excel
             screen_rect = win32gui.GetWindowRect(excel_hwnd)
@@ -432,10 +425,7 @@ class ExcelPreviewModule:
             table_left = max(0, table_left - padding)
             table_top = max(0, table_top - padding)
             table_right = table_right + padding
-            table_bottom = table_bottom + padding
-            
-            print(f"Final bounds: {table_left},{table_top}-{table_right},{table_bottom}")
-            print(f"Size: {table_right-table_left}x{table_bottom-table_top}")
+            table_bottom = table_bottom + padding        
             
             return (table_left, table_top, table_right, table_bottom)
             
@@ -590,7 +580,7 @@ class ExcelPreviewModule:
         # Загружаем сохраненные настройки принтеров
         saved_printers = self.config_manager.get_preview_printers()
         self.printer1_var.set(saved_printers.get("printer1", ""))
-        self.printer2_var.set(saved_printers.get("printer2", ""))
+        self.printer2_var.set(saved_printers.get("printer2", ""))      
         
         # Получаем список системных принтеров
         system_printers = self._get_system_printers()
@@ -690,7 +680,7 @@ class ExcelPreviewModule:
         
         # Метка статуса
         self.status_label = ttk.Label(control_frame, text="", foreground="blue")
-        self.status_label.grid(row=2, column=0, padx=10, sticky='w')      
+        self.status_label.grid(row=2, column=0, columnspan=6, padx=10, sticky='w')      
         
         # Обработка закрытия окна
         self.preview_window.protocol("WM_DELETE_WINDOW", self.on_close_preview)
@@ -762,13 +752,7 @@ class ExcelPreviewModule:
         try:
             printer1 = self.printer1_var.get().strip()
             printer2 = self.printer2_var.get().strip()
-            
-            # Проверяем, не пустые ли строки
-            if printer1 == "":
-                printer1 = None
-            if printer2 == "":
-                printer2 = None
-            
+                     
             # Сохраняем через ConfigManager
             success = self.config_manager.save_preview_printers(printer1, printer2)
             
@@ -808,12 +792,11 @@ class ExcelPreviewModule:
                 )
     
     def _on_print_clicked(self):
-        """Обработчик клика по кнопке печати"""
-        printer1 = self.printer1_var.get().strip()
-        printer2 = self.printer2_var.get().strip()
+        printer1 = self.printer1_var.get().strip()  # "" останется ""
+        printer2 = self.printer2_var.get().strip()  # "" останется ""
         copies = self.copies_var.get()
         
-        # Проверка: хотя бы один принтер должен быть выбран
+        # Проверка: хотя бы один принтер должен быть выбран (не пустая строка)
         if not printer1 and not printer2:
             self.status_label.config(
                 text="Выберите хотя бы один принтер", 
@@ -821,40 +804,28 @@ class ExcelPreviewModule:
             )
             return
             
-        # Проверка существования файла
-        if not self.excel_path or not os.path.exists(self.excel_path):
-            self.status_label.config(
-                text="Файл Excel не найден", 
-                foreground="red"
-            )
-            return
-            
-        # Запускаем печать в отдельном потоке
+        # Запускаем печать
         self._start_printing(printer1, printer2, copies)
         
     def _format_printer_for_excel(self, printer_name, excel_app=None):
-        """Преобразует имя принтера в формат, который понимает Excel"""
         if not printer_name:
-            return ""
+            return ""     
         
         # Если передан экземпляр Excel, берем порт из его ActivePrinter
         if excel_app:
             try:
                 current = excel_app.ActivePrinter
-                print(f"Текущий ActivePrinter для парсинга: '{current}'")
                 
                 # Парсим: "Xprinter XP-420B (Ne00:)"
-                # Находим последнюю открывающую скобку
                 bracket_pos = current.rfind(" (")
                 if bracket_pos != -1:
-                    # Извлекаем все после скобки до конца
                     port_part = current[bracket_pos:]  # " (Ne00:)"
-                    return f"{printer_name}{port_part}"
+                    result = f"{printer_name}{port_part}"
+                    return result
             except Exception as e:
-                print(f"Ошибка парсинга ActivePrinter: {e}")
+                print(f"  Error parsing ActivePrinter: {e}")
         
-        # Запасной вариант
-        return f"{printer_name} (Ne00:)"
+        return printer_name  # Запасной вариант
     
     def _start_printing(self, printer1, printer2, copies):
         """Запускает процесс печати"""
@@ -891,9 +862,7 @@ class ExcelPreviewModule:
             excel = win32com.client.DispatchEx("Excel.Application")
             excel.Visible = False
             excel.DisplayAlerts = False
-            excel.ScreenUpdating = False
-            
-            print(f"ActivePrinter до: {excel.ActivePrinter}")
+            excel.ScreenUpdating = False          
             
             wb = excel.Workbooks.Open(self.excel_path)
             
@@ -914,7 +883,7 @@ class ExcelPreviewModule:
                 self.preview_window.after(0, lambda: self.status_label.config(
                     text=f"Печать на {printer1[:20]}...", 
                     foreground="blue"
-                ))
+                ))             
                 
                 excel_printer1 = self._format_printer_for_excel(printer1, excel)
                 

@@ -28,16 +28,34 @@ class ConfigManager:
     def get_preview_printers(self):
         """Возвращает сохраненные принтеры для предпросмотра Excel"""
         settings = self.load_json_settings("print_settings.json")
-        return settings.get("preview_printers", {"printer1": "", "printer2": ""})
+        printers = settings.get("preview_printers", {"printer1": "", "printer2": ""})
+        
+        # Гарантируем что возвращаем строки, а не None
+        return {
+            "printer1": printers.get("printer1") or "",  # None → ""
+            "printer2": printers.get("printer2") or ""   # None → ""
+        }
 
     def save_preview_printers(self, printer1, printer2):
-        """Сохраняет выбранные принтеры для предпросмотра Excel"""
-        settings = self.load_json_settings("print_settings.json")
-        settings["preview_printers"] = {
-            "printer1": printer1,
-            "printer2": printer2
-        }
-        return self.save_json_settings("print_settings.json", settings)
+        """Сохраняет принтеры для предпросмотра"""
+        try:
+            # Нормализуем: None → ""
+            printer1 = printer1 or ""
+            printer2 = printer2 or ""
+            
+            settings = self.load_json_settings("print_settings.json")
+            
+            if "preview_printers" not in settings:
+                settings["preview_printers"] = {}
+                
+            settings["preview_printers"]["printer1"] = printer1
+            settings["preview_printers"]["printer2"] = printer2
+            
+            return self.save_json_settings("print_settings.json", settings)
+            
+        except Exception as e:
+            print(f"Ошибка сохранения принтеров: {e}")
+            return False
         
     def get_system_printers(self):
         """Возвращает список системных принтеров"""
