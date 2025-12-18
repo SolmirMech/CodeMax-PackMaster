@@ -133,6 +133,8 @@ class ExcelPreviewModule:
 
     def excel_to_image_simple(self, excel_path, sheet_name):
         """Скриншот области печати Excel"""
+        pythoncom_initialized = False
+        excel = None
         try:
             import win32com.client
             import pythoncom
@@ -142,6 +144,7 @@ class ExcelPreviewModule:
             import win32api
             
             pythoncom.CoInitialize()
+            pythoncom_initialized = True
             
             # Основной процесс
             excel = self._open_excel_for_preview(excel_path, sheet_name)
@@ -150,23 +153,30 @@ class ExcelPreviewModule:
                 
             screenshot = self._capture_excel_screenshot(excel, sheet_name)
             
-            # Закрываем Excel
-            self._close_excel(excel)
-            pythoncom.CoUninitialize()
-            
             return screenshot
                 
         except Exception as e:
             print(f"Ошибка скриншота: {e}")
             import traceback
             traceback.print_exc()
-            
-            try:
-                pythoncom.CoUninitialize()
-            except:
-                pass
-                
             return None
+            
+        finally:
+            # Гарантированное освобождение
+            if excel:
+                try:
+                    self._close_excel(excel)
+                except:
+                    pass
+            
+            # Принудительное завершение Excel процессов
+            self._kill_excel_processes()
+            
+            if pythoncom_initialized:
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
 
     def _open_excel_for_preview(self, excel_path, sheet_name):
         """Открывает Excel и подготавливает лист"""
@@ -345,21 +355,38 @@ class ExcelPreviewModule:
             return None
 
     def _close_excel(self, excel):
-        """Закрывает Excel"""
+        """Закрывает Excel и принудительно завершает процесс"""
+        import time
+        
         try:
-            # Сворачиваем перед закрытием
-            excel.WindowState = -4140
-            
-            # Закрываем книгу без сохранения
+            # Стандартное закрытие
             try:
-                excel.Workbooks(1).Close(SaveChanges=False)
+                excel.DisplayAlerts = False
+                excel.ScreenUpdating = False
+                
+                # Закрываем все книги
+                while excel.Workbooks.Count > 0:
+                    try:
+                        excel.Workbooks(1).Close(SaveChanges=False)
+                    except:
+                        break
+                
+                # Закрываем Excel
+                excel.Quit()
+                time.sleep(0.5)
+                
+            except Exception as e:
+                print(f"Ошибка при стандартном закрытии Excel: {e}")
+            
+        finally:
+            # Пытаемся удалить объект
+            try:
+                del excel
             except:
                 pass
-                
-            excel.Quit()
             
-        except Exception as e:
-            print(f"Ошибка закрытия Excel: {e}")
+            # Принудительное завершение процессов
+            self._kill_excel_processes()
             
     def _get_print_area_pixel_bounds(self, excel, worksheet, excel_hwnd):
         """Возвращает границы области печати в пикселях экрана"""
@@ -846,6 +873,10 @@ class ExcelPreviewModule:
         
     def _print_excel_area(self, printer1, printer2, copies):
         """Печатает область печати Excel файла на выбранные принтеры"""
+        pythoncom_initialized = False
+        excel = None
+        wb = None
+        
         try:
             self.preview_window.after(0, lambda: self.status_label.config(
                 text="Подготовка Excel...", 
@@ -855,15 +886,15 @@ class ExcelPreviewModule:
             import win32com.client
             import pythoncom
             import time
-            import win32print  # Для дебага           
             
             pythoncom.CoInitialize()
+            pythoncom_initialized = True
             
             excel = win32com.client.DispatchEx("Excel.Application")
             excel.Visible = False
             excel.DisplayAlerts = False
-            excel.ScreenUpdating = False          
-            
+            excel.ScreenUpdating = False
+                      
             wb = excel.Workbooks.Open(self.excel_path)
             
             try:
@@ -903,10 +934,6 @@ class ExcelPreviewModule:
                 excel.ActivePrinter = excel_printer2
                 ws.PrintOut(Copies=copies)
             
-            wb.Close(SaveChanges=False)
-            excel.Quit()
-            pythoncom.CoUninitialize()
-            
             self.preview_window.after(0, lambda: self.status_label.config(
                 text="✅ Печать завершена", 
                 foreground="green"
@@ -920,10 +947,65 @@ class ExcelPreviewModule:
                 foreground="red"
             ))
             
+        finally:
+            # Гарантированное закрытие
             try:
-                pythoncom.CoUninitialize()
+                if wb:
+                    wb.Close(SaveChanges=False)
             except:
                 pass
+            
+            try:
+                if excel:
+                    excel.Quit()
+            except:
+                pass
+            
+            # Явно удаляем объекты
+            try:
+                del wb
+            except:
+                pass
+                
+            try:
+                del excel
+            except:
+                pass
+            
+            # Гарантированное освобождение com
+            if pythoncom_initialized:
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
+                    
+    def _kill_excel_processes(self):
+        """Принудительно завершает процессы Excel"""
+        try:
+            import psutil
+            import os
+            
+            # Ищем процессы Excel
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if proc.info['name'] and 'excel.exe' in proc.info['name'].lower():
+                        # Если процесс запущен нашим пользователем
+                        if proc.username() == os.getlogin():
+                            proc.kill()
+                            print(f"Завершен процесс Excel (PID: {proc.info['pid']})")
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        except ImportError:
+            # Если psutil не установлен, используем taskkill
+            try:
+                import subprocess
+                subprocess.run(['taskkill', '/F', '/IM', 'excel.exe'], 
+                              capture_output=True, timeout=5)
+                print("Excel процессы завершены через taskkill")
+            except:
+                print("Не удалось завершить Excel процессы")
+        except Exception as e:
+            print(f"Ошибка при завершении Excel: {e}")                    
         
     def load_and_render_preview(self):
         """Загружает Excel и создает точный предпросмотр через win32com"""
