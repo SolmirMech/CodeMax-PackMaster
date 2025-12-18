@@ -54,12 +54,14 @@ class RollLabelPrinter:
         self.batch_num_var = StringVar(value="")  # № съёма
         self.roll_num_var = StringVar(value="")   # № ролика  
         self.streams_var = StringVar(value="")    # Кол-во ручьёв
+        self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
         
         self.create_ui()
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             self._update_cutter_visibility()
+            self.load_sleeve_weights()
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
         variables_to_track = [
             self.rolls_count_var,
@@ -238,79 +240,151 @@ class RollLabelPrinter:
         date_entry.grid(row=3, column=1, padx=(145, 0), pady=5, sticky="e")        
         
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
-            row=4, column=0, sticky="w", pady=5
+            row=4, column=0, sticky="w", pady=2
         )
         # Кол-во этикеток в одном ролике
         quantity_entry = ttk.Entry(data_frame, textvariable=self.quantity_var, width=15)
-        quantity_entry.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+        quantity_entry.grid(row=4, column=1, padx=5, pady=2, sticky="w")
         # Кол-во роликов
         rolls_entry = ttk.Entry(data_frame, textvariable=self.rolls_count_var, width=15)
-        rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=5, sticky="w")
+        rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=2, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
         
         # Схема намотки и Диаметр втулки
         ttk.Label(data_frame, text="Схема намотки:").grid(
-            row=5, column=0, sticky="w", pady=5
+            row=5, column=0, sticky="w", pady=3
         )
         winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
-        winding_entry.grid(row=5, column=0, padx=(180, 0), pady=5, sticky="w")
+        winding_entry.grid(row=5, column=0, padx=(180, 0), pady=3, sticky="w")
         
         ttk.Label(data_frame, text="Диаметр втулки, мм:").grid(
-            row=5, column=1, sticky="w", pady=5
+            row=5, column=1, sticky="w", pady=3
         )
         diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        diameter_entry.grid(row=5, column=1, padx=(210, 0), pady=5, sticky="w")
+        diameter_entry.grid(row=5, column=1, padx=(210, 0), pady=3, sticky="w")
         
         # Длина этикетки
         ttk.Label(data_frame, text="Длина этикетки, мм:").grid(
-            row=6, column=0, sticky="w", pady=5
+            row=6, column=0, sticky="w", pady=2
         )
         label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=6)
-        label_length_entry.grid(row=6, column=0, padx=(200, 0), pady=5, sticky="w")
+        label_length_entry.grid(row=6, column=0, padx=(200, 0), pady=2, sticky="w")
         
         # Длина ролика
         ttk.Label(data_frame, text="Длина ролика, м:").grid(
-            row=6, column=1, sticky="w", pady=5
+            row=6, column=1, sticky="w", pady=2
         )              
         roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=5, sticky="w")        
+        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=2, sticky="w")        
 
         # Вес рулона
         ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
-            row=7, column=0, sticky="w", pady=5
+            row=7, column=0, sticky="w", pady=3
         )
         gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
-        gross_entry.grid(row=7, column=1, padx=(5, 0), pady=5, sticky="w")
+        gross_entry.grid(row=7, column=1, padx=(5, 0), pady=3, sticky="w")
         
         # Вес втулки
         ttk.Label(data_frame, text="Вес втулки, г:").grid(
-            row=7, column=1, sticky="w", padx=(115, 0), pady=5
+            row=7, column=1, sticky="w", padx=(115, 0), pady=3
         )        
         sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=5, sticky="w")
+        sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=3, sticky="w")
         
         # Row 8: Поля для номеров съёмов и роликов       
         self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
-        self.streams_label.grid(row=8, column=0, sticky="w", pady=5)
+        self.streams_label.grid(row=8, column=0, sticky="w", pady=3)
         self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=6)
-        self.streams_entry.grid(row=8, column=0, padx=(160, 0), pady=5, sticky="w")
+        self.streams_entry.grid(row=8, column=0, padx=(160, 0), pady=3, sticky="w")
 
         self.batch_label = ttk.Label(data_frame, text="№ съёма:")
-        self.batch_label.grid(row=8, column=1, sticky="w", pady=5)
+        self.batch_label.grid(row=8, column=1, sticky="w", pady=3)
         self.batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
-        self.batch_entry.grid(row=8, column=1, padx=(110, 0), pady=5, sticky="w")
+        self.batch_entry.grid(row=8, column=1, padx=(110, 0), pady=3, sticky="w")
 
         self.roll_label = ttk.Label(data_frame, text="№ ролика:")
-        self.roll_label.grid(row=8, column=1, sticky="w", padx=(160, 0), pady=5)
+        self.roll_label.grid(row=8, column=1, sticky="w", padx=(160, 0), pady=3)
         self.roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=6)
-        self.roll_entry.grid(row=8, column=1, padx=(275, 0), pady=5, sticky="w")
+        self.roll_entry.grid(row=8, column=1, padx=(275, 0), pady=3, sticky="w")
+        
+        # Row 9: Ширина ручья
+        self.stream_width_label = ttk.Label(data_frame, text="Ширина ручья, мм:")
+        self.stream_width_label.grid(row=9, column=0, sticky="w", pady=2)
+        self.stream_width_entry = ttk.Entry(data_frame, textvariable=self.stream_width_var, width=8)
+        self.stream_width_entry.grid(row=9, column=0, padx=(200, 0), pady=2, sticky="w")
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
         self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
-        
+        self.stream_width_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
+        self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
+    
+    def load_sleeve_weights(self):
+        """Загружает данные о весе втулок из настроек"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            self.sleeve_weights = settings.get("sleeve_weights", {})
+            # Парсим ширины как числа для сравнения
+            self.parsed_sleeve_weights = {}
+            for diameter, widths in self.sleeve_weights.items():
+                self.parsed_sleeve_weights[diameter] = {}
+                for width_str, weight in widths.items():
+                    try:
+                        width = int(width_str)
+                        self.parsed_sleeve_weights[diameter][width] = weight
+                    except ValueError:
+                        continue
+        except Exception as e:
+            print(f"Ошибка загрузки веса втулок: {e}")
+            self.sleeve_weights = {}
+            self.parsed_sleeve_weights = {}
+            
+    def update_sleeve_weight_from_settings(self):
+        """Автоматически выбирает вес втулки на основе ширины ручья и диаметра"""
+        try:
+            # Получаем ширину ручья
+            width_str = self.stream_width_var.get().strip()
+            if not width_str:
+                return
+                
+            # Получаем диаметр втулки
+            diameter_str = self.sleeve_diameter_var.get().strip()
+            if not diameter_str:
+                return
+                
+            # Парсим ширину
+            try:
+                width = int(width_str)
+            except ValueError:
+                return
+                
+            # Ищем ближайшую ширину в настройках
+            if diameter_str in self.parsed_sleeve_weights:
+                diameter_data = self.parsed_sleeve_weights[diameter_str]
+                
+                # Ищем точное совпадение
+                if width in diameter_data:
+                    self.sleeve_weight_var.set(str(diameter_data[width]))
+                    return
+                    
+                # Ищем ближайшую меньшую ширину
+                available_widths = sorted(diameter_data.keys())
+                if available_widths:
+                    # Ищем первое значение, которое <= нашей ширине
+                    closest = None
+                    for w in available_widths:
+                        if w <= width:
+                            closest = w
+                        else:
+                            break
+                    
+                    if closest is not None:
+                        self.sleeve_weight_var.set(str(diameter_data[closest]))
+        except Exception as e:
+            print(f"Ошибка выбора веса втулки: {e}")
+    
     def on_order_enter_pressed(self, event=None):
         """Обрабатывает нажатие Enter в поле номера заказа."""
         # 1. Автоматическое заполнение из XML
@@ -367,7 +441,7 @@ class RollLabelPrinter:
             # Парсим
             parsed_result = self.xml_parser.parse(content)
             
-            # ЗАПОЛНЯЕМ ТОЛЬКО ТЕХНИЧЕСКИЕ ПОЛЯ:
+            # Заполняем только технические поля:
             self._fill_technical_fields_only(parsed_result)
             
         except Exception as e:
@@ -430,13 +504,16 @@ class RollLabelPrinter:
             self.update_cutters_list()
             self._update_cutter_visibility()
             self.load_manufacturer_options()
+            self.load_sleeve_weights()
         except Exception as e:
             print(f"Ошибка обновления списков после изменения настроек: {e}")
             
     def _update_cutter_visibility(self):
-        """Показывает/скрывает резчика в зависимости от цеха"""
+        """Показывает/скрывает резчика и поля автогенерации в зависимости от цеха"""
+        workshop = self.coordinator.get_workshop()
+        
+        # Управление видимостью резчика
         if hasattr(self, 'cutter_label') and hasattr(self, 'cutter_combo'):
-            workshop = self.coordinator.get_workshop()
             if workshop == "1":
                 self.cutter_label.grid_remove()
                 self.cutter_combo.grid_remove()
@@ -444,25 +521,29 @@ class RollLabelPrinter:
                 self.cutter_label.grid()
                 self.cutter_combo.grid()
                 
-        # Добавляем управление видимостью полей row=8
-        if hasattr(self, 'streams_label') and hasattr(self, 'streams_entry'):
-            workshop = self.coordinator.get_workshop()
-            if workshop == "1":
-                # Цех 1 - скрываем поля автогенерации
-                self.streams_label.grid_remove()
-                self.streams_entry.grid_remove()
-                self.batch_label.grid_remove()
-                self.batch_entry.grid_remove()
-                self.roll_label.grid_remove()
-                self.roll_entry.grid_remove()
-            else:  # цех 2
-                # Цех 2 - показываем поля автогенерации
-                self.streams_label.grid()
-                self.streams_entry.grid()
-                self.batch_label.grid()
-                self.batch_entry.grid()
-                self.roll_label.grid()
-                self.roll_entry.grid()
+        # Управление видимостью полей автогенерации (row=8) и ширины ручья (row=9)
+        if workshop == "1":
+            # Цех 1 - скрываем поля автогенерации
+            self.streams_label.grid_remove()
+            self.streams_entry.grid_remove()
+            self.batch_label.grid_remove()
+            self.batch_entry.grid_remove()
+            self.roll_label.grid_remove()
+            self.roll_entry.grid_remove()
+            # И ширину ручья тоже скрываем
+            self.stream_width_label.grid_remove()
+            self.stream_width_entry.grid_remove()
+        else:  # цех 2
+            # Цех 2 - показываем все поля
+            self.streams_label.grid()
+            self.streams_entry.grid()
+            self.batch_label.grid()
+            self.batch_entry.grid()
+            self.roll_label.grid()
+            self.roll_entry.grid()
+            # И ширину ручья показываем
+            self.stream_width_label.grid()
+            self.stream_width_entry.grid()
 
     def update_packers_list(self):
         """Обновляет список упаковщиков в комбобоксе"""
