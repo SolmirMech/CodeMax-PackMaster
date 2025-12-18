@@ -267,7 +267,7 @@ class RollLabelPrinter:
         ttk.Label(data_frame, text="Длина этикетки, мм:").grid(
             row=6, column=0, sticky="w", pady=2
         )
-        label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=6)
+        label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
         label_length_entry.grid(row=6, column=0, padx=(200, 0), pady=2, sticky="w")
         
         # Длина ролика
@@ -475,7 +475,17 @@ class RollLabelPrinter:
             self.streams_var.set(operations['streams_count'])
         
         if operations.get('label_length_with_gap'):
-            self.label_length_mm.set(operations['label_length_with_gap'])
+        # Форматируем до 2 знаков после запятой
+            try:
+                length_value = float(operations['label_length_with_gap'])
+                formatted_length = f"{length_value:.2f}"
+                self.label_length_mm.set(formatted_length)
+            except ValueError:
+                self.label_length_mm.set(operations['label_length_with_gap'])
+            
+        # Ширина ручья
+        if operations.get('stream_width'):
+            self.stream_width_var.set(operations['stream_width'])
         
         # product_text НЕ трогаем - его заполнит OrderDataProcessor
         

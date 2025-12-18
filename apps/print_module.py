@@ -183,11 +183,19 @@ class PrintModule:
         try:
             current_product_data = self.batch_print_data[self.current_batch_index]
             current_product_name = current_product_data['name']
-            stream_count = int(current_product_data.get('stream', 1))  # ← Берем stream из данных
+            stream_count = int(current_product_data.get('stream', 1))
+            date_emission = current_product_data.get('date_emission', '')
             
             # Временно подменяем название продукции
             self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
             self.preview_module.connected_roll_module.product_text.insert("1.0", current_product_name)
+            
+            # Устанавливаем дату эмиссии (если есть)
+            if date_emission:
+                self.preview_module.connected_roll_module.date_emission_var.set(date_emission)
+            else:
+                # Если у вида нет даты - очищаем поле
+                self.preview_module.connected_roll_module.date_emission_var.set("")
             
             # Устанавливаем количество копий для этого вида = stream
             self.copies_var.set(str(stream_count))  # ← ВОТ ТУТ используем stream как кол-во копий

@@ -13,10 +13,11 @@ class XMLOrderParser:
     
     # Коды операций, которые нас интересуют
     OPERATION_CODES = {
-        '11511': 'winding_scheme',      # Схема намотки
-        '8518': 'sleeve_diameter',      # Внутренний диаметр втулки
-        '8516': 'streams_count',        # Количество ручьев для резки
-        '8585': 'label_length_with_gap' # Длина этикетки с учетом зазора
+        '11511': 'winding_scheme',       # Схема намотки
+        '8518': 'sleeve_diameter',       # Внутренний диаметр втулки
+        '8516': 'streams_count',         # Количество ручьев для резки
+        '8585': 'label_length_with_gap', # Длина этикетки с учетом зазора
+        '8517': 'stream_width'           # Ширина ручья
     }
     
     def __init__(self):
@@ -66,20 +67,23 @@ class XMLOrderParser:
         try:
             root = ET.fromstring(xml_content)
             
-            # 1. Базовые данные заказа
+            # Базовые данные заказа
             customer = self._get_text(root, './/Заказчик')
             
-            # 2. Данные продукта/детали
+            # Общая дата эмиссии
+            parent_sheet_date = self._get_text(root, './/parent_sheet/ДатаЭмиссии')
+            
+            # Данные продукта/детали
             products = []
             for product_elem in root.findall('.//product'):
-                product = self._parse_product(product_elem)
+                product = self._parse_product(product_elem, parent_sheet_date, root)
                 if product:
                     products.append(product)
             
-            # 3. Данные из операций
+            # Данные из операций
             operations = self._parse_operations_new_format(root)
             
-            # 4. Извлекаем sheet_name для поиска по тиражу
+            # Извлекаем sheet_name для поиска по тиражу
             sheet_name = self._get_text(root, './/НаименОттиска')
             sheet_number = ""
             if sheet_name:
@@ -101,23 +105,52 @@ class XMLOrderParser:
             raise ValueError(f"Ошибка парсинга XML: {e}")
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
+            
+    def _find_stream_for_product(self, root: ET.Element, detail_number: str, product_name: str) -> str:
+        """Находит количество ручьёв для конкретного продукта из операций упаковки."""
+        try:
+            # Ищем все операции упаковки
+            for operation in root.findall('.//Операция'):
+                operation_name = operation.get('Наименование', '')
+                element_name = operation.get('НаименованиеЭлементаОперации', '')
+                
+                # Ищем операции упаковки, которые ссылаются на этот продукт
+                if ('Упаковка' in operation_name or 'Gallus' in operation_name) and element_name:
+                    # Проверяем, содержит ли название элемента наш detail_number или product_name
+                    if detail_number in element_name or product_name in element_name:
+                        # Ищем свойство с кодом 8516 в этой операции
+                        for prop in operation.findall('.//Свойство'):
+                            if prop.get('Код') == '8516':
+                                value = prop.get('Значение', '')
+                                if value:
+                                    return value
+        except Exception as e:
+            print(f"Ошибка поиска stream для {detail_number}: {e}")
+        
+        return "1"  # Значение по умолчанию
     
-    def _parse_product(self, product_elem: ET.Element) -> Optional[Dict[str, str]]:
+    def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", root: ET.Element = None) -> Optional[Dict[str, str]]:
         """Парсит элемент <product>."""
         try:
             detail_number = self._get_text(product_elem, 'НомерДетали')
             product_name = self._get_text(product_elem, 'НаименДетали')
             gtin = self._get_text(product_elem, 'GTIN')
-            date_emission = self._get_text(product_elem, 'ДатаЭмиссии')
-            quantity = self._get_text(product_elem, 'ТиражДетали')
             
-            print(f"DEBUG: detail_number='{detail_number}'")
-            print(f"DEBUG: product_name='{product_name}'")
-            print(f"DEBUG: date_emission='{date_emission}'")
-            print(f"DEBUG: gtin='{gtin}'")
+            # Индивидуальная дата эмиссии из продукта
+            individual_date = self._get_text(product_elem, 'ДатаЭмиссии')
+            
+            # Приоритет: 1) индивидуальная, 2) родительская, 3) пустая
+            date_emission = individual_date if individual_date else parent_sheet_date
+            
+            quantity = self._get_text(product_elem, 'ТиражДетали')
             
             if not product_name:  # Если нет названия - продукт невалиден
                 return None
+            
+            # Ищем количество ручьёв для этого продукта
+            stream = "1"  # По умолчанию
+            if root and detail_number:
+                stream = self._find_stream_for_product(root, detail_number, product_name)
             
             # Формируем полное название с джит
             full_name = product_name
@@ -130,9 +163,10 @@ class XMLOrderParser:
                 'product_name': product_name,
                 'full_name': full_name,  # Для отображения в UI
                 'gtin': gtin,
-                'date_emission': date_emission,
+                'date_emission': date_emission,  # С приоритетом
                 'quantity': quantity,  # ТиражДетали
-                'sheet_name': self._get_sheet_name(product_elem)  # Для поиска по оттиску
+                'sheet_name': self._get_sheet_name(product_elem),  # Для поиска по оттиску
+                'stream': stream  # количество ручьёв для этого вида
             }
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")
@@ -182,16 +216,25 @@ class XMLOrderParser:
             # Проверяем, является ли это форматом с атрибутами (5208.xml)
             if self._is_attributes_format(root):
                 return self._parse_attributes_format(root)
+                
+            general_date_emission = self._get_text(root, './/date_emission')
             
-            # Старая логика парсинга (адаптированная из order_data_processor.py)
-            customer = self._get_text(root, './/customer')
+            # ищем customer в другом месте
+            customer = ""
+            # Сначала попробуем найти в элементе <order_num>
+            order_num_elem = root.find('.//order_num')
+            if order_num_elem is not None and order_num_elem.text:
+                # Может содержать информацию о заказчике
+                pass
             
             products = []
+            # Ищем <object> внутри <id_man_factjob>
             for obj_elem in root.findall('.//object'):
-                detail_name_elem = obj_elem.find('detail_name')
                 detail_num_elem = obj_elem.find('detail_num')
+                detail_name_elem = obj_elem.find('detail_name')
                 gtin_elem = obj_elem.find('GTIN')
                 stream_elem = obj_elem.find('stream')
+                tirazh_elem = obj_elem.find('tirazh_product')
                 
                 detail_num = self._get_text(detail_num_elem)
                 product_name = self._get_text(detail_name_elem)
@@ -202,27 +245,28 @@ class XMLOrderParser:
                         gtin = gtin_elem.text.strip()
                         if gtin and len(gtin) >= 4:
                             short_gtin = gtin[-4:]
-                            product_name = f"{product_name} джит{short_gtin}"
+                            full_name = f"{product_name} джит{short_gtin}"
+                        else:
+                            full_name = product_name
+                    else:
+                        full_name = product_name
+                        
+                    stream = self._get_text(stream_elem) or "1"
                     
                     products.append({
                         'detail_number': detail_num,
                         'product_name': product_name,
-                        'full_name': product_name,
+                        'full_name': full_name,
                         'gtin': self._get_text(gtin_elem),
-                        'quantity': '',
-                        'sheet_name': self._get_text(root, './/sheet_name')
+                        'date_emission': general_date_emission,
+                        'quantity': self._get_text(tirazh_elem),
+                        'sheet_name': self._get_text(root, './/sheet_name'),
+                        'stream': stream
                     })
             
             # Для старого формата операции извлекаются из других мест
             operations = {}
-            winding_scheme_elem = root.find('.//winding_scheme')
-            sleeve_diameter_elem = root.find('.//sleeve_diameter')
-            
-            if winding_scheme_elem is not None and winding_scheme_elem.text:
-                operations['winding_scheme'] = winding_scheme_elem.text.strip()
-            if sleeve_diameter_elem is not None and sleeve_diameter_elem.text:
-                sleeve_diameter = sleeve_diameter_elem.text.strip().replace(' мм', '')
-                operations['sleeve_diameter'] = sleeve_diameter
+            # В старом формате нет операций с кодами
             
             # Извлекаем sheet_number для поиска
             sheet_name = self._get_text(root, './/sheet_name')
@@ -234,7 +278,7 @@ class XMLOrderParser:
             
             return {
                 'format': 'OLD_FORMAT',
-                'customer': customer,
+                'customer': customer,  # Будет пустым в этом формате
                 'products': products,
                 'operations': operations,
                 'sheet_number': sheet_number,

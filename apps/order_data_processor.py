@@ -454,6 +454,7 @@ class OrderDataProcessor:
         order_num = ""
         if self.roll_module and hasattr(self.roll_module, 'order_number'):
             order_num = self.roll_module.order_number.get().strip()
+                    
         else:
             self.parse_status.config(text="Модуль данных не подключен", foreground="red")
             return
@@ -461,6 +462,14 @@ class OrderDataProcessor:
         if not order_num:
             self.parse_status.config(text="Введите номер заказа", foreground="red")
             return
+            
+        if not hasattr(self, 'current_order'):
+            self.current_order = ""
+        
+        if order_num != self.current_order:
+            # Заказ изменился - сбрасываем поиск вида
+            self.detail_num_search.set("")
+            self.current_order = order_num
 
         # Получаем данные продуктов (словари)
         self.parsed_data = self.parse_xml_for_product_names(order_num)
@@ -472,7 +481,15 @@ class OrderDataProcessor:
         # Ищем конкретный вид или тираж
         search_digits = self.detail_num_search.get().strip()
         
-        # ФИКС: нужно правильно обработать parsed_data после использования нового парсера
+        # проверяем минимальную длину
+        if search_digits and len(search_digits) < 3:
+            self.parse_status.config(
+                text=f"Введите минимум 3 цифры для поиска (введено: {len(search_digits)})", 
+                foreground="red"
+            )
+            return
+        
+        # нужно правильно обработать parsed_data после использования нового парсера
         if search_digits:
             found_products = []
             found_by = ""  # Для отображения по чему нашли
@@ -560,7 +577,21 @@ class OrderDataProcessor:
             try:
                 # Заполняем название продукции (основное поле)
                 self.roll_module.product_text.delete("1.0", tk.END)
-                self.roll_module.product_text.insert("1.0", product_data['name'])              
+                
+                # проверяем разные возможные ключи
+                product_name = ""
+                if 'name' in product_data:
+                    product_name = product_data['name']
+                elif 'full_name' in product_data:  # Новый формат использует full_name
+                    product_name = product_data['full_name']
+                elif 'product_name' in product_data:  # Также может быть product_name
+                    product_name = product_data['product_name']
+                    
+                self.roll_module.product_text.insert("1.0", product_name)
+                
+                # устанавливаем дату эмиссии если она есть в данных
+                if 'date_emission' in product_data and product_data['date_emission']:
+                    self.roll_module.date_emission_var.set(product_data['date_emission'])
                 
                 # Автоматически очищаем Excel данные при смене продукции
                 self.auto_clear_excel_data()
@@ -573,10 +604,14 @@ class OrderDataProcessor:
                 # В случае ошибки пытаемся отправить хотя бы название
                 try:
                     self.roll_module.product_text.delete("1.0", tk.END)
-                    self.roll_module.product_text.insert("1.0", product_data['name'])
-                    print(f"Отправлено только название: {product_data['name']}")
+                    # Также пытаемся найти название в разных ключах
+                    name_to_send = product_data.get('name', 
+                                                  product_data.get('full_name', 
+                                                                  product_data.get('product_name', '')))
+                    self.roll_module.product_text.insert("1.0", name_to_send)
+                    print(f"Отправлено только название: {name_to_send}")
                 except:
-                    print("Критическая ошибка при отправке данных")           
+                    print("Критическая ошибка при отправке данных")
         
     def load_excel_folder_path(self):
         """Загружает путь к папке с Excel файлом из настроек"""
