@@ -23,8 +23,8 @@ class ExportModule:
         self.box_weight_var = tk.StringVar(value="0.0")
         
         # Переменные для поддона
-        self.pallet_weight_var = tk.StringVar(value="0.0")
         self.pallet_size_var = tk.StringVar(value="")
+        self.pallet_weight_var = tk.StringVar(value="0.0")        
         self.boxes_count_var = tk.StringVar(value="1")
         
         # Переменные для пути Excel
@@ -65,9 +65,7 @@ class ExportModule:
             wraplength=250,
             font=("Arial", 14)
         )
-        self.export_status_label.pack(fill=tk.X, pady=10)
-        
-        self.parent.bind("<Visibility>", lambda e: self.update_comboboxes())
+        self.export_status_label.pack(fill=tk.X, pady=10)      
     
     def create_excel_section(self, parent):
         """Создает секцию экспорта коробки"""
@@ -234,6 +232,8 @@ class ExportModule:
         
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
+        self.load_box_sizes()
+        self.load_pallet_sizes()
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""
@@ -255,11 +255,6 @@ class ExportModule:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.connected_roll_module = roll_module
-
-    def update_comboboxes(self):
-        """Обновляет все комбобоксы"""
-        self.load_box_sizes()
-        self.load_pallet_sizes()
 
     def load_box_sizes(self):
         """Загружает список коробок из shared_utils.json"""
@@ -313,8 +308,8 @@ class ExportModule:
         """Загружает список поддонов из shared_utils.json"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            weight_box = settings.get("weight_box", {})
-            pallet_sizes = list(weight_box.keys())
+            weight_pallet = settings.get("weight_pallet", {})
+            pallet_sizes = list(weight_pallet.keys())
             
             # Проверяем, что комбобокс уже создан
             if hasattr(self, 'pallet_sizes_combo'):
@@ -331,8 +326,8 @@ class ExportModule:
         if selected_size:
             try:
                 settings = self.config_manager.load_json_settings("shared_utils.json")
-                weight_box = settings.get("weight_box", {})
-                pallet_weight_g = weight_box.get(selected_size, 0)
+                weight_pallet = settings.get("weight_pallet", {})
+                pallet_weight_g = weight_pallet.get(selected_size, 0)
                 pallet_weight_kg = pallet_weight_g / 1000.0
                 self.pallet_weight_var.set(f"{pallet_weight_kg:.0f}")
             except Exception as e:

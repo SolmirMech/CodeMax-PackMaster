@@ -64,7 +64,16 @@ class ListsSettingsDialog:
             text="📑 Список ТУ", 
             command=self.open_tu_editor
         )
-        open_tu_btn.grid(row=3, column=0, padx=5, pady=5, sticky="w")        
+        open_tu_btn.grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        
+        # Кнопка для редактирования поддонов
+        open_pallets_btn = ttk.Button(
+            boxes_frame,
+            text="📦 Список поддонов", 
+            command=lambda: self.open_box_editor(pallets_mode=True),
+            width=20
+        )
+        open_pallets_btn.grid(row=4, column=0, padx=5, pady=5, sticky="w")        
         
         # Статус-строка
         status_label = ttk.Label(
@@ -76,10 +85,10 @@ class ListsSettingsDialog:
         )
         status_label.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
         
-    def open_box_editor(self):
-        """Открывает редактор коробок"""
+    def open_box_editor(self, pallets_mode=False):
+        """Открывает редактор коробок или поддонов"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = BoxEditorDialog(parent_window, self.preview_export_module)
+        dialog = BoxEditorDialog(parent_window, self.preview_export_module, pallets_mode=pallets_mode)
         dialog.parent_dialog = self
         dialog.show()
         
@@ -116,9 +125,10 @@ class ListsSettingsDialog:
 class BoxEditorDialog:
     """Диалог редактирования списка коробок"""
 
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, preview_export_module, pallets_mode=False):
         self.parent = parent
         self.preview_export_module = preview_export_module
+        self.pallets_mode = pallets_mode
         self.config_manager = ConfigManager()
         self.window = None
         self.box_size_entries = []
@@ -130,7 +140,7 @@ class BoxEditorDialog:
             return
 
         self.window = tk.Toplevel(self.parent)
-        self.window.title("Редактирование списка коробок")
+        self.window.title("Редактирование списка поддонов" if self.pallets_mode else "Редактирование списка коробок")
         self.window.geometry("430x600")
         self.window.grab_set()
 
@@ -222,15 +232,18 @@ class BoxEditorDialog:
             self.box_weight_entries.remove(weight_entry)
 
     def get_current_boxes(self):
-        """Возвращает текущий список коробок"""
+        """Возвращает текущий список коробок ИЛИ поддонов"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            return settings.get("weight_box", {})
+            if self.pallets_mode:
+                return settings.get("weight_pallet", {})  # для поддонов
+            else:
+                return settings.get("weight_box", {})
         except:
             return {}
 
     def save_boxes(self):
-        """Сохраняет список коробок в shared_utils.json"""
+        """Сохраняет список коробок ИЛИ поддонов в shared_utils.json"""
         try:
             new_boxes = {}
             for size_entry, weight_entry in zip(self.box_size_entries, self.box_weight_entries):
@@ -244,28 +257,31 @@ class BoxEditorDialog:
                     except ValueError:
                         continue
 
-            # Загружаем текущие настройки и обновляем weight_box
+            # Загружаем текущие настройки и обновляем
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            settings["weight_box"] = new_boxes
+            
+            if self.pallets_mode:
+                settings["weight_pallet"] = new_boxes
+                key_for_update = "weight_pallet"
+            else:
+                settings["weight_box"] = new_boxes
+                key_for_update = "weight_box"
             
             if self.config_manager.save_json_settings("shared_utils.json", settings):
-                # Обновляем комбобоксы через preview_export_module
-                if hasattr(self.preview_export_module, 'load_box_sizes'):
-                    self.preview_export_module.load_box_sizes()
-                
-                # Обновляем комбобокс поддонов  
-                if hasattr(self.preview_export_module, 'load_pallet_sizes'):
-                    self.preview_export_module.load_pallet_sizes()
+                # Уведомляем координатора об изменении списка
+                if hasattr(self.preview_export_module, 'coordinator'):
+                    self.preview_export_module.coordinator.notify_list_changed(key_for_update)
                 
                 # Статус
-                self.parent_dialog.status_var.set("✅ Список коробок успешно обновлен!")
+                item_name = "поддонов" if self.pallets_mode else "коробок"
+                self.parent_dialog.status_var.set(f"✅ Список {item_name} успешно обновлен!")
                 
                 self.window.destroy()
             else:
-                self.parent_dialog.status_var.set("❌ Не удалось сохранить список коробок")
+                self.parent_dialog.status_var.set("❌ Не удалось сохранить список")
                     
         except Exception as e:
-            self.parent_dialog.status_var.set(f"❌ Ошибка сохранения коробок: {str(e)}")
+            self.parent_dialog.status_var.set(f"❌ Ошибка сохранения: {str(e)}")
                 
                 
 class CustomersEditorDialog:
