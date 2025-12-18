@@ -105,29 +105,6 @@ class XMLOrderParser:
             raise ValueError(f"Ошибка парсинга XML: {e}")
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
-            
-    def _find_stream_for_product(self, root: ET.Element, detail_number: str, product_name: str) -> str:
-        """Находит количество ручьёв для конкретного продукта из операций упаковки."""
-        try:
-            # Ищем все операции упаковки
-            for operation in root.findall('.//Операция'):
-                operation_name = operation.get('Наименование', '')
-                element_name = operation.get('НаименованиеЭлементаОперации', '')
-                
-                # Ищем операции упаковки, которые ссылаются на этот продукт
-                if ('Упаковка' in operation_name or 'Gallus' in operation_name) and element_name:
-                    # Проверяем, содержит ли название элемента наш detail_number или product_name
-                    if detail_number in element_name or product_name in element_name:
-                        # Ищем свойство с кодом 8516 в этой операции
-                        for prop in operation.findall('.//Свойство'):
-                            if prop.get('Код') == '8516':
-                                value = prop.get('Значение', '')
-                                if value:
-                                    return value
-        except Exception as e:
-            print(f"Ошибка поиска stream для {detail_number}: {e}")
-        
-        return "1"  # Значение по умолчанию
     
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", root: ET.Element = None) -> Optional[Dict[str, str]]:
         """Парсит элемент <product>."""
@@ -147,10 +124,23 @@ class XMLOrderParser:
             if not product_name:  # Если нет названия - продукт невалиден
                 return None
             
-            # Ищем количество ручьёв для этого продукта
-            stream = "1"  # По умолчанию
+            # Ищем stream для конкретного вида в операции резки (ВнутреннийИдентификатор="31")
+            stream = "1"  # Значение по умолчанию
+            
             if root and detail_number:
-                stream = self._find_stream_for_product(root, detail_number, product_name)
+                # Ищем все операции резки
+                for operation in root.findall('.//Операция[@ВнутреннийИдентификатор="31"]'):
+                    element_name = operation.get('НаименованиеЭлементаОперации', '')
+                    
+                    # Проверяем, содержит ли эта операция номер нашей детали
+                    if detail_number in element_name:
+                        # В этой операции ищем свойство с кодом 8516
+                        prop = operation.find('.//Свойство[@Код="8516"]')
+                        if prop is not None:
+                            value = prop.get('Значение', '')
+                            if value:
+                                stream = value
+                                break  # Нашли - выходим из цикла
             
             # Формируем полное название с джит
             full_name = product_name
@@ -171,7 +161,7 @@ class XMLOrderParser:
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")
             return None
-    
+        
     def _get_sheet_name(self, product_elem: ET.Element) -> str:
         """Получает имя оттиска (НаименОттиска) для поиска."""
         try:

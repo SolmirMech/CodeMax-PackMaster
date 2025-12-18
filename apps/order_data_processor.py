@@ -417,7 +417,7 @@ class OrderDataProcessor:
                             'manufacturer': "",
                             'gtin': product.get('gtin', ''),
                             'tirazh': product.get('quantity', ''),
-                            'stream': '1'
+                            'stream': product.get('stream', '1')
                         }
                         
                         if not any(item['name'] == product_dict['name'] and 
