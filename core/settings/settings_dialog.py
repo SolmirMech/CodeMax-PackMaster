@@ -148,6 +148,15 @@ class SettingsDialog:
         self.workshop_var.set(workshop)
         self._update_paper_sizes()
         self.coordinator.subscribe(self._on_settings_changed)
+        
+        # Отображение размера этикетки
+        self.size_label = ttk.Label(
+            print_frame,
+            text=self._get_label_size_text(),
+            font=("Arial", 14, "bold"),
+            foreground="green"
+        )
+        self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
         # 2. РАЗДЕЛ: Изготовитель
         manufacturer_frame = ttk.LabelFrame(left_frame, text="Изготовитель", padding=5)
@@ -185,6 +194,14 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+        
+    def _get_label_size_text(self):
+        """Возвращает текст с размером этикетки в формате '92x70'"""
+        workshop = self.workshop_var.get()
+        if workshop == "1":
+            return "90x72 мм"
+        else:  # workshop == "2"
+            return "80x57 мм"
 
     def _on_save_clicked(self):
         """Обработчик клика по кнопке сохранения"""
