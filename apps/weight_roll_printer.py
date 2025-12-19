@@ -55,7 +55,11 @@ class RollLabelPrinter:
         self.roll_num_var = StringVar(value="")   # № ролика  
         self.streams_var = StringVar(value="")    # Кол-во ручьёв
         self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
-        
+        # Переменные парсинга
+        self.cutting_comment_var = StringVar(value="")    # Комментарий резки
+        self.packaging_comment_var = StringVar(value="")  # Комментарий упаковки
+        self.blinking_active = False
+                    
         self.create_ui()
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -233,7 +237,23 @@ class RollLabelPrinter:
         entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
-        entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")     
+        entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
+        
+        # Иконка комментариев
+        self.comment_button = tk.Button(
+            data_frame,
+            text="⚠",
+            font=("Arial", 12, "bold"),
+            foreground="#FF9900",
+            borderwidth=0,          # Убрать рамку
+            highlightthickness=0,   # Убрать обводку при фокусе
+            relief="flat",          # Плоский стиль (без 3D эффекта)
+            command=self.show_comment,
+            width=2,
+            state="disabled"
+        )
+        self.comment_button.grid(row=3, column=1, padx=(160, 0), pady=5, sticky="w")
+        self.comment_button.grid_remove()
         
         # Дата
         date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
@@ -384,6 +404,123 @@ class RollLabelPrinter:
                         self.sleeve_weight_var.set(str(diameter_data[closest]))
         except Exception as e:
             print(f"Ошибка выбора веса втулки: {e}")
+            
+    # Запуск мигания кнопки при появлении
+    def blink_button(self):
+        self.blinking_active = True
+        def blink():
+            if self.blinking_active and self.comment_button.winfo_exists():
+                current = self.comment_button.cget("foreground")
+                new = "#FFFF00" if current == "#FF9900" else "#FF9900"
+                self.comment_button.config(foreground=new)
+                self.comment_button.after(1000, blink)
+        blink()
+            
+    def show_comment(self):
+        """Показывает окно с комментариями"""
+        cutting_comment = self.cutting_comment_var.get()
+        packaging_comment = self.packaging_comment_var.get()
+        
+        if not cutting_comment and not packaging_comment:
+            return
+        
+        # Создаем кастомное окно
+        comment_window = tk.Toplevel(self.parent)
+        comment_window.title("📝 Комментарии к операциям")
+        comment_window.geometry("500x400")
+        comment_window.resizable(True, True)
+        
+        # Центрируем окно относительно ГЛАВНОГО окна приложения
+        self.center_window(comment_window)
+        
+        # Иконка треугольника в заголовке
+        comment_window.iconbitmap(default=None)  # Сбрасываем стандартную иконку
+        
+        # Привязка клавиш
+        comment_window.bind('<Return>', lambda e: self.close_comment_window(comment_window))
+        comment_window.bind('<Escape>', lambda e: self.close_comment_window(comment_window))
+        
+        # Фокус на окно
+        comment_window.focus_set()
+        
+        # Жёлтый треугольник слева
+        triangle_label = ttk.Label(
+            comment_window,
+            text="⚠",
+            font=("Arial", 24, "bold"),
+            foreground="#FF9900"  # Жёлто-оранжевый
+        )
+        triangle_label.pack(side=tk.LEFT, padx=(15, 0), pady=15)
+        
+        # Основной контент справа
+        content_frame = ttk.Frame(comment_window)
+        content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Текстовое поле с полосой прокрутки
+        text_frame = ttk.Frame(content_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        text_widget = tk.Text(
+            text_frame,
+            wrap=tk.WORD,
+            font=("Arial", 10),
+            height=15,
+            width=50,
+            background="#FFFFE0"  # Светло-жёлтый фон
+        )
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Полоса прокрутки
+        scrollbar = ttk.Scrollbar(text_frame, command=text_widget.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        text_widget.config(yscrollcommand=scrollbar.set)
+        
+        # Формируем текст
+        message = ""
+        
+        if cutting_comment:
+            message += "📐 КОММЕНТАРИЙ РЕЗКИ:\n"
+            message += f"{cutting_comment}\n\n"
+        
+        if packaging_comment:
+            message += "📦 КОММЕНТАРИЙ УПАКОВКИ:\n"
+            message += f"{packaging_comment}\n"
+        
+        text_widget.insert("1.0", message.strip())
+        text_widget.config(state="disabled")           
+        
+        # Сохраняем ссылку на окно для остановки мигания при закрытии
+        comment_window.protocol("WM_DELETE_WINDOW", lambda: self.close_comment_window(comment_window))
+
+    def close_comment_window(self, window):
+        """Закрывает окно и останавливает мигание"""
+        self.blinking_active = False  # Останавливаем мигание
+        if self.comment_button.winfo_exists():
+            self.comment_button.config(foreground="#FF9900")
+        window.destroy()
+
+    def center_window(self, window):
+        """Центрирует окно относительно ГЛАВНОГО окна приложения"""
+        window.update_idletasks()  # Обновляем геометрию окна
+        
+        # Получаем корневое окно
+        root_window = self.parent.winfo_toplevel()
+        
+        # Размеры окна комментариев
+        width = window.winfo_width()
+        height = window.winfo_height()
+        
+        # Позиция и размер главного окна
+        root_x = root_window.winfo_rootx()
+        root_y = root_window.winfo_rooty()
+        root_width = root_window.winfo_width()
+        root_height = root_window.winfo_height()
+        
+        # Координаты для центрирования относительно главного окна
+        x = root_x + (root_width - width) // 2
+        y = root_y + (root_height - height) // 2
+        
+        window.geometry(f"+{x}+{y}")
     
     def on_order_enter_pressed(self, event=None):
         """Обрабатывает нажатие Enter в поле номера заказа."""
@@ -486,8 +623,25 @@ class RollLabelPrinter:
         # Ширина ручья
         if operations.get('stream_width'):
             self.stream_width_var.set(operations['stream_width'])
+            
+        # 4. Комментарии
+        comments = parsed_data.get('comments', {})
         
-        # product_text НЕ трогаем - его заполнит OrderDataProcessor
+        cutting_comment = comments.get('cutting_comment', '')
+        packaging_comment = comments.get('packaging_comment', '')
+        
+        # Сохраняем отдельно
+        self.cutting_comment_var.set(cutting_comment)
+        self.packaging_comment_var.set(packaging_comment)
+        
+        # Показываем кнопку если есть хотя бы один комментарий
+        if cutting_comment or packaging_comment:
+            self.comment_button.grid()
+            self.comment_button.config(state="normal")
+            self.blink_button()
+        else:
+            self.comment_button.grid_remove()
+            self.comment_button.config(state="disabled")
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""
@@ -533,14 +687,13 @@ class RollLabelPrinter:
                 
         # Управление видимостью полей автогенерации (row=8) и ширины ручья (row=9)
         if workshop == "1":
-            # Цех 1 - скрываем поля автогенерации
+            # Цех 1 - скрываем поля
             self.streams_label.grid_remove()
             self.streams_entry.grid_remove()
             self.batch_label.grid_remove()
             self.batch_entry.grid_remove()
             self.roll_label.grid_remove()
             self.roll_entry.grid_remove()
-            # И ширину ручья тоже скрываем
             self.stream_width_label.grid_remove()
             self.stream_width_entry.grid_remove()
         else:  # цех 2
@@ -551,7 +704,6 @@ class RollLabelPrinter:
             self.batch_entry.grid()
             self.roll_label.grid()
             self.roll_entry.grid()
-            # И ширину ручья показываем
             self.stream_width_label.grid()
             self.stream_width_entry.grid()
 

@@ -82,6 +82,7 @@ class XMLOrderParser:
             
             # Данные из операций
             operations = self._parse_operations_new_format(root)
+            comments = self._parse_comments_new_format(root)
             
             # Извлекаем sheet_name для поиска по тиражу
             sheet_name = self._get_text(root, './/НаименОттиска')
@@ -97,6 +98,7 @@ class XMLOrderParser:
                 'customer': customer,
                 'products': products,
                 'operations': operations,
+                'comments': comments,
                 'sheet_number': sheet_number,
                 'sheet_name': sheet_name
             }
@@ -105,6 +107,33 @@ class XMLOrderParser:
             raise ValueError(f"Ошибка парсинга XML: {e}")
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
+            
+    def _parse_comments_new_format(self, root: ET.Element) -> Dict[str, str]:
+        """Извлекает комментарии из операций по ID операций (новый формат)."""
+        comments = {}
+        
+        try:
+            # Операции, которые нас интересуют
+            target_operations = {
+                '31': 'cutting_comment',    # Резка&перемотка
+                '62': 'packaging_comment'   # Упаковка Цех-1
+            }
+            
+            for operation in root.findall('.//ОперацииЗаказа//Операция'):
+                op_id = operation.get('ВнутреннийИдентификатор', '')
+                
+                if op_id in target_operations:
+                    # Ищем комментарий операции (код 65000)
+                    prop = operation.find('.//Свойство[@Код="65000"]')
+                    if prop is not None:
+                        comment = prop.get('Значение', '')
+                        if comment:
+                            comments[target_operations[op_id]] = comment
+        
+        except Exception as e:
+            print(f"Ошибка парсинга комментариев: {e}")
+        
+        return comments
     
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", root: ET.Element = None) -> Optional[Dict[str, str]]:
         """Парсит элемент <product>."""
