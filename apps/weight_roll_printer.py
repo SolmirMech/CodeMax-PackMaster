@@ -7,6 +7,7 @@ from datetime import datetime
 from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
 from core.parse.xml_order_parser import XMLOrderParser
+from core.ui.comment_manager import CommentManager
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
@@ -19,6 +20,7 @@ class RollLabelPrinter:
 
         self.order_data_module = None
         self.preview_module = None
+        self.comment_manager = None
         
         # Переменные интерфейса и данных
         self.show_manufacturer_var = BooleanVar(value=False)  # Показывать производителя
@@ -55,12 +57,9 @@ class RollLabelPrinter:
         self.roll_num_var = StringVar(value="")   # № ролика  
         self.streams_var = StringVar(value="")    # Кол-во ручьёв
         self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
-        # Переменные парсинга
-        self.cutting_comment_var = StringVar(value="")    # Комментарий резки
-        self.packaging_comment_var = StringVar(value="")  # Комментарий упаковки
-        self.blinking_active = False
                     
         self.create_ui()
+        self.comment_manager = CommentManager(self.parent, self.comment_button)
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
@@ -245,10 +244,9 @@ class RollLabelPrinter:
             text="⚠",
             font=("Arial", 12, "bold"),
             foreground="#FF9900",
-            borderwidth=0,          # Убрать рамку
-            highlightthickness=0,   # Убрать обводку при фокусе
-            relief="flat",          # Плоский стиль (без 3D эффекта)
-            command=self.show_comment,
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat",
             width=2,
             state="disabled"
         )
@@ -340,6 +338,7 @@ class RollLabelPrinter:
         self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
         self.stream_width_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
+        self.comment_manager = CommentManager(self.parent, self.comment_button)
     
     def load_sleeve_weights(self):
         """Загружает данные о весе втулок из настроек"""
@@ -404,123 +403,6 @@ class RollLabelPrinter:
                         self.sleeve_weight_var.set(str(diameter_data[closest]))
         except Exception as e:
             print(f"Ошибка выбора веса втулки: {e}")
-            
-    # Запуск мигания кнопки при появлении
-    def blink_button(self):
-        self.blinking_active = True
-        def blink():
-            if self.blinking_active and self.comment_button.winfo_exists():
-                current = self.comment_button.cget("foreground")
-                new = "#FFFF00" if current == "#FF9900" else "#FF9900"
-                self.comment_button.config(foreground=new)
-                self.comment_button.after(1000, blink)
-        blink()
-            
-    def show_comment(self):
-        """Показывает окно с комментариями"""
-        cutting_comment = self.cutting_comment_var.get()
-        packaging_comment = self.packaging_comment_var.get()
-        
-        if not cutting_comment and not packaging_comment:
-            return
-        
-        # Создаем кастомное окно
-        comment_window = tk.Toplevel(self.parent)
-        comment_window.title("📝 Комментарии к операциям")
-        comment_window.geometry("500x400")
-        comment_window.resizable(True, True)
-        
-        # Центрируем окно относительно ГЛАВНОГО окна приложения
-        self.center_window(comment_window)
-        
-        # Иконка треугольника в заголовке
-        comment_window.iconbitmap(default=None)  # Сбрасываем стандартную иконку
-        
-        # Привязка клавиш
-        comment_window.bind('<Return>', lambda e: self.close_comment_window(comment_window))
-        comment_window.bind('<Escape>', lambda e: self.close_comment_window(comment_window))
-        
-        # Фокус на окно
-        comment_window.focus_set()
-        
-        # Жёлтый треугольник слева
-        triangle_label = ttk.Label(
-            comment_window,
-            text="⚠",
-            font=("Arial", 24, "bold"),
-            foreground="#FF9900"  # Жёлто-оранжевый
-        )
-        triangle_label.pack(side=tk.LEFT, padx=(15, 0), pady=15)
-        
-        # Основной контент справа
-        content_frame = ttk.Frame(comment_window)
-        content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Текстовое поле с полосой прокрутки
-        text_frame = ttk.Frame(content_frame)
-        text_frame.pack(fill=tk.BOTH, expand=True)
-        
-        text_widget = tk.Text(
-            text_frame,
-            wrap=tk.WORD,
-            font=("Arial", 10),
-            height=15,
-            width=50,
-            background="#FFFFE0"  # Светло-жёлтый фон
-        )
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Полоса прокрутки
-        scrollbar = ttk.Scrollbar(text_frame, command=text_widget.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        text_widget.config(yscrollcommand=scrollbar.set)
-        
-        # Формируем текст
-        message = ""
-        
-        if cutting_comment:
-            message += "📐 КОММЕНТАРИЙ РЕЗКИ:\n"
-            message += f"{cutting_comment}\n\n"
-        
-        if packaging_comment:
-            message += "📦 КОММЕНТАРИЙ УПАКОВКИ:\n"
-            message += f"{packaging_comment}\n"
-        
-        text_widget.insert("1.0", message.strip())
-        text_widget.config(state="disabled")           
-        
-        # Сохраняем ссылку на окно для остановки мигания при закрытии
-        comment_window.protocol("WM_DELETE_WINDOW", lambda: self.close_comment_window(comment_window))
-
-    def close_comment_window(self, window):
-        """Закрывает окно и останавливает мигание"""
-        self.blinking_active = False  # Останавливаем мигание
-        if self.comment_button.winfo_exists():
-            self.comment_button.config(foreground="#FF9900")
-        window.destroy()
-
-    def center_window(self, window):
-        """Центрирует окно относительно ГЛАВНОГО окна приложения"""
-        window.update_idletasks()  # Обновляем геометрию окна
-        
-        # Получаем корневое окно
-        root_window = self.parent.winfo_toplevel()
-        
-        # Размеры окна комментариев
-        width = window.winfo_width()
-        height = window.winfo_height()
-        
-        # Позиция и размер главного окна
-        root_x = root_window.winfo_rootx()
-        root_y = root_window.winfo_rooty()
-        root_width = root_window.winfo_width()
-        root_height = root_window.winfo_height()
-        
-        # Координаты для центрирования относительно главного окна
-        x = root_x + (root_width - width) // 2
-        y = root_y + (root_height - height) // 2
-        
-        window.geometry(f"+{x}+{y}")
     
     def on_order_enter_pressed(self, event=None):
         """Обрабатывает нажатие Enter в поле номера заказа."""
@@ -626,22 +508,18 @@ class RollLabelPrinter:
             
         # 4. Комментарии
         comments = parsed_data.get('comments', {})
+        operations = parsed_data.get('operations', {})
         
         cutting_comment = comments.get('cutting_comment', '')
         packaging_comment = comments.get('packaging_comment', '')
+        aggregation_status = operations.get('aggregation_status', '')
         
-        # Сохраняем отдельно
-        self.cutting_comment_var.set(cutting_comment)
-        self.packaging_comment_var.set(packaging_comment)
-        
-        # Показываем кнопку если есть хотя бы один комментарий
-        if cutting_comment or packaging_comment:
-            self.comment_button.grid()
-            self.comment_button.config(state="normal")
-            self.blink_button()
-        else:
-            self.comment_button.grid_remove()
-            self.comment_button.config(state="disabled")
+        # Используем CommentManager для управления комментариями
+        self.comment_manager.set_comments(
+            cutting_comment=cutting_comment,
+            packaging_comment=packaging_comment,
+            aggregation_status=aggregation_status
+        )
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""

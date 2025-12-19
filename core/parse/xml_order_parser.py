@@ -12,13 +12,17 @@ class XMLOrderParser:
     """Парсер XML файлов заказов."""   
     
     # Коды операций, которые нас интересуют
-    OPERATION_CODES = {
+    OPERATION_PROPERTIES = {
         '11511': 'winding_scheme',       # Схема намотки
         '8518': 'sleeve_diameter',       # Внутренний диаметр втулки
         '8516': 'streams_count',         # Количество ручьев для резки
         '8585': 'label_length_with_gap', # Длина этикетки с учетом зазора
-        '8517': 'stream_width'           # Ширина ручья
+        '8517': 'stream_width',           # Ширина ручья
+        '32543': 'aggregation_status'    # Статус агрегации
     }
+    
+    # Код свойства для комментариев
+    COMMENT_PROPERTY_CODE = '65000'    
     
     def __init__(self):
         self.format_type = None  # 'NEW_FORMAT' или 'OLD_FORMAT'
@@ -81,8 +85,7 @@ class XMLOrderParser:
                     products.append(product)
             
             # Данные из операций
-            operations = self._parse_operations_new_format(root)
-            comments = self._parse_comments_new_format(root)
+            operations, comments = self._parse_operations_and_comments(root)
             
             # Извлекаем sheet_name для поиска по тиражу
             sheet_name = self._get_text(root, './/НаименОттиска')
@@ -108,32 +111,52 @@ class XMLOrderParser:
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
             
-    def _parse_comments_new_format(self, root: ET.Element) -> Dict[str, str]:
-        """Извлекает комментарии из операций по ID операций (новый формат)."""
+    def _parse_operations_and_comments(self, root: ET.Element) -> tuple[Dict[str, str], Dict[str, str]]:
+        """
+        Единый метод для парсинга операций и комментариев.
+        Ищет ТОЛЬКО в операциях с идентификаторами 31 и 62.
+        
+        Returns:
+            tuple: (operations_dict, comments_dict)
+        """
+        operations = {}
         comments = {}
         
         try:
-            # Операции, которые нас интересуют
-            target_operations = {
-                '31': 'cutting_comment',    # Резка&перемотка
-                '62': 'packaging_comment'   # Упаковка Цех-1
-            }
-            
+            # Ищем только операции с нужными идентификаторами
             for operation in root.findall('.//ОперацииЗаказа//Операция'):
                 op_id = operation.get('ВнутреннийИдентификатор', '')
                 
-                if op_id in target_operations:
-                    # Ищем комментарий операции (код 65000)
-                    prop = operation.find('.//Свойство[@Код="65000"]')
-                    if prop is not None:
-                        comment = prop.get('Значение', '')
-                        if comment:
-                            comments[target_operations[op_id]] = comment
+                # Пропускаем операции не с теми идентификаторами
+                if op_id not in ['31', '62']:
+                    continue
+                
+                # 1. Парсим комментарии (свойство 65000)
+                if op_id == '31':
+                    comment_key = 'cutting_comment'
+                elif op_id == '62':
+                    comment_key = 'packaging_comment'
+                else:
+                    continue
+                
+                comment_prop = operation.find(f'.//Свойство[@Код="{self.COMMENT_PROPERTY_CODE}"]')
+                if comment_prop is not None:
+                    comment = comment_prop.get('Значение', '')
+                    if comment:
+                        comments[comment_key] = comment
+                
+                # 2. Парсим технические свойства
+                for prop in operation.findall('.//Свойство'):
+                    code = prop.get('Код', '')
+                    value = prop.get('Значение', '')
+                    
+                    if code in self.OPERATION_PROPERTIES and value:
+                        operations[self.OPERATION_PROPERTIES[code]] = value
         
         except Exception as e:
-            print(f"Ошибка парсинга комментариев: {e}")
+            print(f"Ошибка парсинга операций и комментариев: {e}")
         
-        return comments
+        return operations, comments
     
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", root: ET.Element = None) -> Optional[Dict[str, str]]:
         """Парсит элемент <product>."""
@@ -207,23 +230,6 @@ class XMLOrderParser:
         except Exception:
             pass
         return ""
-    
-    def _parse_operations_new_format(self, root: ET.Element) -> Dict[str, str]:
-        """Извлекает данные из операций по кодам (новый формат)."""
-        operations = {}
-        
-        try:
-            # Ищем все свойства во всех операциях
-            for prop in root.findall('.//ОперацииЗаказа//Свойство'):
-                code = prop.get('Код', '')
-                value = prop.get('Значение', '')
-                
-                if code in self.OPERATION_CODES and value:
-                    operations[self.OPERATION_CODES[code]] = value
-        except Exception as e:
-            print(f"Ошибка парсинга операций: {e}")
-        
-        return operations
     
     def _parse_old_format(self, xml_content: str) -> Dict[str, Any]:
         """
