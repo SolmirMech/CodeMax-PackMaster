@@ -310,83 +310,6 @@ class ExcelPreviewModule:
         except Exception as e:
             print(f"Ошибка захвата скриншота: {e}")
             return None
-
-    def _calculate_screenshot_coordinates(self, excel_hwnd):
-        """Рассчитывает координаты для скриншота"""
-        try:
-            import win32gui
-            import win32api
-            
-            # Получаем размеры экрана
-            screen_width = win32api.GetSystemMetrics(0)
-            screen_height = win32api.GetSystemMetrics(1)
-            
-            # Получаем размеры окна Excel
-            screen_rect = win32gui.GetWindowRect(excel_hwnd)
-            client_rect = win32gui.GetClientRect(excel_hwnd)
-            
-            # Рассчитываем ширину рамок окна
-            frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
-            
-            # Рассчитываем высоту заголовка и ленты Excel
-            title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
-            
-            # Получаем настраиваемый отступ из настроек
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            preview_settings = settings.get("preview_settings", {})
-            top_offset = preview_settings.get("top_offset", 160)
-            
-            # Рассчитываем координаты
-            table_left = screen_rect[0] + frame_width + 20
-            table_top = screen_rect[1] + title_height + top_offset
-            table_right = table_left + 565  # фиксированная ширина
-            
-            # Высота скриншота адаптируется под экран
-            available_height = screen_height - table_top - 50
-            table_bottom = table_top + min(1200, available_height)
-            
-            # Корректируем границы
-            table_right = min(screen_width, table_right)
-            table_bottom = min(screen_height, table_bottom)
-                        
-            return (table_left, table_top, table_right, table_bottom)
-            
-        except Exception as e:
-            return None
-
-    def _close_excel(self, excel):
-        """Закрывает Excel и принудительно завершает процесс"""
-        import time
-        
-        try:
-            # Стандартное закрытие
-            try:
-                excel.DisplayAlerts = False
-                excel.ScreenUpdating = False
-                
-                # Закрываем все книги
-                while excel.Workbooks.Count > 0:
-                    try:
-                        excel.Workbooks(1).Close(SaveChanges=False)
-                    except:
-                        break
-                
-                # Закрываем Excel
-                excel.Quit()
-                time.sleep(0.5)
-                
-            except Exception as e:
-                print(f"Ошибка при стандартном закрытии Excel: {e}")
-            
-        finally:
-            # Пытаемся удалить объект
-            try:
-                del excel
-            except:
-                pass
-            
-            # Принудительное завершение процессов
-            self._kill_excel_processes()
             
     def _get_print_area_pixel_bounds(self, excel, worksheet, excel_hwnd):
         """Возвращает границы области печати в пикселях экрана"""
@@ -435,7 +358,7 @@ class ExcelPreviewModule:
             # Получаем отступ из настроек
             settings = self.config_manager.load_json_settings("shared_utils.json")
             preview_settings = settings.get("preview_settings", {})
-            top_offset = preview_settings.get("top_offset", 160)
+            top_offset = preview_settings.get("top_offset", 0)
             
             # Рассчитываем абсолютные координаты на экране
             # Сейчас координаты relative to client area
@@ -445,14 +368,7 @@ class ExcelPreviewModule:
             table_left = screen_rect[0] + frame_width + left_px
             table_top = screen_rect[1] + title_height + top_offset + top_px + excel_ribbon_height
             table_right = table_left + width_px
-            table_bottom = table_top + height_px
-            
-            # Добавляем небольшой отступ
-            padding = 5
-            table_left = max(0, table_left - padding)
-            table_top = max(0, table_top - padding)
-            table_right = table_right + padding
-            table_bottom = table_bottom + padding        
+            table_bottom = table_top + height_px         
             
             return (table_left, table_top, table_right, table_bottom)
             
@@ -461,6 +377,111 @@ class ExcelPreviewModule:
             import traceback
             traceback.print_exc()
             return None
+            
+    def _calculate_screenshot_coordinates(self, excel_hwnd):
+        """Рассчитывает координаты для скриншота"""
+        try:
+            import win32gui
+            import win32api
+            
+            # Получаем размеры экрана
+            screen_width = win32api.GetSystemMetrics(0)
+            screen_height = win32api.GetSystemMetrics(1)
+            
+            # Получаем размеры окна Excel
+            screen_rect = win32gui.GetWindowRect(excel_hwnd)
+            client_rect = win32gui.GetClientRect(excel_hwnd)
+            
+            # Рассчитываем ширину рамок окна
+            frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
+            
+            # Рассчитываем высоту заголовка и ленты Excel
+            title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
+            
+            # Получаем настраиваемый отступ из настроек
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            preview_settings = settings.get("preview_settings", {})
+            top_offset = preview_settings.get("top_offset", 160)
+            
+            # Рассчитываем координаты
+            table_left = screen_rect[0] + frame_width + 20
+            table_top = screen_rect[1] + title_height + top_offset
+            table_right = table_left + 565  # фиксированная ширина
+            
+            # Высота скриншота адаптируется под экран
+            available_height = screen_height - table_top - 50
+            table_bottom = table_top + min(1000, available_height)
+            
+            # Корректируем границы
+            table_right = min(screen_width, table_right)
+            table_bottom = min(screen_height, table_bottom)
+                        
+            return (table_left, table_top, table_right, table_bottom)
+            
+        except Exception as e:
+            return None
+
+    def _close_excel(self, excel):
+        """Закрывает Excel и принудительно завершает процесс"""
+        import time
+        
+        try:
+            # Стандартное закрытие
+            try:
+                excel.DisplayAlerts = False
+                excel.ScreenUpdating = False
+                
+                # Закрываем все книги
+                while excel.Workbooks.Count > 0:
+                    try:
+                        excel.Workbooks(1).Close(SaveChanges=False)
+                    except:
+                        break
+                
+                # Закрываем Excel
+                excel.Quit()
+                time.sleep(0.5)
+                
+            except Exception as e:
+                print(f"Ошибка при стандартном закрытии Excel: {e}")
+            
+        finally:
+            # Пытаемся удалить объект
+            try:
+                del excel
+            except:
+                pass
+            
+            # Принудительное завершение процессов
+            self._kill_excel_processes()
+            
+    def _kill_excel_processes(self):
+        """Принудительно завершает процессы Excel"""
+        try:
+            import psutil
+            import os
+            
+            # Ищем процессы Excel
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if proc.info['name'] and 'excel.exe' in proc.info['name'].lower():
+                        # Если процесс запущен нашим пользователем
+                        if proc.username() == os.getlogin():
+                            proc.kill()
+                            print(f"Завершен процесс Excel (PID: {proc.info['pid']})")
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        except ImportError:
+            # Если psutil не установлен, используем taskkill
+            try:
+                import subprocess
+                subprocess.run(['taskkill', '/F', '/IM', 'excel.exe'], 
+                              capture_output=True, timeout=5)
+                print("Excel процессы завершены через taskkill")
+            except:
+                print("Не удалось завершить Excel процессы")
+        except Exception as e:
+            print(f"Ошибка при завершении Excel: {e}")
             
     def _save_preview_settings(self):
         """Сохраняет настройки предпросмотра в shared_utils.json"""
@@ -547,13 +568,7 @@ class ExcelPreviewModule:
         # Определяем текущий цех
         workshop = "1"
         if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
-            workshop = self.coordinator.get_workshop()      
-        
-        # Если sheet_name еще не установлен (например, при прямом вызове из UI)
-        if self.sheet_name is None:
-            # ТОЛЬКО тогда используем лист для коробки как fallback
-            self.sheet_name = self._get_sheet_for_preview(workshop, enable_pallet=False, multitype_mode=False)
-        # Иначе используем уже установленный sheet_name (из show_pallet_preview())
+            workshop = self.coordinator.get_workshop()
         
         # Создаем новое окно предпросмотра
         self.preview_window = tk.Toplevel(self.parent)
@@ -819,8 +834,8 @@ class ExcelPreviewModule:
                 )
     
     def _on_print_clicked(self):
-        printer1 = self.printer1_var.get().strip()  # "" останется ""
-        printer2 = self.printer2_var.get().strip()  # "" останется ""
+        printer1 = self.printer1_var.get().strip()
+        printer2 = self.printer2_var.get().strip()
         copies = self.copies_var.get()
         
         # Проверка: хотя бы один принтер должен быть выбран (не пустая строка)
@@ -977,35 +992,7 @@ class ExcelPreviewModule:
                 try:
                     pythoncom.CoUninitialize()
                 except:
-                    pass
-                    
-    def _kill_excel_processes(self):
-        """Принудительно завершает процессы Excel"""
-        try:
-            import psutil
-            import os
-            
-            # Ищем процессы Excel
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
-                    if proc.info['name'] and 'excel.exe' in proc.info['name'].lower():
-                        # Если процесс запущен нашим пользователем
-                        if proc.username() == os.getlogin():
-                            proc.kill()
-                            print(f"Завершен процесс Excel (PID: {proc.info['pid']})")
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-        except ImportError:
-            # Если psutil не установлен, используем taskkill
-            try:
-                import subprocess
-                subprocess.run(['taskkill', '/F', '/IM', 'excel.exe'], 
-                              capture_output=True, timeout=5)
-                print("Excel процессы завершены через taskkill")
-            except:
-                print("Не удалось завершить Excel процессы")
-        except Exception as e:
-            print(f"Ошибка при завершении Excel: {e}")                    
+                    pass                    
         
     def load_and_render_preview(self):
         """Загружает Excel и создает точный предпросмотр через win32com"""
@@ -1013,6 +1000,7 @@ class ExcelPreviewModule:
             self.excel_path = self._get_excel_path()
             if not self.excel_path or not os.path.exists(self.excel_path):
                 self.show_error_preview("Файл Excel не найден")
+                self.status_label.config(text="✗ Файл не найден", foreground="red")
                 return
             
             # Конвертируем Excel в изображение
@@ -1020,19 +1008,15 @@ class ExcelPreviewModule:
             
             if image:
                 self.display_preview(image)
-                if hasattr(self, 'status_label'):
-                    self.status_label.config(text="✓ Загружено", foreground="green")
+                self.status_label.config(text="✓ Загружено", foreground="green")
             else:
                 self.show_error_preview("Не удалось создать предпросмотр")
-                # Добавить сюда изменение статуса на ошибку
-                if hasattr(self, 'status_label'):
-                    self.status_label.config(text="✗ Ошибка загрузки", foreground="red")
-                    
+                self.status_label.config(text="✗ Ошибка загрузки", foreground="red")
+                
         except Exception as e:
-            self.show_error_preview(f"Ошибка: {str(e)}")
-            # Добавить сюда изменение статуса на ошибку
-            if hasattr(self, 'status_label'):
-                self.status_label.config(text=f"✗ Ошибка: {str(e)[:20]}", foreground="red")
+            error_msg = str(e)
+            self.show_error_preview(error_msg)
+            self.status_label.config(text=f"✗ Ошибка: {error_msg[:20]}", foreground="red")
             
     def update_preview(self):
         """Обновляет предпросмотр"""
