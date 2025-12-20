@@ -847,27 +847,7 @@ class ExcelPreviewModule:
             return
             
         # Запускаем печать
-        self._start_printing(printer1, printer2, copies)
-        
-    def _format_printer_for_excel(self, printer_name, excel_app=None):
-        if not printer_name:
-            return ""     
-        
-        # Если передан экземпляр Excel, берем порт из его ActivePrinter
-        if excel_app:
-            try:
-                current = excel_app.ActivePrinter
-                
-                # Парсим: "Xprinter XP-420B (Ne00:)"
-                bracket_pos = current.rfind(" (")
-                if bracket_pos != -1:
-                    port_part = current[bracket_pos:]  # " (Ne00:)"
-                    result = f"{printer_name}{port_part}"
-                    return result
-            except Exception as e:
-                print(f"  Error parsing ActivePrinter: {e}")
-        
-        return printer_name  # Запасной вариант
+        self._start_printing(printer1, printer2, copies)      
     
     def _start_printing(self, printer1, printer2, copies):
         """Запускает процесс печати"""
@@ -893,70 +873,120 @@ class ExcelPreviewModule:
         wb = None
         
         try:
-            self.preview_window.after(0, lambda: self.status_label.config(
-                text="Подготовка Excel...", 
-                foreground="blue"
-            ))
-            
             import win32com.client
             import pythoncom
+            import win32print
             import time
             
             pythoncom.CoInitialize()
             pythoncom_initialized = True
             
-            excel = win32com.client.DispatchEx("Excel.Application")
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            excel.ScreenUpdating = False
-                      
-            wb = excel.Workbooks.Open(self.excel_path)
+            # 1. Запоминаем текущий принтер по умолчанию
+            original_printer = win32print.GetDefaultPrinter()
             
-            try:
-                ws = wb.Sheets(self.sheet_name)
-            except:
-                ws = wb.Sheets(1)
-            
-            ws.Activate()
-            
-            print_area = ws.Range(ws.PageSetup.PrintArea)
-            print_area.Select()
-            
-            time.sleep(0.5)
-            
-            # Печать на принтер 1
+            # 2. Список принтеров для печати
+            printers_to_use = []
             if printer1:
-                self.preview_window.after(0, lambda: self.status_label.config(
-                    text=f"Печать на {printer1[:20]}...", 
-                    foreground="blue"
-                ))             
-                
-                excel_printer1 = self._format_printer_for_excel(printer1, excel)
-                
-                excel.ActivePrinter = excel_printer1
-                ws.PrintOut(Copies=copies)
-                time.sleep(1)
-            
-            # Печать на принтер 2
+                printers_to_use.append(printer1)
             if printer2 and printer2 != printer1:
-                self.preview_window.after(0, lambda: self.status_label.config(
-                    text=f"Печать на {printer2[:20]}...", 
+                printers_to_use.append(printer2)
+            
+            # 3. Печать на каждый принтер
+            for i, printer_name in enumerate(printers_to_use, 1):
+                self.preview_window.after(0, lambda p=printer_name: self.status_label.config(
+                    text=f"Печать на {p[:20]}...", 
                     foreground="blue"
                 ))
+                                
+                # Устанавливаем принтер по умолчанию
+                try:
+                    win32print.SetDefaultPrinter(printer_name)
+                    time.sleep(1)  # Дать системе время на применение
+                except Exception as e:
+                    print(f"[ERROR] Не удалось установить принтер по умолчанию: {e}")
+                    continue
                 
-                excel_printer2 = self._format_printer_for_excel(printer2, excel)
-                
-                excel.ActivePrinter = excel_printer2
-                ws.PrintOut(Copies=copies)
+                # Создаем новый экземпляр Excel для каждого принтера
+                try:
+                    excel = win32com.client.DispatchEx("Excel.Application")
+                    excel.Visible = False
+                    excel.DisplayAlerts = False
+                    excel.ScreenUpdating = False
+                    
+                    wb = excel.Workbooks.Open(self.excel_path)
+                    
+                    try:
+                        ws = wb.Sheets(self.sheet_name)
+                    except:
+                        ws = wb.Sheets(1)
+                    
+                    ws.Activate()
+                    
+                    # Настраиваем область печати
+                    print_area = None
+                    try:
+                        print_area_str = ws.PageSetup.PrintArea
+                        if print_area_str:
+                            print_area = ws.Range(print_area_str)
+                        else:
+                            print_area = ws.Range("A1:I45")
+                    except:
+                        print_area = ws.Range("A1:I45")
+                    
+                    print_area.Select()
+                    time.sleep(0.5)
+                    
+                    # Печатаем на текущем принтере по умолчанию
+                    ws.PrintOut(Copies=copies)
+                    time.sleep(1)  # Дать время на печать
+                    
+                    # Закрываем Excel для этого принтера
+                    wb.Close(SaveChanges=False)
+                    excel.Quit()
+                    time.sleep(0.5)
+                    
+                    # Принудительно чистим
+                    del ws
+                    del wb
+                    del excel
+                    wb = None
+                    excel = None
+                    
+                except Exception as e:
+                    print(f"[ERROR] Ошибка при печати на {printer_name}: {e}")
+                    continue
+                finally:
+                    # Гарантированное закрытие
+                    if wb:
+                        try:
+                            wb.Close(SaveChanges=False)
+                        except:
+                            pass
+                    
+                    if excel:
+                        try:
+                            excel.Quit()
+                        except:
+                            pass
+                    
+                    # Принудительно убиваем процессы Excel
+                    self._kill_excel_processes()
+            
+            # 4. Возвращаем оригинальный принтер по умолчанию
+            if original_printer:
+                try:
+                    win32print.SetDefaultPrinter(original_printer)
+                except Exception as e:
+                    print(f"[ERROR] Не удалось вернуть принтер по умолчанию: {e}")
             
             self.preview_window.after(0, lambda: self.status_label.config(
                 text="✅ Печать завершена", 
                 foreground="green"
             ))
-            
+                
         except Exception as e:
             error_msg = str(e)
-            print(f"Ошибка печати: {error_msg}")
+            print(f"[ERROR] Ошибка печати: {error_msg}")
             self.preview_window.after(0, lambda: self.status_label.config(
                 text=f"❌ Ошибка: {error_msg[:50]}", 
                 foreground="red"
@@ -992,7 +1022,10 @@ class ExcelPreviewModule:
                 try:
                     pythoncom.CoUninitialize()
                 except:
-                    pass                    
+                    pass
+            
+            # Принудительно убиваем процессы Excel
+            self._kill_excel_processes()
         
     def load_and_render_preview(self):
         """Загружает Excel и создает точный предпросмотр через win32com"""
