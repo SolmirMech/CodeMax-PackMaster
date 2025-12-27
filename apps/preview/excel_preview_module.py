@@ -937,8 +937,11 @@ class ExcelPreviewModule:
                     time.sleep(0.5)
                     
                     # Печатаем на текущем принтере по умолчанию
-                    ws.PrintOut(Copies=copies)
-                    time.sleep(1)  # Дать время на печать
+                    import time
+                    for i in range(copies):
+                        ws.PrintOut(ActivePrinter=printer_name)
+                        if i < copies - 1:  # Не ждать после последней копии
+                            time.sleep(0.5)  # Полсекунды на обработку
                     
                     # Закрываем Excel для этого принтера
                     wb.Close(SaveChanges=False)
@@ -983,6 +986,9 @@ class ExcelPreviewModule:
                 text="✅ Печать завершена", 
                 foreground="green"
             ))
+            
+            # Добавить автоматическую архивацию
+            self.preview_window.after(100, self.archive_current_sheet)  # 100ms delay
                 
         except Exception as e:
             error_msg = str(e)
