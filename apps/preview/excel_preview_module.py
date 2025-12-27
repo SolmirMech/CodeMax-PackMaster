@@ -31,6 +31,14 @@ class ExcelPreviewModule:
         # Подписка на координатор
         if coordinator and hasattr(coordinator, 'subscribe'):
             coordinator.subscribe(self.on_excel_exported)
+        # Инициализация статуса архивации
+        if coordinator and hasattr(coordinator, 'subscribe'):
+            # Подписываемся на уведомления координатора
+            coordinator.subscribe(self.on_settings_changed)
+            # Получаем текущий статус
+            self.archive_enabled = (coordinator.get_archive_status() == "on")
+        else:
+            self.archive_enabled = True  # по умолчанию включено            
             
     def _get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
         """Определяет лист для предпросмотра на основе контекста"""
@@ -94,7 +102,7 @@ class ExcelPreviewModule:
             self.show_preview_window()
     
     def on_excel_exported(self, event_type=None, data=None):
-        """Обработчик событий от координатора для всех режимов"""
+        """Обработчик событий от координатора для всех режимов предпросмотра"""
         if event_type == "excel_exported":
             # Получаем параметры из данных события
             workshop = data.get('workshop', '1')
@@ -130,6 +138,12 @@ class ExcelPreviewModule:
                 
                 self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
                 self.update_preview()
+                
+    def on_settings_changed(self):
+        """Обработчик изменения любых настроек от координатора"""
+        if self.coordinator and hasattr(self.coordinator, 'get_archive_status'):
+            status = self.coordinator.get_archive_status()
+            self.archive_enabled = (status == "on")                
 
     def excel_to_image_simple(self, excel_path, sheet_name):
         """Скриншот области печати Excel"""
@@ -982,13 +996,18 @@ class ExcelPreviewModule:
                 except Exception as e:
                     print(f"[ERROR] Не удалось вернуть принтер по умолчанию: {e}")
             
-            self.preview_window.after(0, lambda: self.status_label.config(
-                text="✅ Печать завершена", 
-                foreground="green"
-            ))
-            
-            # Добавить автоматическую архивацию
-            self.preview_window.after(100, self.archive_current_sheet)  # 100ms delay
+            if self.archive_enabled:
+                self.preview_window.after(0, lambda: self.status_label.config(
+                    text="✅ Печать завершена", 
+                    foreground="green"
+                ))
+                # Добавить автоматическую архивацию
+                self.preview_window.after(100, self.archive_current_sheet)
+            else:
+                self.preview_window.after(0, lambda: self.status_label.config(
+                    text="✅ Печать завершена (архивация отключена)", 
+                    foreground="green"
+                ))
                 
         except Exception as e:
             error_msg = str(e)

@@ -22,7 +22,7 @@ class SettingsCoordinator:
         self._subscribers = []
         
         self._load_initial_settings()
-        self._initialized = True
+        self._initialized = True       
     
     def _load_initial_settings(self):
         """Загружает начальные настройки"""
@@ -36,6 +36,10 @@ class SettingsCoordinator:
             # Загружаем шаблон шрифтов
             font_template = settings.get("last_font_template", "1_цех")
             self._current_font_template = font_template
+            
+            # Загружаем статус архивации
+            archive_status = settings.get("archive_status", "on")
+            self._current_archive_status = archive_status            
             
             if not self._is_template_synced_with_workshop():
                 self._auto_sync_template_with_workshop()
@@ -125,6 +129,22 @@ class SettingsCoordinator:
             "1": "1_цех",
             "2": "2_цех"
         }
+        
+    def get_archive_status(self) -> str:
+        """Возвращает текущий статус архивации"""
+        return getattr(self, '_current_archive_status', 'on')
+    
+    def refresh_archive_status(self):
+        """Обновляет статус архивации из настроек и уведомляет подписчиков"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json") or {}
+            new_status = settings.get("archive_status", "on")
+            
+            if new_status != getattr(self, '_current_archive_status', 'on'):
+                self._current_archive_status = new_status
+                self._notify_subscribers()
+        except Exception as e:
+            print(f"Ошибка обновления статуса архивации: {e}")                       
     
     def _save_workshop_setting(self):
         """Сохраняет настройку цеха"""

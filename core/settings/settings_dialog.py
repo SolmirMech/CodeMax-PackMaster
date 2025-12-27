@@ -27,6 +27,7 @@ class SettingsDialog:
         self.excel_folder_path = ""
         self.status_var = tk.StringVar(value="")
         self.workshop_var = tk.StringVar(value="1")
+        self.archive_status_var = tk.StringVar(value="on")
         self.paper_width_var = tk.StringVar(value="")
         self.paper_height_var = tk.StringVar(value="")
         self.main_frame = None
@@ -173,7 +174,30 @@ class SettingsDialog:
         ttk.Label(manufacturer_frame, text="Суффикс заказа:").grid(row=2, column=0, sticky="w", pady=5)
         self.settings_suffix_var = tk.StringVar(value=self.preview_export_module.order_suffix.get())
         suffix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_suffix_var, width=6)
-        suffix_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")                   
+        suffix_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        
+        # 3. РАЗДЕЛ: Настройки архивации
+        archive_frame = ttk.LabelFrame(left_frame, text="Архивация листов при печати", padding=5)
+        archive_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        # Загружаем сохранённый статус
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        archive_status = settings.get("archive_status", "on")
+        self.archive_status_var.set(archive_status)
+        
+        ttk.Radiobutton(
+            archive_frame, 
+            text="Включить", 
+            variable=self.archive_status_var, 
+            value="on"
+        ).pack(side=tk.LEFT, padx=(10, 5))
+        
+        ttk.Radiobutton(
+            archive_frame, 
+            text="Выключить", 
+            variable=self.archive_status_var, 
+            value="off"
+        ).pack(side=tk.LEFT, padx=(5, 10))        
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
@@ -232,6 +256,9 @@ class SettingsDialog:
                 "prefix": self.settings_prefix_var.get().strip(),
                 "suffix": self.settings_suffix_var.get().strip()
             }
+            
+            # Сохраняем статус архивации
+            shared_settings["archive_status"] = self.archive_status_var.get()            
 
             # Сохраняем список резчиков
             new_cutters = []
@@ -249,14 +276,15 @@ class SettingsDialog:
                     new_packers.append(packer_name)
             shared_settings["packers"] = new_packers
             
+            # Сохраняем упаковщиков через config_manager
+            self.preview_export_module.config_manager.save_packers(new_packers)            
+            
+            # Сохраняем значение номера цеха
             workshop = self.workshop_var.get()
             self.coordinator.set_workshop(workshop)
             shared_settings["workshop"] = workshop
             
             self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
-
-            # Сохраняем упаковщиков через config_manager
-            self.preview_export_module.config_manager.save_packers(new_packers)
 
             # Сохраняем все изменения в shared_utils.json
             self.preview_export_module.config_manager.save_json_settings("shared_utils.json", shared_settings)
@@ -265,6 +293,7 @@ class SettingsDialog:
             self.preview_export_module.order_prefix.set(shared_settings["order_number"]["prefix"])
             self.preview_export_module.order_suffix.set(shared_settings["order_number"]["suffix"])
 
+            self.coordinator.refresh_archive_status()
             self.coordinator._notify_subscribers()
 
             self.last_status = "✅ Общие настройки успешно сохранены!"
