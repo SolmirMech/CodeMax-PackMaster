@@ -195,8 +195,8 @@ class BoxEditorDialog:
         header_frame = ttk.Frame(scrollable_frame)
         header_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(header_frame, text="Название коробки", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
-        ttk.Label(header_frame, text="Вес коробки (г)", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(15, 15))
+        ttk.Label(header_frame, text="Название", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
+        ttk.Label(header_frame, text="Вес (в граммах)", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(85, 15))
 
         # Создаем поля ввода
         self.box_size_entries = []
@@ -215,7 +215,6 @@ class BoxEditorDialog:
         ttk.Button(button_frame, text="💾 Сохранить", command=self.save_boxes).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="➕ Добавить строку", 
                   command=lambda: self._create_box_row(scrollable_frame, "", "")).pack(side=tk.LEFT, padx=(5, 30))
-        ttk.Button(button_frame, text="❌ Отмена", command=self.window.destroy).pack(side=tk.LEFT, padx=5)
 
         self.window.bind("<Return>", lambda e: self.save_boxes())
 
@@ -231,7 +230,7 @@ class BoxEditorDialog:
         self.box_size_entries.append(size_entry)
 
         # Поле для веса
-        weight_entry = ttk.Entry(row_frame, width=15)
+        weight_entry = ttk.Entry(row_frame, width=20)
         weight_entry.insert(0, str(weight))
         weight_entry.pack(side=tk.LEFT, padx=(0, 10))
         self.box_weight_entries.append(weight_entry)
@@ -642,13 +641,13 @@ class TechnicalSpecificationsDialog:
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Label(header_frame, text="Изготовитель", width=20, 
-                 font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=2)
-        ttk.Label(header_frame, text="Адрес", width=35,
-                 font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=2)
-        ttk.Label(header_frame, text="Название продукта", width=25,
-                 font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=2)
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=2)
+        ttk.Label(header_frame, text="Адрес изготовителя", width=25,
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(5, 2))
+        ttk.Label(header_frame, text="Название материала", width=20,
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(75, 2))
         ttk.Label(header_frame, text="Номер ТУ", width=20,
-                 font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=2)
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(5, 2))
         
         # Загружаем текущие ТУ
         current_specs = self.get_current_specifications()
