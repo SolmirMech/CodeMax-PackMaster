@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, StringVar, BooleanVar, filedialog, messagebox
 import os
+import re
 import sys
 import shutil
 import xml.etree.ElementTree as ET
@@ -406,10 +407,19 @@ class OrderDataProcessor:
                     
                     # Преобразуем в старый формат
                     for product in parsed_result.get('products', []):
+                        # Извлекаем sheet_number из sheet_name
+                        sheet_name = product.get('sheet_name', '')  # Полное название тиража
+                        sheet_number = ""
+                        if sheet_name:
+                            import re
+                            match = re.search(r'[A-Za-zА-Яа-я]-?(\d+)', sheet_name)
+                            if match:
+                                sheet_number = match.group(1)
+                        
                         product_dict = {
                             'name': product.get('full_name', product.get('product_name', '')),
                             'detail_num': product.get('detail_number', ''),
-                            'sheet_number': parsed_result.get('sheet_number', ''),
+                            'sheet_number': product.get('sheet_number', ''),
                             'customer': parsed_result.get('customer', ''),
                             'winding_scheme': parsed_result.get('operations', {}).get('winding_scheme', ''),
                             'sleeve_diameter': parsed_result.get('operations', {}).get('sleeve_diameter', ''),
@@ -477,9 +487,10 @@ class OrderDataProcessor:
         if not self.parsed_data:
             self.parse_status.config(text="Данные не найдены", foreground="red")
             return
-            
+        
         # Ищем конкретный вид или тираж
         search_digits = self.detail_num_search.get().strip()
+        search_digits_numeric = re.sub(r'\D', '', search_digits)  # Убираем всё, кроме цифр
         
         # проверяем минимальную длину
         if search_digits and len(search_digits) < 3:
@@ -491,21 +502,25 @@ class OrderDataProcessor:
         
         # нужно правильно обработать parsed_data после использования нового парсера
         if search_digits:
-            found_products = []
-            found_by = ""  # Для отображения по чему нашли
-            
-            # Ищем продукты по detail_num и sheet_number
-            for product in self.parsed_data:
-                detail_num = product.get('detail_num', '')
-                sheet_number = product.get('sheet_number', '')
+            if search_digits:
+                found_products = []
+                found_by = ""
                 
-                # Если введенные цифры есть в detail_num ИЛИ в sheet_number
-                if search_digits in detail_num or search_digits in sheet_number:
-                    found_products.append(product)
-                    if search_digits in detail_num:
-                        found_by = f"вид {detail_num}"
-                    elif search_digits in sheet_number:
-                        found_by = f"тираж I-{sheet_number}"
+                # Нормализуем поиск (оставляем только цифры)
+                search_digits_numeric = re.sub(r'\D', '', search_digits)
+                
+                for product in self.parsed_data:
+                    detail_num = product.get('detail_num', '')
+                    sheet_number = product.get('sheet_number', '')  # ← Теперь индивидуальный!
+                    
+                    # Ищем по detail_num ИЛИ по sheet_number (только цифры)
+                    if (search_digits in detail_num or 
+                        (search_digits_numeric and search_digits_numeric in sheet_number)):
+                        found_products.append(product)
+                        if search_digits in detail_num:
+                            found_by = f"вид {detail_num}"
+                        elif search_digits_numeric in sheet_number:
+                            found_by = f"тираж I-{sheet_number}"
             
             if found_products:
                 # Сохраняем отфильтрованные данные

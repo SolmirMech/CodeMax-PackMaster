@@ -46,64 +46,62 @@ class XMLOrderParser:
             return self._parse_old_format(xml_content)
     
     def _parse_new_format(self, xml_content: str) -> Dict[str, Any]:
-        """
-        Парсит новый формат XML (с <ОперацииЗаказа>).
-        
-        Структура нового формата:
-        <export>
-          <order>
-            <Заказчик>...</Заказчик>
-            <parent_sheet>
-              <product>
-                <НомерДетали>...</НомерДетали>
-                <НаименДетали>...</НаименДетали>
-                <GTIN>...</GTIN>
-                <ДатаЭмиссии>...</ДатаЭмиссии>
-                <ТиражДетали>...</ТиражДетали>
-              </product>
-            </parent_sheet>
-            <ОперацииЗаказа>
-              <Операция>...</Операция> с кодами
-            </ОперацииЗаказа>
-          </order>
-        </export>
-        """
+        """Парсит новый формат XML (с <ОперацииЗаказа>)."""
         try:
             root = ET.fromstring(xml_content)
             
             # Базовые данные заказа
             customer = self._get_text(root, './/Заказчик')
             
-            # Общая дата эмиссии
+            # Общая дата эмиссии - ДОЛЖНА БЫТЬ ОПРЕДЕЛЕНА ДО ИСПОЛЬЗОВАНИЯ
             parent_sheet_date = self._get_text(root, './/parent_sheet/ДатаЭмиссии')
             
-            # Данные продукта/детали
+            # Словарь для быстрого поиска: id_order_sheet -> sheet_number
+            sheet_mapping = {}
+            
+            # Сначала собираем все sheet_number для каждого parent_sheet
+            for parent_sheet in root.findall('.//parent_sheet'):
+                id_elem = parent_sheet.find('id_order_sheet')
+                sheet_name_elem = parent_sheet.find('НаименОттиска')
+                
+                if id_elem is not None and id_elem.text and sheet_name_elem is not None and sheet_name_elem.text:
+                    sheet_id = id_elem.text.strip()
+                    sheet_name = sheet_name_elem.text.strip()
+                    
+                    # Извлекаем цифры из НаименОттиска
+                    match = re.search(r'(\d+)', sheet_name)
+                    if match:
+                        sheet_mapping[sheet_id] = match.group(1)
+            
+            # Теперь парсим продукты
             products = []
             for product_elem in root.findall('.//product'):
-                product = self._parse_product(product_elem, parent_sheet_date, root)
+                # Получаем id_order_sheet этого продукта
+                sheet_id_elem = product_elem.find('id_order_sheet')
+                sheet_number = ""
+                
+                if sheet_id_elem is not None and sheet_id_elem.text:
+                    sheet_id = sheet_id_elem.text.strip()
+                    sheet_number = sheet_mapping.get(sheet_id, "")
+                
+                product = self._parse_product(
+                    product_elem, 
+                    parent_sheet_date,  # ← ТЕПЕРЬ ОПРЕДЕЛЕНА
+                    root,
+                    sheet_number
+                )
                 if product:
                     products.append(product)
-            
+                                
             # Данные из операций
             operations, comments = self._parse_operations_and_comments(root)
-            
-            # Извлекаем sheet_name для поиска по тиражу
-            sheet_name = self._get_text(root, './/НаименОттиска')
-            sheet_number = ""
-            if sheet_name:
-                # Ищем паттерн "буква-цифры" в sheet_name
-                match = re.search(r'[A-Za-zА-Яа-я]-?(\d+)', sheet_name)
-                if match:
-                    sheet_number = match.group(1)
             
             return {
                 'format': 'NEW_FORMAT',
                 'customer': customer,
                 'products': products,
                 'operations': operations,
-                'comments': comments,
-                'sheet_number': sheet_number,
-                'sheet_name': sheet_name
+                'comments': comments
             }
             
         except ET.ParseError as e:
@@ -158,7 +156,8 @@ class XMLOrderParser:
         
         return operations, comments
     
-    def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", root: ET.Element = None) -> Optional[Dict[str, str]]:
+    def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", 
+                       root: ET.Element = None, sheet_number: str = "") -> Optional[Dict[str, str]]:
         """Парсит элемент <product>."""
         try:
             detail_number = self._get_text(product_elem, 'НомерДетали')
@@ -176,29 +175,16 @@ class XMLOrderParser:
             if not product_name:  # Если нет названия - продукт невалиден
                 return None
             
-            # Ищем stream для конкретного вида в операции резки (ВнутреннийИдентификатор="31")
-            stream = "1"  # Значение по умолчанию
-            
-            if root and detail_number:
-                # Ищем все операции резки
-                for operation in root.findall('.//Операция[@ВнутреннийИдентификатор="31"]'):
-                    element_name = operation.get('НаименованиеЭлементаОперации', '')
-                    
-                    # Проверяем, содержит ли эта операция номер нашей детали
-                    if detail_number in element_name:
-                        # В этой операции ищем свойство с кодом 8516
-                        prop = operation.find('.//Свойство[@Код="8516"]')
-                        if prop is not None:
-                            value = prop.get('Значение', '')
-                            if value:
-                                stream = value
-                                break  # Нашли - выходим из цикла
+            # ВАЖНО: Берем stream из тега КолвоРучьев внутри product, а не из операции!
+            stream = self._get_text(product_elem, 'КолвоРучьев')
+            if not stream:
+                stream = "1"  # Значение по умолчанию
             
             # Формируем полное название с джит
             full_name = product_name
             if gtin and len(gtin) >= 4:
                 short_gtin = gtin[-4:]
-                full_name = f"{product_name} джит{short_gtin}"
+                full_name = f"{product_name} джит{short_gtin}"        
             
             return {
                 'detail_number': detail_number,  # Для поиска
@@ -207,29 +193,12 @@ class XMLOrderParser:
                 'gtin': gtin,
                 'date_emission': date_emission,  # С приоритетом
                 'quantity': quantity,  # ТиражДетали
-                'sheet_name': self._get_sheet_name(product_elem),  # Для поиска по оттиску
+                'sheet_number': sheet_number,  # Только цифры из тиража (57043, 57044 и т.д.)
                 'stream': stream  # количество ручьёв для этого вида
             }
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")
-            return None
-        
-    def _get_sheet_name(self, product_elem: ET.Element) -> str:
-        """Получает имя оттиска (НаименОттиска) для поиска."""
-        try:
-            # Ищем родительский parent_sheet
-            parent = product_elem
-            for _ in range(3):  # Максимум 3 уровня вверх
-                parent = parent.getparent()
-                if parent is None:
-                    break
-                if parent.tag.endswith('parent_sheet') or parent.tag == 'parent_sheet':
-                    sheet_name_elem = parent.find('НаименОттиска')
-                    if sheet_name_elem is not None and sheet_name_elem.text:
-                        return sheet_name_elem.text.strip()
-        except Exception:
-            pass
-        return ""
+            return None             
     
     def _parse_old_format(self, xml_content: str) -> Dict[str, Any]:
         """
