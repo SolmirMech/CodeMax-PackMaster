@@ -405,7 +405,7 @@ class OrderDataProcessor:
                     
                 xml_digits = digits_match.group(1)
                 
-                # СТРОГОЕ СРАВНЕНИЕ как в auto_fill_from_xml
+                # Строгое сравнение как в auto_fill_from_xml
                 if xml_digits != order_number:
                     continue  # Пропускаем файлы с другими номерами
                 

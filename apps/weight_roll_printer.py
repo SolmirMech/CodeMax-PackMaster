@@ -23,6 +23,10 @@ class RollLabelPrinter:
         self.preview_module = None
         self.comment_manager = None
         
+        order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
+        self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
+        self.order_suffix = StringVar(value=order_settings.get("suffix", "/5"))        
+        
         # Переменные интерфейса и данных
         self.show_manufacturer_var = BooleanVar(value=False)  # Показывать производителя
         self.show_manufacturer_var.trace_add("write", self._on_producer_visibility_changed)
@@ -34,9 +38,7 @@ class RollLabelPrinter:
         self.customer_var = StringVar(value="")  # Наименование заказчика
         self.gross_weight_kg_var = StringVar(value="")  # Вес ролика брутто в кг
         self.net_weight_kg_var = StringVar(value="")  # Вес ролика нетто в кг (авторасчет)
-        self.order_prefix = StringVar(value="Ф")  # Префикс номера заказа (например, "Ф")
         self.order_number = StringVar(value="")  # Основной номер заказа
-        self.order_suffix = StringVar(value="/5")  # Суффикс номера заказа (например, "/5")
         self.date_var = StringVar(value=datetime.now().strftime("%d.%m.%Y"))  # Дата изготовления
         self.packer_var = StringVar(value="")  # ФИО упаковщика
         self.quantity_var = StringVar(value="")  # Количество этикеток в одном ролике
@@ -497,14 +499,23 @@ class RollLabelPrinter:
             self.customer_var.set(customer)
             self.check_manufacturer_visibility(customer)
         
-        # 2. Дата эмиссии (берём из первого продукта если есть)
+        # 2. Префикс и суффикс заказа
+        order_prefix = parsed_data.get('order_prefix', '')
+        order_suffix = parsed_data.get('order_suffix', '')
+        
+        if order_prefix:
+            self.order_prefix.set(order_prefix)
+        if order_suffix:
+            self.order_suffix.set(order_suffix)
+        
+        # 3. Дата эмиссии (берём из первого продукта если есть)
         products = parsed_data.get('products', [])
         if products:
             date_emission = products[0].get('date_emission', '')
             if date_emission:
                 self.date_emission_var.set(date_emission)
         
-        # 3. Данные из операций
+        # 4. Данные из операций
         operations = parsed_data.get('operations', {})
         
         if operations.get('winding_scheme'):
@@ -529,7 +540,7 @@ class RollLabelPrinter:
         if operations.get('stream_width'):
             self.stream_width_var.set(operations['stream_width'])
             
-        # 4. Комментарии
+        # 5. Комментарии
         comments = parsed_data.get('comments', {})
         operations = parsed_data.get('operations', {})
         

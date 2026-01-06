@@ -45,6 +45,22 @@ class XMLOrderParser:
             # Базовые данные заказа
             customer = self._get_text(root, './/Заказчик')
             
+            # Добавляем парсинг номера заказа
+            order_number = self._get_text(root, './/НомерЗаказа')
+            order_prefix = ""
+            order_suffix = ""
+            
+            if order_number:
+                # Извлекаем префикс (буквы в начале) и суффикс (после цифр)
+                prefix_match = re.match(r'^([A-ZА-Я]+)', order_number)
+                if prefix_match:
+                    order_prefix = prefix_match.group(1)
+                
+                # Ищем суффикс после цифр (например, /5)
+                suffix_match = re.search(r'(\/\d+)$', order_number)
+                if suffix_match:
+                    order_suffix = suffix_match.group(1)
+            
             # Общая дата эмиссии
             parent_sheet_date = self._get_text(root, './/parent_sheet/ДатаЭмиссии')
             
@@ -77,8 +93,8 @@ class XMLOrderParser:
                     sheet_number = sheet_mapping.get(sheet_id, "")
                 
                 product = self._parse_product(
-                    product_elem, 
-                    parent_sheet_date,  # ← ТЕПЕРЬ ОПРЕДЕЛЕНА
+                    product_elem,
+                    parent_sheet_date,
                     root,
                     sheet_number
                 )
@@ -91,6 +107,8 @@ class XMLOrderParser:
             return {
                 'format': 'NEW_FORMAT',
                 'customer': customer,
+                'order_prefix': order_prefix,  # Добавляем префикс
+                'order_suffix': order_suffix,  # Добавляем суффикс
                 'products': products,
                 'operations': operations,
                 'comments': comments
