@@ -232,7 +232,7 @@ class XMLOrderParser:
                 result['sheet_names'].append(product['sheet_name'])
         
         return result
-
+        
 # Фабричная функция для удобства использования
 def parse_xml(xml_content: str) -> Dict[str, Any]:
     """Упрощенный интерфейс для парсинга XML."""
