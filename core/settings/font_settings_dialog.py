@@ -52,6 +52,10 @@ class FontSettingsDialog:
                     "preview": 16,
                     "print": 44
                 },
+                "order_number": {
+                    "preview": 20,
+                    "print": 38
+                },
                 "total": {
                     "preview": 25,
                     "print": 55
@@ -186,9 +190,22 @@ class FontSettingsDialog:
         template_settings = all_settings.get(self.current_template)
         
         if template_settings:
+            # Проверяем и добавляем отсутствующие поля
+            default_settings = self.get_default_font_settings()
+            
+            # Для ролика
+            for key in default_settings["roll"]:
+                if key not in template_settings["roll"]:
+                    template_settings["roll"][key] = default_settings["roll"][key]
+            
+            # Для коробки
+            for key in default_settings["box"]:
+                if key not in template_settings["box"]:
+                    template_settings["box"][key] = default_settings["box"][key]
+            
             return template_settings
         else:
-            return self.get_default_font_settings()            
+            return self.get_default_font_settings()
         
     def create_template_panel(self):
         """Создает панель управления шаблонами"""
@@ -510,6 +527,7 @@ class FontSettingsDialog:
             ("🏠 Адрес", "address"),
             ("💼 Заказчик", "customer"),
             ("🏷 Изделие", "product"),
+            ("📋 Номер заказа", "order_number"),
             ("🔢 Всего этикеток", "total"),
             ("📑 ТУ", "tu_number"),
             ("👷 Упаковщик", "packer"),

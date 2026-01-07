@@ -14,6 +14,7 @@ class PDFTemplateFiller:
         "customer": "customer",      # Заказчик
         "product": "product",        # Изделие
         "packer": "other",           # Упаковщик
+        "onum": "order_number",      # Номер заказа
         
         # Поля ролика и коробки (группа "other")
         "brutto": "other",           # Вес брутто
@@ -22,7 +23,6 @@ class PDFTemplateFiller:
         "tr": "other",               # Количество роликов
         "sx": "other",               # Схема намотки
         "dia": "other",              # Диаметр втулки
-        "onum": "other",             # Номер заказа
         "date": "other",             # Дата изготовления
         
         # Поля только для коробки
@@ -261,7 +261,7 @@ class PDFTemplateFiller:
             transformed_rect = rect * mat
             
             setting_field_type = self.FIELD_MAPPING.get(field_type, field_type)
-            
+                        
             # Определяем размер шрифта из настроек или используем значения по умолчанию
             if self.font_settings:
                 font_size = self._get_font_size_from_settings(setting_field_type, for_print)
@@ -309,6 +309,10 @@ class PDFTemplateFiller:
                 display_text = f"{text}"
             elif field_type == 'tr' and text:
                 display_text = f"{text} шт"
+            elif field_type == 'rol' and text:
+                display_text = f"{text} шт"
+            elif field_type == 'total' and text:
+                display_text = f"{text} шт"                
             elif field_type == 'box_brut' and text:
                 display_text = f"Брутто {text} кг"
             elif field_type == 'box_net' and text:
@@ -381,7 +385,7 @@ class PDFTemplateFiller:
         if not self.font_settings:
             return 18
             
-        setting_type = "print" if for_print else "preview"
+        setting_type = "print" if for_print else "preview"     
         
         # Ищем настройку для конкретного поля
         if field_type in self.font_settings:

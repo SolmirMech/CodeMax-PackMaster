@@ -69,7 +69,7 @@ class ExportModule:
     
     def create_excel_section(self, parent):
         """Создает секцию экспорта коробки"""
-        box_frame = ttk.LabelFrame(parent, text="Экспорт коробки", padding=10)
+        box_frame = ttk.LabelFrame(parent, text="Упак.лист на коробку", padding=10)
         box_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Конфигурация колонок
@@ -77,18 +77,15 @@ class ExportModule:
         box_frame.columnconfigure(1, weight=1)
         
         # Комбобокс выбора коробки
+        ttk.Label(box_frame, text="Вес коробки:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
         self.box_sizes_combo = ttk.Combobox(
             box_frame,
             textvariable=self.box_size_var,
             state="readonly",
             width=20
         )
-        self.box_sizes_combo.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
-        self.box_sizes_combo.bind("<<ComboboxSelected>>", self.on_box_selected)
-        
-        # Поле веса коробки
-        self.box_weight_entry = ttk.Entry(box_frame, textvariable=self.box_weight_var, width=8)
-        self.box_weight_entry.grid(row=0, column=1, padx=(5, 0), pady=5, sticky="w")
+        self.box_sizes_combo.grid(row=0, column=1, padx=(0, 5), pady=5, sticky="w")
+        self.box_sizes_combo.bind("<<ComboboxSelected>>", self.on_box_selected)     
         
         # Кнопки управления Excel
         ttk.Button(box_frame, text="🎯 В Excel", 
@@ -101,24 +98,24 @@ class ExportModule:
         excel_menu.menu = tk.Menu(excel_menu, tearoff=0)
         excel_menu["menu"] = excel_menu.menu
         excel_menu.menu.add_command(
-            label="Очистить коробку", 
+            label="Очистить лист коробки", 
             command=self.clear_excel_data
         )
         
         # Кнопка предпросмотра коробки
         btn_preview = ttk.Button(
             box_frame,
-            text="👀 Просмотр",
-            width=12,
+            text="👀 Просмотр листа",
+            width=18,
             command=self.show_box_preview,
             style="Accent.TButton"
         )
 
-        btn_preview.grid(row=2, column=0, pady=10, sticky="w")
+        btn_preview.grid(row=2, column=0, pady=10, sticky="w", columnspan=2)
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
-        pallet_frame = ttk.LabelFrame(parent, text="Экспорт поддона", padding=10)
+        pallet_frame = ttk.LabelFrame(parent, text="Упак.лист на поддон", padding=10)
         pallet_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Конфигурация колонок
@@ -126,18 +123,15 @@ class ExportModule:
         pallet_frame.columnconfigure(1, weight=1)
         
         # Выбор поддона и вес
+        ttk.Label(pallet_frame, text="Вес поддона:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
         self.pallet_sizes_combo = ttk.Combobox(
             pallet_frame,
             textvariable=self.pallet_size_var,
             state="readonly",
             width=20
         )
-        self.pallet_sizes_combo.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
+        self.pallet_sizes_combo.grid(row=0, column=1, padx=(0, 5), pady=5, sticky="w")
         self.pallet_sizes_combo.bind("<<ComboboxSelected>>", self.on_pallet_selected)
-
-        pallet_weight_entry = ttk.Entry(pallet_frame, textvariable=self.pallet_weight_var, 
-                                       width=8)
-        pallet_weight_entry.grid(row=0, column=1, padx=(5, 0), pady=5, sticky="w")
 
         # Количество коробок
         ttk.Label(pallet_frame, text="Кол-во коробок:").grid(row=1, column=0, padx=(0, 5), pady=5, sticky="w")
@@ -155,18 +149,18 @@ class ExportModule:
         pallet_menu.menu = tk.Menu(pallet_menu, tearoff=0)
         pallet_menu["menu"] = pallet_menu.menu
         pallet_menu.menu.add_command(
-            label="Очистить поддон", 
+            label="Очистить лист поддона", 
             command=self.clear_pallet_excel
         )
         
         # Кнопка предпросмотра поддона
         ttk.Button(
             pallet_frame,
-            text="👀 Просмотр",
-            width=12,
+            text="👀 Просмотр листа",
+            width=18,
             command=self.show_pallet_preview,
             style="Accent.TButton"
-        ).grid(row=3, column=0, pady=(5, 0), sticky="w")
+        ).grid(row=3, column=0, pady=(5, 0), sticky="w", columnspan=2)
         
     def show_box_preview(self):
         """Открывает предпросмотр для коробки"""

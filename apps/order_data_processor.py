@@ -461,7 +461,7 @@ class OrderDataProcessor:
                     encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
                     return raw_data.decode(encoding)
                 except:
-                    return raw_data.decode('utf-8', errors='ignore')        
+                    return raw_data.decode('utf-8', errors='ignore')
 
     def get_product_name(self):
         """Получает данные продукта из XML файлов с поддержкой поиска по detail_num и номеру тиража"""
@@ -509,6 +509,13 @@ class OrderDataProcessor:
         if not self.parsed_data:
             self.parse_status.config(text="Данные не найдены", foreground="red")
             return
+        
+        # Если найдено больше одного вида - отправляем "Ассортимент" в roll_module
+        if len(self.parsed_data) > 1 and self.roll_module:
+            # Отправляем "Ассортимент" в поле названия продукции
+            self.roll_module.product_text.delete("1.0", tk.END)
+            self.roll_module.product_text.insert("1.0", "Ассортимент")
+            self.parse_status.config(text="Найдено несколько видов. Установлено 'Ассортимент'", foreground="green")
         
         # Ищем конкретный вид или тираж
         search_digits = self.detail_num_search.get().strip()

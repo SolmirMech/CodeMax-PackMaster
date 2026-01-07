@@ -125,6 +125,20 @@ class RollPreview:
         
         if loaded_settings and active_template in loaded_settings:
             self.font_settings = loaded_settings[active_template]
+            
+            # ГАРАНТИРУЕМ, что все необходимые ключи присутствуют
+            default_settings = FontSettingsDialog.get_default_font_settings()
+            
+            # Для ролика
+            for key in default_settings["roll"]:
+                if key not in self.font_settings["roll"]:
+                    self.font_settings["roll"][key] = default_settings["roll"][key]
+            
+            # Для коробки  
+            for key in default_settings["box"]:
+                if key not in self.font_settings["box"]:
+                    self.font_settings["box"][key] = default_settings["box"][key]
+                    
         else:
             # Используем настройки по умолчанию
             self.font_settings = FontSettingsDialog.get_default_font_settings()
@@ -134,9 +148,22 @@ class RollPreview:
             self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
         if self.box_pdf_filler and self.font_settings:
             self.box_pdf_filler.set_font_settings(self.font_settings["box"])
-        
+            
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
+        # ГАРАНТИРУЕМ, что все необходимые ключи присутствуют
+        default_settings = FontSettingsDialog.get_default_font_settings()
+        
+        # Для ролика
+        for key in default_settings["roll"]:
+            if key not in new_settings["roll"]:
+                new_settings["roll"][key] = default_settings["roll"][key]
+        
+        # Для коробки  
+        for key in default_settings["box"]:
+            if key not in new_settings["box"]:
+                new_settings["box"][key] = default_settings["box"][key]
+        
         self.font_settings = new_settings
         # Передаем ТОЛЬКО СВОИ секции настроек
         if self.roll_pdf_filler:
@@ -366,9 +393,9 @@ class RollPreview:
         except Exception as e:
             print(f"Ошибка загрузки данных изготовителя: {e}")
             return {
-                'name': 'ООО "Ремас-Флексо"',
-                'address': '426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1',
-                'tu_number': 'ТУ 9570-001-26604209-2014'
+                'name': 'Производитель',
+                'address': 'Адрес производителя',
+                'tu_number': 'ТУ: Номер технических условий'
             }
     
     def _get_regular_manufacturer_data(self, order_number: str) -> dict:
@@ -422,9 +449,9 @@ class RollPreview:
         
         # Fallback
         return {
-            'name': 'ООО "Ремас-Флексо"',
-            'address': '426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1',
-            'tu_number': 'ТУ 9570-001-26604209-2014'
+            'name': 'Производитель',
+            'address': 'Адрес производителя',
+            'tu_number': 'ТУ: Номер технических условий'
         }
 
     def _copy_packaging_tu_from_assets(self):
@@ -504,9 +531,21 @@ class RollPreview:
         
         data = self.current_data or {}
         
+        # Форматируем общее количество с разделителем
+        total_quantity = data.get('total_quantity', '')
+        if total_quantity:
+            try:
+                # Преобразуем в число и форматируем с разделителем тысяч
+                total_quantity_int = int(total_quantity)
+                formatted_total = f"{total_quantity_int:,}".replace(",", " ")
+            except (ValueError, TypeError):
+                formatted_total = total_quantity
+        else:
+            formatted_total = ''
+        
         # Добавляем специфичные для коробки поля
         data_map.update({
-            "$total": data.get('total_quantity', ''),
+            "$total": formatted_total,
             "$box_brut": data.get('box_brut', ''),
             "$box_net": data.get('box_net', ''),
         })

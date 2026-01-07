@@ -271,18 +271,21 @@ class RollLabelPrinter:
         rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=2, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
         
-        # Схема намотки и Диаметр втулки
-        ttk.Label(data_frame, text="Схема намотки:").grid(
+        # Дополнительные поля:
+        
+        # Вес рулона
+        ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
             row=5, column=0, sticky="w", pady=3
         )
-        winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
-        winding_entry.grid(row=5, column=0, padx=(180, 0), pady=3, sticky="w")
+        gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
+        gross_entry.grid(row=5, column=1, padx=(5, 0), pady=3, sticky="w")
         
-        ttk.Label(data_frame, text="Диаметр втулки, мм:").grid(
-            row=5, column=1, sticky="w", pady=3
-        )
-        diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        diameter_entry.grid(row=5, column=1, padx=(210, 0), pady=3, sticky="w")
+        # Вес втулки
+        ttk.Label(data_frame, text="Вес втулки, г:").grid(
+            row=5, column=1, sticky="w", padx=(115, 0), pady=3
+        )        
+        sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
+        sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=3, sticky="w")             
         
         # Длина этикетки
         ttk.Label(data_frame, text="Длина этикетки, мм:").grid(
@@ -296,21 +299,7 @@ class RollLabelPrinter:
             row=6, column=1, sticky="w", pady=2
         )              
         roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=2, sticky="w")        
-
-        # Вес рулона
-        ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
-            row=7, column=0, sticky="w", pady=3
-        )
-        gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
-        gross_entry.grid(row=7, column=1, padx=(5, 0), pady=3, sticky="w")
-        
-        # Вес втулки
-        ttk.Label(data_frame, text="Вес втулки, г:").grid(
-            row=7, column=1, sticky="w", padx=(115, 0), pady=3
-        )        
-        sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        sleeve_entry.grid(row=7, column=1, padx=(270, 0), pady=3, sticky="w")
+        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=2, sticky="w")
         
         # Row 8: Поля для номеров съёмов и роликов       
         self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
@@ -333,6 +322,19 @@ class RollLabelPrinter:
         self.stream_width_label.grid(row=9, column=0, sticky="w", pady=2)
         self.stream_width_entry = ttk.Entry(data_frame, textvariable=self.stream_width_var, width=8)
         self.stream_width_entry.grid(row=9, column=0, padx=(200, 0), pady=2, sticky="w")
+        
+        # Схема намотки и Диаметр втулки
+        ttk.Label(data_frame, text="Схема намотки:").grid(
+            row=10, column=0, sticky="w", pady=3
+        )
+        winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
+        winding_entry.grid(row=10, column=0, padx=(180, 0), pady=3, sticky="w")
+        
+        ttk.Label(data_frame, text="Диаметр втулки, мм:").grid(
+            row=10, column=1, sticky="w", pady=3
+        )
+        diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
+        diameter_entry.grid(row=10, column=1, padx=(210, 0), pady=3, sticky="w")        
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
@@ -409,6 +411,9 @@ class RollLabelPrinter:
     
     def on_order_enter_pressed(self, event=None):
         """Обрабатывает нажатие Enter в поле номера заказа."""
+        self.quantity_var.set("")
+        self.rolls_count_var.set("1")
+        
         # 1. Автоматическое заполнение из XML
         self.auto_fill_from_xml()
         
