@@ -13,7 +13,7 @@ class PDFTemplateFiller:
         # Общие поля для ролика и коробки
         "customer": "customer",      # Заказчик
         "product": "product",        # Изделие
-        "packer": "other",           # Упаковщик
+        "packer": "packer",           # Упаковщик
         "onum": "order_number",      # Номер заказа
         
         # Поля ролика и коробки (группа "other")

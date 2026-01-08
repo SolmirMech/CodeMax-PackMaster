@@ -11,20 +11,20 @@ class FontSettingsDialog:
         return {
             "roll": {
                 "customer": {
-                    "preview": 20,
+                    "preview": 16,
                     "print": 36
                 },
                 "product": {
-                    "preview": 16, 
+                    "preview": 16,
                     "print": 44
                 },
                 "tu_number": {
                     "preview": 12,
                     "print": 24
-                },                
+                },
                 "other": {
-                    "preview": 20,
-                    "print": 42
+                    "preview": 16,
+                    "print": 36
                 },
                 "multiline_settings": {
                     "line_width_mm": 79,
@@ -41,32 +41,28 @@ class FontSettingsDialog:
                     "print": 40
                 },
                 "address": {
-                    "preview": 9, 
+                    "preview": 9,
                     "print": 24
                 },
                 "customer": {
-                    "preview": 20,
-                    "print": 38
+                    "preview": 16,
+                    "print": 36
                 },
                 "product": {
                     "preview": 16,
                     "print": 44
                 },
-                "order_number": {
-                    "preview": 20,
-                    "print": 38
-                },
                 "total": {
-                    "preview": 25,
-                    "print": 55
+                    "preview": 20,
+                    "print": 50
                 },
                 "tu_number": {
                     "preview": 8,
                     "print": 22
                 },
                 "packer": {
-                    "preview": 16,
-                    "print": 36
+                    "preview": 12,
+                    "print": 28
                 },
                 "other": {
                     "preview": 14,
@@ -79,6 +75,12 @@ class FontSettingsDialog:
                     "max_lines": 4,
                     "font_family": "Arial",
                     "font_style": "normal"
+                },
+                "order_number": {
+                    "preview": 16,
+                    "print": 48,
+                    "font_family": "Arial",
+                    "font_style": "bold"
                 }
             }
         }

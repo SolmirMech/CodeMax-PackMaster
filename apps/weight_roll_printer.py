@@ -296,7 +296,7 @@ class RollLabelPrinter:
         self.sleeve_label.grid(row=5, column=1, sticky="w", padx=(115, 0), pady=3)        
         
         self.sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        self.sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=3, sticky="w")             
+        self.sleeve_entry.grid(row=5, column=1, padx=(260, 0), pady=3, sticky="w")             
         
         # Длина этикетки
         self.label_length_label = ttk.Label(data_frame, text="Длина этикетки, мм:")
