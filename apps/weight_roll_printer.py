@@ -60,6 +60,7 @@ class RollLabelPrinter:
         self.roll_num_var = StringVar(value="")   # № ролика  
         self.streams_var = StringVar(value="")    # Кол-во ручьёв
         self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
+        self.xml_tu_number = ""
                     
         self.create_ui()
         self.comment_manager = CommentManager(self.parent, self.comment_button)
@@ -228,7 +229,7 @@ class RollLabelPrinter:
         # Основные поля ввода
         
         # Номер заказа (3 части)
-        ttk.Label(data_frame, text="№ заказа/ Дата:").grid(
+        ttk.Label(data_frame, text="№ заказа:").grid(
             row=3, column=0, sticky="w", pady=5
         )
         entry_prefix = ttk.Entry(data_frame, textvariable=self.order_prefix, width=4)
@@ -422,6 +423,7 @@ class RollLabelPrinter:
     
     def on_order_enter_pressed(self, event=None):
         """Обрабатывает нажатие Enter в поле номера заказа."""
+        self.xml_tu_number = ""
         self.quantity_var.set("")
         self.rolls_count_var.set("1")
         
@@ -509,13 +511,27 @@ class RollLabelPrinter:
 
     def _fill_technical_fields_only(self, parsed_data: dict):
         """Заполняет только технические поля (НЕ product_text!)."""
-        # 1. Заказчик
+        # Заказчик
         customer = parsed_data.get('customer', '')
         if customer:
             self.customer_var.set(customer)
             self.check_manufacturer_visibility(customer)
+            
+        # Изготовитель:
+        executor = parsed_data.get('executor', '')
+        if executor:
+            # Просто ставим значение
+            self.manufacturer_var.set(executor)
+            
+        # Передаем ТУ в preview_module
+        tu_number = parsed_data.get('tu_number', '')
+        # Проверяем на некорректные значения
+        if tu_number and tu_number.strip() not in ["—", "-", ""]:
+            self.xml_tu_number = tu_number.strip()
+        else:
+            self.xml_tu_number = ""  # Очищаем некорректное
         
-        # 2. Префикс и суффикс заказа
+        # Префикс и суффикс заказа
         order_prefix = parsed_data.get('order_prefix', '')
         order_suffix = parsed_data.get('order_suffix', '')
         
@@ -524,14 +540,14 @@ class RollLabelPrinter:
         if order_suffix:
             self.order_suffix.set(order_suffix)
         
-        # 3. Дата эмиссии (берём из первого продукта если есть)
+        # Дата эмиссии (берём из первого продукта если есть)
         products = parsed_data.get('products', [])
         if products:
             date_emission = products[0].get('date_emission', '')
             if date_emission:
                 self.date_emission_var.set(date_emission)
         
-        # 4. Данные из операций
+        # Данные из операций
         operations = parsed_data.get('operations', {})
         
         if operations.get('winding_scheme'):
@@ -556,7 +572,7 @@ class RollLabelPrinter:
         if operations.get('stream_width'):
             self.stream_width_var.set(operations['stream_width'])
             
-        # 5. Комментарии
+        # Комментарии
         comments = parsed_data.get('comments', {})
         operations = parsed_data.get('operations', {})
         
@@ -591,7 +607,6 @@ class RollLabelPrinter:
         """Обработчик изменений настроек от координатора"""
         try:
             self.config_manager.reload_settings()
-            # Обновляем списки упаковщиков и резчиков
             self.update_packers_list()
             self.update_cutters_list()
             self._update_cutter_visibility()
@@ -667,7 +682,7 @@ class RollLabelPrinter:
             
             show_elements = (elements_status == "Показать")
             
-            # Управляем видимостью элементов
+            # Управляем видимостью даты
             if hasattr(self, 'date_entry'):
                 if show_elements:
                     self.date_entry.grid()

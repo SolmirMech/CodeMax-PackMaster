@@ -45,6 +45,10 @@ class XMLOrderParser:
             # Базовые данные заказа
             customer = self._get_text(root, './/Заказчик')
             
+            executor = self._get_text(root, './/Исполнитель')
+            
+            tu_number = self._get_text(root, './/ТУ')
+            
             # Добавляем парсинг номера заказа
             order_number = self._get_text(root, './/НомерЗаказа')
             order_prefix = ""
@@ -107,8 +111,10 @@ class XMLOrderParser:
             return {
                 'format': 'NEW_FORMAT',
                 'customer': customer,
-                'order_prefix': order_prefix,  # Добавляем префикс
-                'order_suffix': order_suffix,  # Добавляем суффикс
+                'executor': executor,
+                'tu_number': tu_number,
+                'order_prefix': order_prefix,
+                'order_suffix': order_suffix,
                 'products': products,
                 'operations': operations,
                 'comments': comments

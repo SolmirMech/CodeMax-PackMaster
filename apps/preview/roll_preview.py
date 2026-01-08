@@ -126,7 +126,7 @@ class RollPreview:
         if loaded_settings and active_template in loaded_settings:
             self.font_settings = loaded_settings[active_template]
             
-            # ГАРАНТИРУЕМ, что все необходимые ключи присутствуют
+            # Гарантируем, что все необходимые ключи присутствуют
             default_settings = FontSettingsDialog.get_default_font_settings()
             
             # Для ролика
@@ -151,7 +151,7 @@ class RollPreview:
             
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
-        # ГАРАНТИРУЕМ, что все необходимые ключи присутствуют
+        # Гарантируем, что все необходимые ключи присутствуют
         default_settings = FontSettingsDialog.get_default_font_settings()
         
         # Для ролика
@@ -373,18 +373,41 @@ class RollPreview:
         )
         
     def _get_manufacturer_data(self, order_number: str) -> dict:
-        """Получает данные изготовителя из выпадающих списков или автоматически"""
+        """Получает данные изготовителя: сначала из XML, потом из настроек"""
         try:
-            # Если выбран "Без изготовителя" - скрываем name и address, но оставляем ТУ
+            # 1. Пробуем получить ТУ из XML (высший приоритет)
+            if (self.connected_roll_module and 
+                hasattr(self.connected_roll_module, 'xml_tu_number') and 
+                self.connected_roll_module.xml_tu_number):
+                
+                tu_from_xml = self.connected_roll_module.xml_tu_number
+                
+                # Если выбран "Без изготовителя"
+                if (self.connected_roll_module and 
+                    self.connected_roll_module.show_manufacturer_var.get()):
+                    return {
+                        'name': '',
+                        'address': '',
+                        'tu_number': tu_from_xml  # ТУ из XML
+                    }
+                
+                # Иначе получаем производителя из комбобокса
+                manufacturer_name = self.connected_roll_module.manufacturer_var.get() if self.connected_roll_module else ''
+                return {
+                    'name': manufacturer_name,
+                    'address': '',  # Из XML нет адреса
+                    'tu_number': tu_from_xml  # ТУ из XML
+                }
+            
+            # 2. Если нет XML ТУ - старая логика
             if (self.connected_roll_module and 
                 self.connected_roll_module.show_manufacturer_var.get()):
                 
-                # Получаем данные как обычно, но обнуляем name и address
                 regular_data = self._get_regular_manufacturer_data(order_number)
                 return {
                     'name': '',
                     'address': '',
-                    'tu_number': regular_data['tu_number']  # ТУ сохраняем!
+                    'tu_number': regular_data['tu_number']
                 }
             
             # Иначе обычная логика
