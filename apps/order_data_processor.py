@@ -183,7 +183,7 @@ class OrderDataProcessor:
                 
             if self.excel_file_path and os.path.exists(self.excel_file_path):
                 # Очищаем оба листа: коробку и поддон
-                exporter = WeightOrdersExporter(
+                exporter = WeightOrdersExporter.create_exporter(
                     excel_file_path=self.excel_file_path,
                     roll_module=self.roll_module,
                     preview_module=self.preview_module
@@ -231,7 +231,7 @@ class OrderDataProcessor:
                 return
 
             # Создаем экспортер и выполняем очистку
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.roll_module,
                 preview_module=self.preview_module,
@@ -314,7 +314,7 @@ class OrderDataProcessor:
                 return
 
             # Создаем экспортер и выполняем экспорт в много-видовой лист
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.roll_module,
                 preview_module=self.preview_module,

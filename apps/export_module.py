@@ -372,7 +372,7 @@ class ExportModule:
                 return
 
             # Создаем экспортер с координатором
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
                 preview_module=self.preview_module,
@@ -415,7 +415,7 @@ class ExportModule:
                 return
 
             # Создаем экспортер с координатором
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
                 preview_module=self.preview_module,
@@ -463,7 +463,7 @@ class ExportModule:
                 return
 
             # Создаем экспортер и выполняем экспорт
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
                 preview_module=self.preview_module,
@@ -505,7 +505,7 @@ class ExportModule:
                 return
 
             # Создаем экспортер и выполняем очистку
-            exporter = WeightOrdersExporter(
+            exporter = WeightOrdersExporter.create_exporter(
                 excel_file_path=self.excel_file_path,
                 roll_module=self.connected_roll_module,
                 preview_module=self.preview_module,

@@ -20,6 +20,21 @@ class WeightOrdersExporter:
         self.wb = None
         self.ws = None
         
+    @staticmethod
+    def create_exporter(excel_file_path, roll_module, preview_module, coordinator=None):
+        """Фабричный метод - полная совместимость со старым конструктором"""
+        # Проверяем вес
+        has_weight = False
+        if roll_module and hasattr(roll_module, 'total_gross_var'):
+            weight_value = roll_module.total_gross_var.get()
+            if weight_value and str(weight_value).strip() and str(weight_value).strip() != '0':
+                has_weight = True
+        
+        if has_weight:
+            return WeightOrdersExporter(excel_file_path, roll_module, preview_module, coordinator)
+        else:
+            return NoWeightOrdersExporter(excel_file_path, roll_module, preview_module, coordinator)
+        
     def export_data(self, enable_pallet=False, pallet_data=None, multitype_mode=False):
         """Основной метод экспорта данных с четким разделением по цехам"""
         try:
@@ -1366,3 +1381,209 @@ class WeightOrdersExporter:
             except:
                 pass
             return {'success': False, 'error': str(e)}
+            
+            
+class NoWeightOrdersExporter(WeightOrdersExporter):
+    """Экспортер для заказов без веса (только количество этикеток)"""
+    
+    def export_data(self, enable_pallet=False, pallet_data=None, multitype_mode=False):
+        """Экспорт данных в лист 'БезВеса' (только количество)"""
+        try:
+            # Используем правильный путь к файлу
+            actual_file_path = self.get_excel_file_path()
+            
+            if not os.path.exists(actual_file_path):
+                raise FileNotFoundError(f"Файл не найден: {actual_file_path}")
+            
+            # Загружаем книгу
+            self.wb = load_workbook(actual_file_path)
+            
+            # Проверяем наличие листа 'БезВеса'
+            if "БезВеса" not in self.wb.sheetnames:
+                raise ValueError(f"Лист 'БезВеса' не найден в файле {actual_file_path}")
+            
+            self.ws = self.wb["БезВеса"]
+            
+            # Экспортируем базовую информацию
+            self._export_basic_info_for_no_weight()
+            
+            # Экспортируем данные коробок/роликов
+            all_fitted = self._export_quantity_to_empty_cells(pallet_data)
+            
+            # Сохраняем изменения
+            self.wb.save(actual_file_path)
+            
+            # Уведомление (если понадобится позже)
+            if self.coordinator and hasattr(self.coordinator, 'notify'):
+                self.coordinator.notify("excel_exported", {
+                    'file_path': actual_file_path,
+                    'sheet_name': 'БезВеса',
+                    'enable_pallet': False,
+                    'multitype_mode': False,
+                    'workshop': '1'  # Пока только для цеха 1
+                })
+            
+            return {
+                'success': True,
+                'all_fitted': all_fitted
+            }
+            
+        except Exception as e:
+            print(f"Ошибка экспорта в лист 'БезВеса': {e}")
+            return {'success': False, 'error': str(e)}
+        finally:
+            if self.wb:
+                self.wb.close()
+    
+    def _export_basic_info_for_no_weight(self):
+        """Экспортирует основную информацию для листа 'БезВеса'"""
+        try:
+            # Заказчик - D10
+            if self.roll_module and hasattr(self.roll_module, 'customer_var'):
+                customer = self.roll_module.customer_var.get()
+                self._set_cell_value('D10', customer)
+            
+            # Номер заказа - E9
+            if self.roll_module:
+                order_prefix = getattr(self.roll_module, 'order_prefix', None).get()
+                order_number = getattr(self.roll_module, 'order_number', None).get()
+                order_suffix = getattr(self.roll_module, 'order_suffix', None).get()
+                full_order = f"{order_prefix}{order_number}{order_suffix}"
+                self._set_cell_value('E9', full_order)
+            
+            # Наименование продукции - D11
+            if self.roll_module and hasattr(self.roll_module, 'product_text'):
+                product_text = self.roll_module.product_text.get("1.0", "end-1c").strip()
+                self._set_cell_value('D11', product_text)
+                cell = self.ws['D11']
+                cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            
+            # Дата упаковки - E37
+            if self.roll_module and hasattr(self.roll_module, 'date_var'):
+                date = self.roll_module.date_var.get()
+                self._set_cell_value('E37', date)
+            
+            # Упаковщик - E41
+            if self.roll_module and hasattr(self.roll_module, 'packer_var'):
+                packer = self.roll_module.packer_var.get()
+                self._set_cell_value('E41', packer)
+            
+            # Тип продукта - E39
+            if self.roll_module and hasattr(self.roll_module, 'product_type_var'):
+                product_type = self.roll_module.product_type_var.get()
+                self._set_cell_value('E39', product_type)
+            
+            # TU номер - A39
+            tu_number = self._get_tu_number()
+            self._set_cell_value('A39', tu_number)        
+            
+        except Exception as e:
+            print(f"Ошибка при экспорте базовой информации для листа 'БезВеса': {e}")
+    
+    def _export_quantity_to_empty_cells(self, pallet_data):
+        """ТОЧНАЯ КОПИЯ _export_boxes_to_empty_cells_for_first_workshop, но для C,F,I"""
+        
+        boxes_count = 0
+        if pallet_data and pallet_data.get("boxes_count"):
+            try:
+                boxes_count_str = pallet_data["boxes_count"]
+                boxes_count = int(boxes_count_str) if boxes_count_str else 0
+            except (ValueError, TypeError):
+                boxes_count = 0
+        
+        if boxes_count == 0:
+            boxes_count = 1
+         
+        quantity = self._convert_to_number_if_possible(self.roll_module.total_quantity_var.get())
+        
+        empty_cells_found = 0
+        
+        for row in range(14, 29):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            if self.ws[f'C{row}'].value is None:
+                if quantity:
+                    self._set_cell_value(f'C{row}', quantity)
+                empty_cells_found += 1
+        
+        for row in range(14, 29):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            if self.ws[f'F{row}'].value is None:
+                if quantity:
+                    self._set_cell_value(f'F{row}', quantity)
+                empty_cells_found += 1
+        
+        for row in range(14, 29):
+            if empty_cells_found >= boxes_count:
+                break
+                
+            if self.ws[f'I{row}'].value is None:
+                if quantity:
+                    self._set_cell_value(f'I{row}', quantity)
+                empty_cells_found += 1
+        
+        return empty_cells_found >= boxes_count
+    
+    def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
+        """Очищает лист 'БезВеса'"""
+        try:
+            actual_file_path = self.get_excel_file_path()
+            
+            if not os.path.exists(actual_file_path):
+                raise FileNotFoundError(f"Файл не найден: {actual_file_path}")
+            
+            if self._is_file_locked(actual_file_path):
+                raise PermissionError(f"Файл {actual_file_path} открыт в Excel. Закройте его и попробуйте снова.")
+            
+            self.wb = load_workbook(actual_file_path)
+            
+            if "БезВеса" not in self.wb.sheetnames:
+                raise ValueError(f"Лист 'БезВеса' не найден")
+            
+            self.ws = self.wb["БезВеса"]
+            
+            # Очищаем количество (столбцы C, F, I)
+            for row in range(14, 29):
+                for col in ['C', 'F', 'I']:
+                    try:
+                        cell = self.ws[f'{col}{row}']
+                        cell.value = None
+                        cell.alignment = Alignment(horizontal='general', vertical='center')
+                    except Exception as e:
+                        print(f"Не удалось очистить ячейку {col}{row}: {e}")
+            
+            # Очищаем базовую информацию
+            basic_info_cells = ['D10', 'E9', 'D11', 'E37', 'E41', 'E39', 'A39']
+            
+            for cell_address in basic_info_cells:
+                try:
+                    cell = self.ws[cell_address]
+                    cell.value = None
+                    cell.alignment = Alignment(horizontal='general', vertical='center')
+                except Exception as e:
+                    print(f"Не удалось очистить ячейку {cell_address}: {e}")
+            
+            # Сохраняем изменения
+            self.wb.save(actual_file_path)
+            
+            # Уведомление (если понадобится позже)
+            if self.coordinator and hasattr(self.coordinator, 'notify'):
+                self.coordinator.notify("excel_cleared", {
+                    'file_path': actual_file_path,
+                    'sheet_name': 'БезВеса',
+                    'enable_pallet': False,
+                    'multitype_mode': False,
+                    'workshop': '1'
+                })
+            
+            return True
+            
+        except Exception as e:
+            print(f"Ошибка очистки листа 'БезВеса': {e}")
+            return False
+        finally:
+            if self.wb:
+                self.wb.close()            
