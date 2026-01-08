@@ -197,6 +197,29 @@ class SettingsDialog:
             text="Выключить", 
             variable=self.archive_status_var, 
             value="off"
+        ).pack(side=tk.LEFT, padx=(5, 10))
+        
+        # 4. РАЗДЕЛ: Дополнительные элементы
+        elements_frame = ttk.LabelFrame(left_frame, text="Дополнительные элементы", padding=5)
+        elements_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        # Загружаем сохранённый статус
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        elements_status = settings.get("elements_status", "Скрыть")
+        self.elements_status_var = tk.StringVar(value=elements_status)
+        
+        ttk.Radiobutton(
+            elements_frame, 
+            text="Скрыть", 
+            variable=self.elements_status_var, 
+            value="Скрыть"
+        ).pack(side=tk.LEFT, padx=(10, 5))
+        
+        ttk.Radiobutton(
+            elements_frame, 
+            text="Показать", 
+            variable=self.elements_status_var, 
+            value="Показать"
         ).pack(side=tk.LEFT, padx=(5, 10))        
         
         # Статус-бар внизу окна настроек
@@ -258,7 +281,10 @@ class SettingsDialog:
             }
             
             # Сохраняем статус архивации
-            shared_settings["archive_status"] = self.archive_status_var.get()            
+            shared_settings["archive_status"] = self.archive_status_var.get()
+            
+            # Сохраняем статус дополнительных элементов
+            shared_settings["elements_status"] = self.elements_status_var.get()            
 
             # Сохраняем список резчиков
             new_cutters = []

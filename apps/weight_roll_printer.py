@@ -257,8 +257,8 @@ class RollLabelPrinter:
         self.comment_button.grid_remove()
         
         # Дата
-        date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
-        date_entry.grid(row=3, column=1, padx=(145, 0), pady=5, sticky="e")        
+        self.date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
+        self.date_entry.grid(row=3, column=1, padx=(145, 0), pady=5, sticky="e")        
         
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
             row=4, column=0, sticky="w", pady=2
@@ -271,35 +271,43 @@ class RollLabelPrinter:
         rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=2, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
         
+        # Добавляем галочку "Вес"
+        self.show_weight_var = BooleanVar(value=False)
+        self.weight_checkbutton = ttk.Checkbutton(
+            data_frame,
+            text="Вес",
+            variable=self.show_weight_var,
+            command=self.toggle_weight_visibility
+        )
+        self.weight_checkbutton.grid(row=4, column=1, padx=(240, 0), pady=2, sticky="w")
+        
         # Дополнительные поля:
         
         # Вес рулона
-        ttk.Label(data_frame, text="Вес ролика брутто, кг:").grid(
-            row=5, column=0, sticky="w", pady=3
-        )
-        gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
-        gross_entry.grid(row=5, column=1, padx=(5, 0), pady=3, sticky="w")
+        self.weight_label = ttk.Label(data_frame, text="Вес ролика брутто, кг:")
+        self.weight_label.grid(row=5, column=0, sticky="w", pady=3)
+        
+        self.gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
+        self.gross_entry.grid(row=5, column=1, padx=(5, 0), pady=3, sticky="w")
         
         # Вес втулки
-        ttk.Label(data_frame, text="Вес втулки, г:").grid(
-            row=5, column=1, sticky="w", padx=(115, 0), pady=3
-        )        
-        sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=3, sticky="w")             
+        self.sleeve_label = ttk.Label(data_frame, text="Вес втулки, г:")
+        self.sleeve_label.grid(row=5, column=1, sticky="w", padx=(115, 0), pady=3)        
+        
+        self.sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
+        self.sleeve_entry.grid(row=5, column=1, padx=(270, 0), pady=3, sticky="w")             
         
         # Длина этикетки
-        ttk.Label(data_frame, text="Длина этикетки, мм:").grid(
-            row=6, column=0, sticky="w", pady=2
-        )
-        label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
-        label_length_entry.grid(row=6, column=0, padx=(200, 0), pady=2, sticky="w")
+        self.label_length_label = ttk.Label(data_frame, text="Длина этикетки, мм:")
+        self.label_length_label.grid(row=6, column=0, sticky="w", pady=2)
+        self.label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
+        self.label_length_entry.grid(row=6, column=0, padx=(195, 0), pady=2, sticky="w")
         
         # Длина ролика
-        ttk.Label(data_frame, text="Длина ролика, м:").grid(
-            row=6, column=1, sticky="w", pady=2
-        )              
-        roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        roll_length_entry.grid(row=6, column=1, padx=(170, 0), pady=2, sticky="w")
+        self.roll_length_label = ttk.Label(data_frame, text="Длина ролика, м:")
+        self.roll_length_label.grid(row=6, column=1, sticky="w", pady=2)
+        self.roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
+        self.roll_length_entry.grid(row=6, column=1, padx=(165, 0), pady=2, sticky="w")
         
         # Row 8: Поля для номеров съёмов и роликов       
         self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
@@ -323,18 +331,19 @@ class RollLabelPrinter:
         self.stream_width_entry = ttk.Entry(data_frame, textvariable=self.stream_width_var, width=8)
         self.stream_width_entry.grid(row=9, column=0, padx=(200, 0), pady=2, sticky="w")
         
-        # Схема намотки и Диаметр втулки
-        ttk.Label(data_frame, text="Схема намотки:").grid(
-            row=10, column=0, sticky="w", pady=3
-        )
-        winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
-        winding_entry.grid(row=10, column=0, padx=(180, 0), pady=3, sticky="w")
+        # Схема намотки
+        self.winding_label = ttk.Label(data_frame, text="Схема намотки:")
+        self.winding_label.grid(row=10, column=0, sticky="w", pady=3)
         
-        ttk.Label(data_frame, text="Диаметр втулки, мм:").grid(
-            row=10, column=1, sticky="w", pady=3
-        )
-        diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        diameter_entry.grid(row=10, column=1, padx=(210, 0), pady=3, sticky="w")        
+        self.winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
+        self.winding_entry.grid(row=10, column=0, padx=(160, 0), pady=3, sticky="w")
+        
+        # Диаметр втулки
+        self.diameter_label = ttk.Label(data_frame, text="Диаметр втулки, мм:")
+        self.diameter_label.grid(row=10, column=1, sticky="w", pady=3)
+        
+        self.diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
+        self.diameter_entry.grid(row=10, column=1, padx=(205, 0), pady=3, sticky="w")        
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
@@ -344,6 +353,8 @@ class RollLabelPrinter:
         self.stream_width_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.comment_manager = CommentManager(self.parent, self.comment_button)
+        self.toggle_weight_visibility()
+        self.update_elements_visibility()
     
     def load_sleeve_weights(self):
         """Загружает данные о весе втулок из настроек"""
@@ -586,6 +597,7 @@ class RollLabelPrinter:
             self._update_cutter_visibility()
             self.load_manufacturer_options()
             self.load_sleeve_weights()
+            self.update_elements_visibility()
         except Exception as e:
             print(f"Ошибка обновления списков после изменения настроек: {e}")
             
@@ -613,6 +625,10 @@ class RollLabelPrinter:
             self.roll_entry.grid_remove()
             self.stream_width_label.grid_remove()
             self.stream_width_entry.grid_remove()
+            self.label_length_label.grid_remove()
+            self.label_length_entry.grid_remove()
+            self.roll_length_label.grid_remove()
+            self.roll_length_entry.grid_remove()
         else:  # цех 2
             # Цех 2 - показываем все поля
             self.streams_label.grid()
@@ -623,6 +639,56 @@ class RollLabelPrinter:
             self.roll_entry.grid()
             self.stream_width_label.grid()
             self.stream_width_entry.grid()
+            self.label_length_label.grid()
+            self.label_length_entry.grid()
+            self.roll_length_label.grid()
+            self.roll_length_entry.grid()
+            
+    def toggle_weight_visibility(self):
+        """Показывает/скрывает строку с весом в зависимости от состояния галочки"""
+        show_weight = self.show_weight_var.get()
+        
+        if show_weight:
+            self.weight_label.grid()
+            self.gross_entry.grid()
+            self.sleeve_label.grid()
+            self.sleeve_entry.grid()
+        else:
+            self.weight_label.grid_remove()
+            self.gross_entry.grid_remove()
+            self.sleeve_label.grid_remove()
+            self.sleeve_entry.grid_remove()
+            
+    def update_elements_visibility(self):
+        """Обновляет видимость дополнительных элементов на основе настроек"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            elements_status = settings.get("elements_status", "Скрыть")
+            
+            show_elements = (elements_status == "Показать")
+            
+            # Управляем видимостью элементов
+            if hasattr(self, 'date_entry'):
+                if show_elements:
+                    self.date_entry.grid()
+                else:
+                    self.date_entry.grid_remove()
+            
+            # Управляем видимостью схемы намотки и диаметра
+            if hasattr(self, 'winding_label'):
+                if show_elements:
+                    self.winding_label.grid()
+                    self.winding_entry.grid()
+                    self.diameter_label.grid()
+                    self.diameter_entry.grid()
+                else:
+                    self.winding_label.grid_remove()
+                    self.winding_entry.grid_remove()
+                    self.diameter_label.grid_remove()
+                    self.diameter_entry.grid_remove()
+                    
+        except Exception as e:
+            print(f"Ошибка обновления видимости элементов: {e}")            
 
     def update_packers_list(self):
         """Обновляет список упаковщиков в комбобоксе"""
