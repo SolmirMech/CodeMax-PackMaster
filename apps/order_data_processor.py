@@ -570,6 +570,9 @@ class OrderDataProcessor:
                         text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", 
                         foreground="orange"
                     )
+                    # Устанавливаем фокус и открываем список
+                    self.name_combobox.focus_set()
+                    self.name_combobox.event_generate('<Down>')                    
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
@@ -580,6 +583,10 @@ class OrderDataProcessor:
                     foreground="orange"
                 )
                 self.filtered_parsed_data = self.parsed_data
+                # Устанавливаем фокус и открываем список если есть варианты
+                if len(names_list) > 0:
+                    self.name_combobox.focus_set()
+                    self.name_combobox.event_generate('<Down>')                
         
         else:
             # Если поиск по коду не выполняется
@@ -597,6 +604,9 @@ class OrderDataProcessor:
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
+                if len(names_list) > 0:
+                    self.name_combobox.focus_set()
+                    self.name_combobox.event_generate('<Down>')                
             
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""

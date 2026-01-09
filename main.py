@@ -71,6 +71,14 @@ class WeightOrdersApp:
         
         self.create_ui()
         self.center_window()
+        root.after(100, self.set_initial_focus)
+        
+    def set_initial_focus(self):
+        """Устанавливает фокус на поле номера заказа при запуске"""
+        if hasattr(self, 'roll_module'):
+            # Находим поле order_number в roll_module
+            if hasattr(self.roll_module, 'order_entry'):
+                self.roll_module.order_entry.focus_set()        
 
     def setup_styles(self):
         """Настройка стилей"""

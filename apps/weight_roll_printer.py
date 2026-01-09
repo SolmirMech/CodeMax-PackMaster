@@ -237,6 +237,7 @@ class RollLabelPrinter:
         entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
         entry_number.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
         entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
+        self.order_entry = entry_number
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
         entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
