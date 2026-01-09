@@ -150,7 +150,17 @@ class PrintModule:
                 if not filtered_data:
                     self.print_status_label.config(text="Нет данных для печати", foreground="red")
                     return
-                    
+                
+                # === Проверка количества для тиража ===
+                quantity = self.connected_roll_module.quantity_var.get().strip()
+                if not quantity or int(quantity) <= 0:
+                    self.print_status_label.config(
+                        text="❌ Введите кол-во этикеток", 
+                        foreground="red"
+                    )
+                    self.parent.after(5000, lambda: self.print_status_label.config(text="", foreground="green"))
+                    return
+                
                 # Сохраняем оригинальное название для восстановления
                 self.original_product_name = self.preview_module.connected_roll_module.product_text.get("1.0", "end-1c")
                 
@@ -173,7 +183,7 @@ class PrintModule:
             # Завершение печати
             if hasattr(self, 'original_product_name'):
                 self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
-                self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)
+                self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)          
             
             self.copies_var.set("1")
             self.is_batch_printing = False
@@ -195,16 +205,12 @@ class PrintModule:
                 self.preview_module.connected_roll_module.date_emission_var.set(date_emission)
             else:
                 # Если у вида нет даты - очищаем поле
-                self.preview_module.connected_roll_module.date_emission_var.set("")
-            
-            # Устанавливаем количество копий для этого вида = stream
-            self.copies_var.set(str(stream_count))  # ← ВОТ ТУТ используем stream как кол-во копий
+                self.preview_module.connected_roll_module.date_emission_var.set("")          
             
             # Ждем обновления данных перед печатью
             self.parent.after(100, lambda: self.print_current_item(current_product_data, stream_count))
             
         except Exception as e:
-            self.copies_var.set("1")
             self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
@@ -212,10 +218,28 @@ class PrintModule:
     def print_current_item(self, product_data, stream_count):
         """Печатает текущий элемент после обновления данных"""
         try:
-            # Теперь данные обновлены - печатаем (уже с установленным stream_count в copies_var)
-            self.print_label()  # ← этот метод использует self.copies_var.get()
+            # Получаем множитель из copies_var (то, что ввел пользователь)
+            copies_var_value = self.copies_var.get().strip()
+            copies_multiplier = int(copies_var_value) if copies_var_value else 1
             
-            product_name_full = product_data['name']
+            # Умножаем на stream_count
+            total_copies = stream_count * copies_multiplier
+            
+            # Печатаем total_copies копий
+            printer_name = self._find_printer()
+            if not printer_name:
+                self.print_status_label.config(text="Принтер не найден!", foreground="red")
+                return
+            
+            if self.selected_preview == "roll":
+                data_map = self.preview_module._prepare_roll_data_map()
+                print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+            else:
+                data_map = self.preview_module._prepare_box_data_map()
+                print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+            
+            for i in range(total_copies):
+                self._print_image_gdi(print_image, printer_name)
             
             # Следующий вид
             self.current_batch_index += 1
@@ -305,6 +329,17 @@ class PrintModule:
     def print_label(self):
         """Печатает выбранную этикетку с поддержкой автогенерации"""
         try:
+            
+            # === Проверка количества ===
+            quantity = self.connected_roll_module.quantity_var.get().strip()
+            if not quantity or int(quantity) <= 0:
+                self.preview_module.status_label.config(
+                    text="❌ Введите кол-во этикеток", 
+                    foreground="red"
+                )
+                self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
+                return
+            
             # Получаем данные из roll_module
             roll_module = self.connected_roll_module
             batch_num = roll_module.batch_num_var.get().strip()
@@ -395,7 +430,7 @@ class PrintModule:
             self.preview_module.status_label.config(text=f"Ошибка автопечати: {e}", foreground="red")
 
     def _print_standard_label(self, copies):
-        """Стандартная печать без изменений (как был старый print_label)"""
+        """Стандартная печать без изменений"""
         printer_name = self._find_printer()
         if not printer_name:
             self.preview_module.status_label.config(text="Принтер не найден!", foreground="red")
