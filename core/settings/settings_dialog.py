@@ -200,7 +200,7 @@ class SettingsDialog:
         ).pack(side=tk.LEFT, padx=(5, 10))
         
         # 4. РАЗДЕЛ: Дополнительные элементы
-        elements_frame = ttk.LabelFrame(left_frame, text="Дополнительные элементы", padding=5)
+        elements_frame = ttk.LabelFrame(left_frame, text="Дата и другие редкие настройки", padding=5)
         elements_frame.pack(fill=tk.X, pady=(0, 5))
         
         # Загружаем сохранённый статус
