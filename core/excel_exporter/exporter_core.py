@@ -87,17 +87,29 @@ class SmartExporter:
             all_fitted = True
             
             # Группируем секции по типу
+            boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
             rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
-            other_sections = [s for s in mapping.dynamic_sections if "rolls" not in s.name]
+            other_sections = [s for s in mapping.dynamic_sections if "boxes" not in s.name and "rolls" not in s.name]
             
-            # Заполняем ролики с распределением
+            # Заполняем коробки (для поддона)
+            if boxes_sections:
+                boxes_count = sheet_specific_data.get('boxes_count', 1)
+                if boxes_count == 0:
+                    boxes_count = 1
+                boxes_fitted = self._fill_boxes_sections_with_distribution(
+                    boxes_sections, sheet_specific_data, boxes_count
+                )
+                all_fitted = boxes_fitted and all_fitted
+            
+            # Заполняем ролики (для коробки)
             if rolls_sections:
                 rolls_count = sheet_specific_data.get('rolls_count', 1)
                 if rolls_count == 0:
                     rolls_count = 1
-                all_fitted = self._fill_rolls_sections_with_distribution(
+                rolls_fitted = self._fill_rolls_sections_with_distribution(
                     rolls_sections, sheet_specific_data, rolls_count
-                ) and all_fitted
+                )
+                all_fitted = rolls_fitted and all_fitted
             
             # Заполняем остальные секции (если есть)
             for section in other_sections:
@@ -273,17 +285,87 @@ class SmartExporter:
         except Exception as e:
             print(f"Ошибка заполнения секции роликов '{section.name}': {e}")
             return 0
+            
+    def _fill_boxes_sections_with_distribution(self, sections: List[DynamicSection], 
+                                              data: Dict[str, Any], total_boxes: int) -> bool:
+        """Распределяет коробки по секциям последовательно (логика как для роликов)"""
+        filled_count = 0
+        
+        for section in sections:
+            if filled_count >= total_boxes:
+                break
+                
+            # Сколько осталось заполнить
+            boxes_left = total_boxes - filled_count
+            filled_in_section = self._fill_boxes_section(section, data, boxes_left)
+            filled_count += filled_in_section
+        
+        return filled_count >= total_boxes
+
+    def _fill_boxes_section(self, section: DynamicSection, data: Dict[str, Any], max_boxes: int) -> int:
+        """Заполняет одну секцию коробок, возвращает сколько заполнил"""
+        try:
+            # Данные одной коробки
+            gross_weight = data.get('gross_weight_per_box')
+            net_weight = data.get('net_weight_per_box')
+            quantity = data.get('quantity_per_box')
+            
+            # Если данных нет - пропускаем
+            if gross_weight is None and net_weight is None and quantity is None:
+                return 0
+            
+            start_row, end_row = section.rows_range
+            filled_count = 0
+            
+            # Ищем пустые строки
+            for row in range(start_row, end_row):
+                if filled_count >= max_boxes:
+                    break
+                
+                # Проверяем, пуста ли строка
+                is_empty = True
+                for col_config in section.columns_config:
+                    cell_ref = f"{col_config['column']}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+                
+                if is_empty:
+                    # Заполняем строку
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+                        
+                        # Сопоставляем ключи данных
+                        if data_key == 'gross_weight_per_box':
+                            value = gross_weight
+                        elif data_key == 'net_weight_per_box':
+                            value = net_weight
+                        elif data_key == 'quantity_per_box':
+                            value = quantity
+                        else:
+                            value = None
+                        
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+                    
+                    filled_count += 1
+            
+            return filled_count
+                
+        except Exception as e:
+            print(f"Ошибка заполнения секции коробок '{section.name}': {e}")
+            return 0
 
     def _fill_dynamic_section(self, section: DynamicSection, data: Dict[str, Any], 
                              mode: str, pallet_data: Optional[Dict]) -> bool:
-        """Заполняет НЕ-роликовые секции"""
-        # Только для НЕ-роликов
-        if "rolls" in section.name:
-            # Сюда не должны попадать ролики
-            print(f"Внимание: секция '{section.name}' обрабатывается отдельно")
+        """Заполняет другие типы секций (не коробки и не ролики)"""
+        # Коробки и ролики уже обрабатываются отдельно
+        if "boxes" in section.name or "rolls" in section.name:
             return True
         
-        # TODO: Логика для других типов секций (коробки, поддоны)
+        # TODO: Другие типы секций
         print(f"Внимание: тип секции '{section.name}' не реализован")
         return True
     
@@ -330,9 +412,25 @@ class SmartExporter:
             if isinstance(category_data, dict):
                 sheet_data.update(category_data)
         
+        # ДОБАВИТЬ: специальная обработка для производителя
+        if 'manufacturer' in all_data and isinstance(all_data['manufacturer'], dict):
+            manufacturer_data = all_data['manufacturer']
+            
+            # Переносим display_text под нужным ключом
+            if 'display_text' in manufacturer_data:
+                sheet_data['manufacturer_display_text'] = manufacturer_data['display_text']
+            
+            # Также добавляем другие поля производителя для возможных будущих нужд
+            sheet_data['manufacturer_name'] = manufacturer_data.get('manufacturer_name', '')
+            sheet_data['show_manufacturer'] = manufacturer_data.get('show_manufacturer', True)
+        
         # Добавляем метаданные
         sheet_data['workshop'] = workshop
         sheet_data['sheet_name'] = sheet_name
+        
+        # Для поддона используем специализированный метод DataProvider
+        if sheet_name == "Лист для паллеты" or "паллет" in sheet_name.lower():
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_pallet()}
         
         return sheet_data
     
@@ -361,6 +459,14 @@ class SmartExporter:
         
         if rolls_count > max_rolls:
             print(f"Внимание: количество роликов ({rolls_count}) превышает максимальное ({max_rolls})")
+            
+    def _hook_validate_boxes_count(self, data: Dict[str, Any]):
+        """Хук для проверки количества коробок"""
+        boxes_count = data.get('boxes_count', 0)
+        max_boxes = 30  # Максимум для 1 цеха (15 слева + 15 справа)
+        
+        if boxes_count > max_boxes:
+            print(f"Внимание: количество коробок ({boxes_count}) превышает максимальное ({max_boxes})")            
     
     def _process_value_by_type(self, value: Any, data_type: DataType) -> Any:
         """Обрабатывает значение согласно типу данных"""

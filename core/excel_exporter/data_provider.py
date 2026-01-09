@@ -85,6 +85,57 @@ class ExportDataProvider:
             'has_weight': all_data['metadata'].get('has_weight', False)
         }
     
+    def get_data_for_workshop1_pallet(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 1 цеха, лист поддона.
+        Включает данные о поддоне и коробках.
+        """
+        all_data = self.collect_all_data()
+        
+        # Получаем количество коробок через preview_module
+        boxes_count = 0
+        try:
+            boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
+            boxes_count = self._convert_to_number(boxes_count_str, force_int=True) or 0
+        except Exception as e:
+            print(f"Ошибка получения количества коробок: {e}")
+            boxes_count = 0
+        
+        # Если 0 - устанавливаем 1
+        if boxes_count == 0:
+            boxes_count = 1
+        
+        return {
+            # Основная информация (как для коробки)
+            'customer': all_data['common'].get('customer'),
+            'box_type': all_data['common'].get('box_type'),
+            'order_number': all_data['common'].get('order_number'),
+            'product_text': all_data['common'].get('product_text'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            
+            # Данные поддона
+            'pallet_weight': all_data['weights'].get('box_weight'),  # Вес поддона в том же поле
+            'boxes_count': boxes_count,
+            
+            # Данные одной коробки (для заполнения в динамические секции)
+            'gross_weight_per_box': all_data['weights'].get('total_gross'),
+            'net_weight_per_box': all_data['weights'].get('total_net'),
+            'quantity_per_box': all_data['quantities'].get('total_quantity'),
+            
+            # Производитель
+            'show_manufacturer': all_data['manufacturer'].get('show_manufacturer'),
+            'manufacturer_name': all_data['manufacturer'].get('manufacturer_name'),
+            'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
+            
+            # Дополнительно
+            'workshop': '1',
+            'sheet_type': 'pallet',
+            'has_weight': all_data['metadata'].get('has_weight', False)
+        }
+    
     # ==================== ПРИВАТНЫЕ МЕТОДЫ СБОРА ====================
     
     def _get_common_data(self) -> Dict[str, Any]:
@@ -123,13 +174,25 @@ class ExportDataProvider:
             if hasattr(self.roll_module, 'packer_var'):
                 data['packer'] = self.roll_module.packer_var.get()
             
-            # Тип продукта
-            if hasattr(self.roll_module, 'product_type_var'):
-                data['product_type'] = self.roll_module.product_type_var.get()
+            # TU номер из XML (новый источник)
+            tu_number = None
+            if hasattr(self.roll_module, 'xml_tu_number'):
+                tu_number = self.roll_module.xml_tu_number
+                if callable(tu_number):
+                    tu_number = tu_number()
             
-            # TU номер (вычисляется отдельно)
-            data['tu_number'] = self._get_tu_number()
-            
+            if tu_number:
+                # Есть TU номер из XML - вычисляем product_type
+                data['tu_number'] = tu_number
+                data['product_type'] = self._get_product_type_by_tu(tu_number)
+            else:
+                # Нет TU из XML - работаем по старой логике
+                if hasattr(self.roll_module, 'product_type_var'):
+                    data['product_type'] = self.roll_module.product_type_var.get()
+                
+                # TU номер вычисляется по product_type
+                data['tu_number'] = self._get_tu_number()
+                
         except Exception as e:
             print(f"Ошибка сбора общих данных: {e}")
             # Возвращаем частично собранные данные
@@ -294,13 +357,15 @@ class ExportDataProvider:
         """Получает TU номер на основе производителя и типа продукта"""
         try:
             if not self.roll_module:
-                return "ТУ 9570-001-26604209-2014"  # Fallback
+                return "ТУ технические условия"  # Fallback
                 
             manufacturer = self.roll_module.manufacturer_var.get() if hasattr(self.roll_module, 'manufacturer_var') else ""
+            
+            # Используем уже вычисленный product_type из data, если есть
             product_type = self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
             
             if not manufacturer or not product_type:
-                return "ТУ 9570-001-26604209-2014"
+                return "ТУ технические условия"
             
             # Ищем в конфигурации
             packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
@@ -314,7 +379,27 @@ class ExportDataProvider:
         except Exception as e:
             print(f"Ошибка получения TU номера: {e}")
         
-        return "ТУ 9570-001-26604209-2014"  # Fallback
+        return "ТУ технические условия"  # Fallback
+        
+    def _get_product_type_by_tu(self, tu_number: str) -> str:
+        """Получает тип продукта по TU номеру из конфигурации"""
+        try:
+            if not tu_number or not self.roll_module:
+                return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
+            
+            # Ищем в конфигурации
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            for spec in technical_specs:
+                if spec["product"]["tu_number"] == tu_number:
+                    return spec["product"]["name"]
+                    
+        except Exception as e:
+            print(f"Ошибка получения типа продукта по TU номеру: {e}")
+        
+        # Fallback - возвращаем текущее значение из UI
+        return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
     
     def _convert_to_number(self, value: Optional[str], force_int: bool = False) -> Optional[Union[int, float]]:
         """

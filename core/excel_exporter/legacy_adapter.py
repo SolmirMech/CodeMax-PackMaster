@@ -55,54 +55,61 @@ class LegacyExporterAdapter:
         """
         Интерфейс, совместимый со старым WeightOrdersExporter.export_data
         """
+        # Определяем цех (упрощенно)
+        workshop = "1"  # По умолчанию 1 цех
+        if hasattr(self, 'coordinator') and self.coordinator:
+            workshop = self.coordinator.get_workshop()
+        
+        # Определяем тип листа
+        if multitype_mode:
+            sheet_type = "multitype"
+        elif enable_pallet:
+            sheet_type = "pallet"
+        else:
+            sheet_type = "box"
+        
+        # Получаем маппинг
         try:
-            # Определяем цех
-            workshop = self._determine_workshop()
+            mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, "box" if not enable_pallet else "pallet")
+        except ValueError as e:
+            # Если маппинг не найден, используем fallback
+            print(f"Маппинг не найден, используем старый экспорт: {e}")
+            return self._legacy_fallback_export(enable_pallet, pallet_data, multitype_mode)
+        
+        # Получаем путь к файлу
+        file_path = self._get_excel_file_path(workshop)
+        
+        # Для поддона передаем данные из pallet_data
+        if enable_pallet and pallet_data:
+            # Обновляем box_type в данных из pallet_data
+            box_type_from_data = pallet_data.get("pallet_type", "")
+            if box_type_from_data:
+                # Нужно обновить данные в data_provider
+                if hasattr(self.data_provider.roll_module, 'box_size_var'):
+                    self.data_provider.roll_module.box_size_var.set(box_type_from_data)
+                    # Очищаем кеш, чтобы данные обновились
+                    self.data_provider.clear_cache()
+        
+        # Выполняем экспорт
+        try:
+            result = self.exporter.export_to_sheet(
+                file_path=file_path,
+                mapping=mapping,
+                mode="pallet" if enable_pallet else "box",
+                pallet_data=pallet_data
+            )
             
-            # Определяем тип листа и режим
-            if multitype_mode:
-                # Много-видовой режим (пока используем старый)
-                return self._legacy_multitype_export(workshop, pallet_data)
-            elif enable_pallet:
-                # Режим поддона
-                sheet_type = "pallet"
-                mode = "pallet"
-            else:
-                # Режим коробки (НАШ ТЕКУЩИЙ КЕЙС)
-                sheet_type = "box"
-                mode = "box"
+            # Отправляем уведомление через координатор
+            if result['success'] and self.coordinator and hasattr(self.coordinator, 'notify'):
+                self.coordinator.notify("excel_exported", {
+                    'file_path': result['file_path'],
+                    'sheet_name': result['sheet_name'],
+                    'enable_pallet': enable_pallet,
+                    'multitype_mode': multitype_mode,
+                    'workshop': workshop
+                })
             
-            # Получаем маппинг из новой системы
-            try:
-                mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
-                
-                # Получаем путь к файлу
-                file_path = self._get_excel_file_path(workshop)
-                
-                # Выполняем экспорт через новую систему
-                result = self.exporter.export_to_sheet(
-                    file_path=file_path,
-                    mapping=mapping,
-                    mode=mode,
-                    pallet_data=pallet_data
-                )
-                
-                # Отправляем уведомление через координатор (если есть)
-                if result['success'] and self.coordinator and hasattr(self.coordinator, 'notify'):
-                    self.coordinator.notify("excel_exported", {
-                        'file_path': result['file_path'],
-                        'sheet_name': result['sheet_name'],
-                        'enable_pallet': enable_pallet,
-                        'multitype_mode': multitype_mode,
-                        'workshop': workshop
-                    })
-                
-                return result
-                
-            except ValueError as e:
-                # Если маппинг не найден, используем старый код как fallback
-                print(f"Маппинг не найден, используем старый экспорт: {e}")
-                return self._legacy_fallback_export(enable_pallet, pallet_data, multitype_mode)
+            return result
             
         except Exception as e:
             print(f"Ошибка в новом экспортере: {e}")
