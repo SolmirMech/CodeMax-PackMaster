@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, StringVar
 import os
 from core.config_manager import ConfigManager
-from core.excel_exporter import WeightOrdersExporter
+from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 
 class ExportModule:
     """Модуль управления экспортом в Excel"""

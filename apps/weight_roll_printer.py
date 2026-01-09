@@ -5,7 +5,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox, StringVar, BooleanVar
 import math
 from datetime import datetime
-from core.excel_exporter import WeightOrdersExporter
 from core.config_manager import ConfigManager
 from core.parse.xml_order_parser import XMLOrderParser
 from core.ui.comment_manager import CommentManager

@@ -1,0 +1,431 @@
+# cell_mappers.py
+"""
+Модуль маппингов ячеек Excel.
+Определяет КАКИЕ данные в КАКИЕ ячейки помещать.
+Полностью декларативный, не содержит логики экспорта.
+"""
+from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional, Tuple, Union
+from enum import Enum
+
+class DataType(Enum):
+    """Типы данных для ячеек"""
+    TEXT = "text"
+    NUMBER = "number"
+    INTEGER = "integer"
+    DATE = "date"
+    MULTILINE_TEXT = "multiline_text"
+    FORMULA = "formula"
+
+class HorizontalAlignment(Enum):
+    """Горизонтальное выравнивание"""
+    GENERAL = "general"
+    LEFT = "left"
+    CENTER = "center"
+    RIGHT = "right"
+    FILL = "fill"
+    JUSTIFY = "justify"
+    CENTER_CONTINUOUS = "centerContinuous"
+    DISTRIBUTED = "distributed"
+
+class VerticalAlignment(Enum):
+    """Вертикальное выравнивание"""
+    TOP = "top"
+    CENTER = "center"
+    BOTTOM = "bottom"
+    JUSTIFY = "justify"
+    DISTRIBUTED = "distributed"
+
+@dataclass
+class CellFormat:
+    """Форматирование ячейки"""
+    horizontal_alignment: HorizontalAlignment = HorizontalAlignment.GENERAL
+    vertical_alignment: VerticalAlignment = VerticalAlignment.CENTER
+    wrap_text: bool = False
+    number_format: Optional[str] = None
+    font_size: Optional[int] = None
+    bold: bool = False
+
+@dataclass
+class CellMapping:
+    """Описание одной ячейки или диапазона ячеек"""
+    cell_reference: str  # Например: "D5", "B14:D28"
+    data_key: str  # Ключ данных из DataProvider
+    data_type: DataType
+    format: CellFormat = field(default_factory=CellFormat)
+    is_merged_cell: bool = False
+    required: bool = False
+    default_value: Any = None
+    validation: Optional[Dict[str, Any]] = None
+
+@dataclass
+class DynamicSection:
+    """Динамическая секция (например, ролики)"""
+    name: str  # Например: "rolls", "boxes"
+    start_cell: str  # Начальная ячейка диапазона
+    rows_range: Tuple[int, int]  # Диапазон строк (14, 29)
+    columns_config: List[Dict[str, Any]]  # Конфигурация колонок
+    direction: str = "horizontal"  # "horizontal" или "vertical"
+    max_items: Optional[int] = None  # Максимальное количество элементов
+
+@dataclass
+class SheetMapping:
+    """Полный маппинг для одного листа Excel"""
+    sheet_name: str
+    workshop: str
+    description: str
+    static_cells: List[CellMapping]
+    dynamic_sections: List[DynamicSection]
+    post_processing_hooks: List[str] = field(default_factory=list)
+
+class CellMappingRegistry:
+    """
+    Реестр всех маппингов по цехам и типам листов.
+    Центральное место для определения структуры Excel файлов.
+    """
+    
+    # ==================== МАППИНГИ ДЛЯ ЦЕХА 1 ====================
+    
+    @staticmethod
+    def get_workshop1_box_mapping() -> SheetMapping:
+        """
+        Маппинг для 1 цеха, лист коробки ('Лист для коробки')
+        Соответствует текущей логике из WeightOrdersExporter._export_basic_info_for_first_workshop
+        """
+        return SheetMapping(
+            sheet_name="Лист для коробки",
+            workshop="1",
+            description="Этикетка для коробки (цех 1)",
+            
+            static_cells=[
+                # Основная информация
+                CellMapping(
+                    cell_reference="D5",
+                    data_key="customer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="D6",
+                    data_key="box_type",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="D8",
+                    data_key="order_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="D10",
+                    data_key="product_text",
+                    data_type=DataType.MULTILINE_TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.TOP,
+                        wrap_text=True
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="F37",
+                    data_key="date",
+                    data_type=DataType.DATE,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="E41",
+                    data_key="packer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="E39",
+                    data_key="product_type",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="A39",
+                    data_key="tu_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=False
+                ),
+                
+                # Вес коробки
+                CellMapping(
+                    cell_reference="K2",
+                    data_key="box_weight",
+                    data_type=DataType.NUMBER,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        number_format="0.000"
+                    ),
+                    required=False
+                ),
+                
+                # Производитель (в ячейке B1)
+                CellMapping(
+                    cell_reference="B1",
+                    data_key="manufacturer_display_text",
+                    data_type=DataType.MULTILINE_TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        wrap_text=True
+                    ),
+                    required=False,
+                    is_merged_cell=True  # Вероятно объединенная ячейка
+                ),
+            ],
+            
+            dynamic_sections=[
+                # Секция для роликов (левая часть: B14-D28)
+                DynamicSection(
+                    name="rolls_left_section",
+                    start_cell="B14",
+                    rows_range=(14, 29),  # Строки 14-28
+                    columns_config=[
+                        {
+                            "column": "B",
+                            "data_key": "gross_weight_per_roll",
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.000"
+                            )
+                        },
+                        {
+                            "column": "C",
+                            "data_key": "net_weight_per_roll",
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.000"
+                            )
+                        },
+                        {
+                            "column": "D",
+                            "data_key": "quantity_per_roll",
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        }
+                    ],
+                    direction="vertical",
+                    max_items=15  # Максимум 15 роликов в левой секции
+                ),
+                
+                # Секция для роликов (правая часть: F14-H28)
+                DynamicSection(
+                    name="rolls_right_section",
+                    start_cell="F14",
+                    rows_range=(14, 29),  # Строки 14-28
+                    columns_config=[
+                        {
+                            "column": "F",
+                            "data_key": "gross_weight_per_roll",
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.000"
+                            )
+                        },
+                        {
+                            "column": "G",
+                            "data_key": "net_weight_per_roll",
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.000"
+                            )
+                        },
+                        {
+                            "column": "H",
+                            "data_key": "quantity_per_roll",
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        }
+                    ],
+                    direction="vertical",
+                    max_items=15  # Максимум 15 роликов в правой секции
+                )
+            ],
+            
+            post_processing_hooks=[
+                "update_manufacturer_info",  # Хук для обновления информации о производителе
+                "validate_rolls_count"       # Хук для проверки количества роликов
+            ]
+        )
+    
+    # ==================== МЕТОДЫ ДОСТУПА К МАППИНГАМ ====================
+    
+    @classmethod
+    def get_mapping(cls, workshop: str, sheet_type: str, mode: str = "box") -> SheetMapping:
+        """
+        Получает маппинг по параметрам.
+        
+        Args:
+            workshop: "1" или "2"
+            sheet_type: "box", "pallet", "multitype", "noweight", "pallet_list"
+            mode: Дополнительный режим (для совместимости)
+            
+        Returns:
+            Соответствующий SheetMapping
+            
+        Raises:
+            ValueError: Если маппинг не найден
+        """
+        # Словарь доступных маппингов
+        mappings = {
+            # Цех 1
+            ("1", "box"): cls.get_workshop1_box_mapping,
+            # TODO: Добавить другие маппинги по мере реализации
+            # ("1", "pallet"): cls.get_workshop1_pallet_mapping,
+            # ("1", "multitype"): cls.get_workshop1_multitype_mapping,
+            # ("1", "noweight"): cls.get_workshop1_noweight_mapping,
+            
+            # Цех 2
+            # ("2", "box"): cls.get_workshop2_box_mapping,
+            # ("2", "pallet"): cls.get_workshop2_pallet_mapping,
+            # ("2", "pallet_list"): cls.get_workshop2_pallet_list_mapping,
+            # ("2", "multitype"): cls.get_workshop2_multitype_mapping,
+        }
+        
+        key = (workshop, sheet_type)
+        
+        if key not in mappings:
+            # Пробуем найти по workshop и mode (для обратной совместимости)
+            alt_key = (workshop, mode)
+            if alt_key in mappings:
+                return mappings[alt_key]()
+            
+            # Если не нашли - пробуем найти по sheet_type (без workshop)
+            for (w, s), mapper in mappings.items():
+                if s == sheet_type:
+                    return mapper()
+            
+            raise ValueError(f"Маппинг не найден для workshop={workshop}, sheet_type={sheet_type}, mode={mode}")
+        
+        return mappings[key]()
+    
+    @classmethod
+    def get_available_mappings(cls) -> List[Dict[str, Any]]:
+        """Возвращает список всех доступных маппингов"""
+        return [
+            {
+                "workshop": "1",
+                "sheet_type": "box",
+                "sheet_name": "Лист для коробки",
+                "description": "Этикетка для коробки (цех 1)"
+            },
+            # TODO: Добавить остальные по мере реализации
+        ]
+    
+    # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+    
+    @staticmethod
+    def parse_cell_reference(cell_ref: str) -> Tuple[str, int]:
+        """
+        Разбирает ссылку на ячейку на букву колонки и номер строки.
+        
+        Args:
+            cell_ref: Ссылка на ячейку (например, "A1", "BC23")
+            
+        Returns:
+            Кортеж (буква_колонки, номер_строки)
+        """
+        import re
+        match = re.match(r"([A-Z]+)(\d+)", cell_ref)
+        if not match:
+            raise ValueError(f"Некорректная ссылка на ячейку: {cell_ref}")
+        return match.group(1), int(match.group(2))
+    
+    @staticmethod
+    def get_column_letter(column_index: int) -> str:
+        """
+        Преобразует индекс колонки в букву Excel.
+        
+        Args:
+            column_index: Индекс колонки (начинается с 1)
+            
+        Returns:
+            Буква колонки Excel
+        """
+        result = ""
+        while column_index > 0:
+            column_index, remainder = divmod(column_index - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+    
+    @staticmethod
+    def get_column_index(column_letter: str) -> int:
+        """
+        Преобразует букву колонки Excel в индекс.
+        
+        Args:
+            column_letter: Буква колонки Excel
+            
+        Returns:
+            Индекс колонки (начинается с 1)
+        """
+        result = 0
+        for char in column_letter:
+            result = result * 26 + (ord(char) - 64)
+        return result
+
+# ==================== ШОРТКАТЫ ДЛЯ БЫСТРОГО ДОСТУПА ====================
+
+def get_mapping(workshop: str, sheet_type: str, mode: str = "box") -> SheetMapping:
+    """Краткая функция для получения маппинга"""
+    return CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
+
+def get_workshop1_box_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга коробки 1 цеха"""
+    return CellMappingRegistry.get_workshop1_box_mapping()
