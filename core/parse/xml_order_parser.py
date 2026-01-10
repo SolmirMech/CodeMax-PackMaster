@@ -235,27 +235,7 @@ class XMLOrderParser:
                 return elem.text.strip()
         except Exception:
             pass
-        return default
-    
-    def extract_search_data(self, parsed_data: Dict[str, Any]) -> Dict[str, List[str]]:
-        """
-        Извлекает данные для поиска.
-        """
-        result = {
-            'detail_numbers': [],
-            'sheet_names': [],
-            'full_names': []
-        }
-        
-        for product in parsed_data.get('products', []):
-            if product.get('detail_number'):
-                result['detail_numbers'].append(product['detail_number'])
-            if product.get('full_name'):
-                result['full_names'].append(product['full_name'])
-            if product.get('sheet_name'):
-                result['sheet_names'].append(product['sheet_name'])
-        
-        return result
+        return default   
         
 # Фабричная функция для удобства использования
 def parse_xml(xml_content: str) -> Dict[str, Any]:
