@@ -22,6 +22,10 @@ class FontSettingsDialog:
                     "preview": 12,
                     "print": 24
                 },
+                "address": {
+                    "preview": 9,
+                    "print": 24
+                },
                 "other": {
                     "preview": 16,
                     "print": 36
@@ -428,6 +432,7 @@ class FontSettingsDialog:
             ("💼 Заказчик", "customer"),
             ("🏷 Изделие", "product"),
             ("📑 ТУ", "tu_number"),
+            ("🏠 Адрес", "address"),
             ("🔧 Остальные поля", "other")
         ]
 

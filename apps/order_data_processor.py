@@ -68,7 +68,25 @@ class OrderDataProcessor:
         
         detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=10)
         detail_num_entry.grid(row=0, column=0, padx=(130, 0), pady=5, sticky="w")
-        detail_num_entry.bind("<Return>", lambda e: self.get_product_name())
+        # Заменяем прямое связывание на кастомный обработчик
+        def handle_detail_num_enter(event):
+            """Обработчик Enter для поля поиска вида"""
+            # 1. Сохраняем текущее значение поля поиска
+            search_value = self.detail_num_search.get()
+            
+            # 2. Сначала запускаем on_order_enter_pressed из roll_module
+            if self.roll_module and hasattr(self.roll_module, 'on_order_enter_pressed'):
+                self.roll_module.on_order_enter_pressed(event)
+            
+            # 3. Восстанавливаем значение поиска после автозаполнения
+            self.parent.after(50, lambda: self.detail_num_search.set(search_value))
+            
+            # 4. Запускаем поиск продукта
+            self.parent.after(100, self.get_product_name)  # Чуть позже чтобы восстановилось значение
+            
+            return "break"
+
+        detail_num_entry.bind("<Return>", handle_detail_num_enter)
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
@@ -569,10 +587,7 @@ class OrderDataProcessor:
                     self.parse_status.config(
                         text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", 
                         foreground="orange"
-                    )
-                    # Устанавливаем фокус и открываем список
-                    self.name_combobox.focus_set()
-                    self.name_combobox.event_generate('<Down>')                    
+                    )                    
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
@@ -582,11 +597,7 @@ class OrderDataProcessor:
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
-                self.filtered_parsed_data = self.parsed_data
-                # Устанавливаем фокус и открываем список если есть варианты
-                if len(names_list) > 0:
-                    self.name_combobox.focus_set()
-                    self.name_combobox.event_generate('<Down>')                
+                self.filtered_parsed_data = self.parsed_data                
         
         else:
             # Если поиск по коду не выполняется
@@ -604,9 +615,11 @@ class OrderDataProcessor:
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
-                if len(names_list) > 0:
-                    self.name_combobox.focus_set()
-                    self.name_combobox.event_generate('<Down>')                
+                    
+        if self.name_combobox['values']:
+            # Откладываем установку фокуса, чтобы UI успел отрендерить комбобокс
+            self.parent.after(120, lambda: self.name_combobox.focus_set())
+            self.parent.after(140, lambda: self.name_combobox.event_generate('<Down>'))
             
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""

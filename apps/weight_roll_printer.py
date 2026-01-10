@@ -651,11 +651,13 @@ class RollLabelPrinter:
         show_weight = self.show_weight_var.get()
         
         if show_weight:
+            self.gross_weight_kg_var.set("")
             self.weight_label.grid()
             self.gross_entry.grid()
             self.sleeve_label.grid()
             self.sleeve_entry.grid()
         else:
+            self.gross_weight_kg_var.set("")
             self.weight_label.grid_remove()
             self.gross_entry.grid_remove()
             self.sleeve_label.grid_remove()

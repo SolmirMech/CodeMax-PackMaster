@@ -393,9 +393,23 @@ class RollPreview:
                 
                 # Иначе получаем производителя из комбобокса
                 manufacturer_name = self.connected_roll_module.manufacturer_var.get() if self.connected_roll_module else ''
+                address = ''
+                
+                # Ищем адрес в packaging_tu.json
+                if manufacturer_name:
+                    try:
+                        packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+                        technical_specs = packaging_data.get("technical_specifications", [])
+                        for spec in technical_specs:
+                            if spec["manufacturer"]["name"] == manufacturer_name:
+                                address = spec["manufacturer"].get("address", "")
+                                break
+                    except Exception as e:
+                        print(f"Ошибка поиска адреса для {manufacturer_name}: {e}")
+                
                 return {
                     'name': manufacturer_name,
-                    'address': '',  # Из XML нет адреса
+                    'address': address,  # Теперь с адресом!
                     'tu_number': tu_from_xml  # ТУ из XML
                 }
             
