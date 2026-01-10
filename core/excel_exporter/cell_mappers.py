@@ -522,6 +522,174 @@ class CellMappingRegistry:
             ]
         )    
     
+
+    @staticmethod
+    def get_workshop1_noweight_mapping() -> SheetMapping:
+        """
+        Маппинг для 1 цеха, лист без веса ('БезВеса')
+        """
+        return SheetMapping(
+            sheet_name="БезВеса",
+            workshop="1",
+            description="Лист без веса для поддона (цех 1)",
+            
+            static_cells=[
+                # Заказчик - D10
+                CellMapping(
+                    cell_reference="D10",
+                    data_key="customer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                # Номер заказа - E9
+                CellMapping(
+                    cell_reference="E9",
+                    data_key="order_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                # Наименование продукции - D11 (многострочный)
+                CellMapping(
+                    cell_reference="D11",
+                    data_key="product_text",
+                    data_type=DataType.MULTILINE_TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.TOP,
+                        wrap_text=True
+                    ),
+                    required=True
+                ),
+                
+                # Дата упаковки - E37
+                CellMapping(
+                    cell_reference="E37",
+                    data_key="date",
+                    data_type=DataType.DATE,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                # Упаковщик - E41
+                CellMapping(
+                    cell_reference="E41",
+                    data_key="packer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                # Тип продукта - E39
+                CellMapping(
+                    cell_reference="C1",
+                    data_key="manufacturer_display_text",
+                    data_type=DataType.MULTILINE_TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        wrap_text=True
+                    ),
+                    required=False,
+                    is_merged_cell=True
+                ),
+                
+                # TU номер - A39
+                CellMapping(
+                    cell_reference="A39",
+                    data_key="tu_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=False
+                ),
+            ],
+            
+            dynamic_sections=[
+                # ЛЕВАЯ секция (C14-C28) - только количество
+                DynamicSection(
+                    name="boxes_left_section",
+                    start_cell="C14",
+                    rows_range=(14, 29),  # Строки 14-28
+                    columns_config=[
+                        {
+                            "column": "C",
+                            "data_key": "quantity_per_box",
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        }
+                    ],
+                    direction="vertical",
+                    max_items=15  # Максимум 15 коробок
+                ),
+                
+                # ЦЕНТРАЛЬНАЯ секция (F14-F28) - только количество
+                DynamicSection(
+                    name="boxes_center_section",
+                    start_cell="F14",
+                    rows_range=(14, 29),  # Строки 14-28
+                    columns_config=[
+                        {
+                            "column": "F",
+                            "data_key": "quantity_per_box",
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        }
+                    ],
+                    direction="vertical",
+                    max_items=15  # Максимум 15 коробок
+                ),
+                
+                # ПРАВАЯ секция (I14-I28) - только количество
+                DynamicSection(
+                    name="boxes_right_section",
+                    start_cell="I14",
+                    rows_range=(14, 29),  # Строки 14-28
+                    columns_config=[
+                        {
+                            "column": "I",
+                            "data_key": "quantity_per_box",
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        }
+                    ],
+                    direction="vertical",
+                    max_items=15  # Максимум 15 коробок
+                )
+            ],
+            
+            post_processing_hooks=[
+                "validate_boxes_count_noweight",
+                "fill_box_numbers"
+            ]
+        )    
+    
     # ==================== МЕТОДЫ ДОСТУПА К МАППИНГАМ ====================
     
     @classmethod
@@ -542,12 +710,12 @@ class CellMappingRegistry:
         """
         # Словарь доступных маппингов
         mappings = {
-            # Цех 1
-            ("1", "box"): cls.get_workshop1_box_mapping,
             # TODO: Добавить другие маппинги по мере реализации
+            # Цех 1
+            ("1", "box"): cls.get_workshop1_box_mapping,           
             ("1", "pallet"): cls.get_workshop1_pallet_mapping,
-            # ("1", "multitype"): cls.get_workshop1_multitype_mapping,
-            # ("1", "noweight"): cls.get_workshop1_noweight_mapping,
+            ("1", "noweight"): cls.get_workshop1_noweight_mapping,
+            # ("1", "multitype"): cls.get_workshop1_multitype_mapping,            
             
             # Цех 2
             # ("2", "box"): cls.get_workshop2_box_mapping,

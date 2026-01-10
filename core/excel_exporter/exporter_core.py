@@ -85,39 +85,51 @@ class SmartExporter:
             
             # 2. Заполняем динамические секции
             all_fitted = True
-            
-            # Группируем секции по типу
-            boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
-            rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
-            other_sections = [s for s in mapping.dynamic_sections if "boxes" not in s.name and "rolls" not in s.name]
-            
-            # Заполняем коробки (для поддона)
-            if boxes_sections:
+
+            # ТОЛЬКО для БезВеса
+            if mapping.sheet_name == "БезВеса":
                 boxes_count = sheet_specific_data.get('boxes_count', 1)
                 if boxes_count == 0:
                     boxes_count = 1
-                boxes_fitted = self._fill_boxes_sections_with_distribution(
-                    boxes_sections, sheet_specific_data, boxes_count
+                boxes_fitted = self._fill_quantity_sections_with_distribution(
+                    mapping.dynamic_sections, sheet_specific_data, boxes_count
                 )
-                all_fitted = boxes_fitted and all_fitted
-            
-            # Заполняем ролики (для коробки)
-            if rolls_sections:
-                rolls_count = sheet_specific_data.get('rolls_count', 1)
-                if rolls_count == 0:
-                    rolls_count = 1
-                rolls_fitted = self._fill_rolls_sections_with_distribution(
-                    rolls_sections, sheet_specific_data, rolls_count
-                )
-                all_fitted = rolls_fitted and all_fitted
-            
-            # Заполняем остальные секции (если есть)
-            for section in other_sections:
-                section_fitted = self._fill_dynamic_section(
-                    section, sheet_specific_data, mode, pallet_data
-                )
-                if not section_fitted:
-                    all_fitted = False
+                all_fitted = boxes_fitted
+
+            # Для всех остальных листов
+            else:
+                # Группируем секции по типу
+                boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
+                rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
+                other_sections = [s for s in mapping.dynamic_sections if "boxes" not in s.name and "rolls" not in s.name]
+                
+                # Заполняем коробки (для поддона)
+                if boxes_sections:
+                    boxes_count = sheet_specific_data.get('boxes_count', 1)
+                    if boxes_count == 0:
+                        boxes_count = 1
+                    boxes_fitted = self._fill_boxes_sections_with_distribution(
+                        boxes_sections, sheet_specific_data, boxes_count
+                    )
+                    all_fitted = boxes_fitted and all_fitted
+                
+                # Заполняем ролики (для коробки)
+                if rolls_sections:
+                    rolls_count = sheet_specific_data.get('rolls_count', 1)
+                    if rolls_count == 0:
+                        rolls_count = 1
+                    rolls_fitted = self._fill_rolls_sections_with_distribution(
+                        rolls_sections, sheet_specific_data, rolls_count
+                    )
+                    all_fitted = rolls_fitted and all_fitted
+                
+                # Заполняем остальные секции (если есть)
+                for section in other_sections:
+                    section_fitted = self._fill_dynamic_section(
+                        section, sheet_specific_data, mode, pallet_data
+                    )
+                    if not section_fitted:
+                        all_fitted = False
             
             # 3. Выполняем пост-обработку
             self._run_post_processing_hooks(mapping.post_processing_hooks, sheet_specific_data)
@@ -174,8 +186,14 @@ class SmartExporter:
             self._clear_static_cells(mapping.static_cells)
             
             # 2. Очищаем динамические секции
-            for section in mapping.dynamic_sections:
-                self._clear_dynamic_section(section)
+            if mapping.sheet_name == "БезВеса":
+                # Очистка для БезВеса: и ячейки с количеством, и номера
+                for section in mapping.dynamic_sections:
+                    self._clear_noweight_section_with_numbers(section)
+            else:
+                # Обычная очистка для других листов
+                for section in mapping.dynamic_sections:
+                    self._clear_dynamic_section(section)
             
             # 3. Сохраняем файл
             self.wb.save(file_path)
@@ -357,17 +375,75 @@ class SmartExporter:
         except Exception as e:
             print(f"Ошибка заполнения секции коробок '{section.name}': {e}")
             return 0
-
-    def _fill_dynamic_section(self, section: DynamicSection, data: Dict[str, Any], 
-                             mode: str, pallet_data: Optional[Dict]) -> bool:
-        """Заполняет другие типы секций (не коробки и не ролики)"""
-        # Коробки и ролики уже обрабатываются отдельно
-        if "boxes" in section.name or "rolls" in section.name:
-            return True
+            
+    def _fill_quantity_sections_with_distribution(self, sections: List[DynamicSection], 
+                                                data: Dict[str, Any], total_boxes: int) -> bool:
+        """Распределяет количество по 3 секциям для листа БезВеса"""
+        print(f"DEBUG: БезВеса: total_boxes={total_boxes}, sections={len(sections)} секции")
         
-        # TODO: Другие типы секций
-        print(f"Внимание: тип секции '{section.name}' не реализован")
-        return True
+        filled_count = 0
+        
+        for i, section in enumerate(sections):
+            print(f"DEBUG: Секция {i}: {section.name}, filled_count={filled_count}")
+            if filled_count >= total_boxes:
+                print(f"DEBUG: Выход из цикла, т.к. filled_count({filled_count}) >= total_boxes({total_boxes})")
+                break
+                
+            # Сколько осталось заполнить
+            boxes_left = total_boxes - filled_count
+            filled_in_section = self._fill_quantity_section(section, data, boxes_left)
+            filled_count += filled_in_section
+        
+        print(f"DEBUG: Итого заполнено {filled_count} из {total_boxes}")
+        return filled_count >= total_boxes
+
+    def _fill_quantity_section(self, section: DynamicSection, data: Dict[str, Any], max_boxes: int) -> int:
+        """Заполняет одну секцию количества для листа БезВеса"""
+        try:
+            # Только количество
+            quantity = data.get('quantity_per_box')
+            
+            # Если данных нет - пропускаем
+            if quantity is None:
+                return 0
+            
+            start_row, end_row = section.rows_range
+            filled_count = 0
+            
+            # Ищем пустые строки
+            for row in range(start_row, end_row):
+                if filled_count >= max_boxes:
+                    break
+                
+                # Проверяем, пуста ли строка (ТА ЖЕ ЛОГИКА)
+                is_empty = True
+                for col_config in section.columns_config:
+                    cell_ref = f"{col_config['column']}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+                
+                if is_empty:
+                    # Заполняем строку (ПРОЩЕ - только quantity_per_box)
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+                        
+                        # В БезВеса только quantity_per_box
+                        value = quantity if data_key == 'quantity_per_box' else None
+                        
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+                    
+                    filled_count += 1
+            
+            return filled_count
+                
+        except Exception as e:
+            print(f"Ошибка заполнения секции количества '{section.name}': {e}")
+            return 0
+
     
     # ==================== МЕТОДЫ ОЧИСТКИ ====================
     
@@ -396,6 +472,26 @@ class SmartExporter:
                 except Exception as e:
                     print(f"Ошибка очистки ячейки {cell_ref}: {e}")
                     continue
+                    
+    def _clear_noweight_section_with_numbers(self, section: DynamicSection):
+        """Очищает секцию в БезВеса вместе с номерами"""
+        start_row, end_row = section.rows_range
+        
+        for row in range(start_row, end_row):
+            for col_config in section.columns_config:
+                try:
+                    # 1. Очищаем ячейку с количеством (C/F/I)
+                    quantity_col = col_config['column']  # C, F, I
+                    quantity_cell = f"{quantity_col}{row}"
+                    self._set_cell_value(quantity_cell, None, CellFormat())
+                    
+                    # 2. Очищаем соседнюю ячейку с номером
+                    number_col = chr(ord(quantity_col) - 1)  # C→B, F→E, I→H
+                    number_cell = f"{number_col}{row}"
+                    self._set_cell_value(number_cell, None, CellFormat())
+                    
+                except Exception as e:
+                    print(f"Не удалось очистить ячейку в БезВеса {row}: {e}")
     
     # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
     
@@ -431,6 +527,10 @@ class SmartExporter:
         # Для поддона используем специализированный метод DataProvider
         if sheet_name == "Лист для паллеты" or "паллет" in sheet_name.lower():
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_pallet()}
+            
+        # Для БезВеса используем специализированный метод DataProvider
+        if sheet_name == "БезВеса":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_noweight()}
         
         return sheet_data
     
@@ -466,7 +566,74 @@ class SmartExporter:
         max_boxes = 30  # Максимум для 1 цеха (15 слева + 15 справа)
         
         if boxes_count > max_boxes:
-            print(f"Внимание: количество коробок ({boxes_count}) превышает максимальное ({max_boxes})")            
+            print(f"Внимание: количество коробок ({boxes_count}) превышает максимальное ({max_boxes})")
+            
+    def _hook_validate_boxes_count_noweight(self, data: Dict[str, Any]):
+        """Хук для проверки количества коробок в листе БезВеса"""
+        boxes_count = data.get('boxes_count', 0)
+        max_boxes = 45  # Максимум для БезВеса (15 слева + 15 центр + 15 справа)
+        
+        if boxes_count > max_boxes:
+            print(f"Внимание: количество коробок ({boxes_count}) превышает максимальное ({max_boxes}) для листа БезВеса")
+            
+    def _hook_fill_box_numbers(self, data: Dict[str, Any]):
+        """Заполняет номера коробок в листе БезВеса"""
+        if self.current_mapping.sheet_name != "БезВеса":
+            return
+        
+        boxes_count = data.get('boxes_count', 0)
+        
+        # Считаем сколько номеров уже заполнено
+        last_number = 0
+        
+        # Проверяем левые номера (B14-B28)
+        for i in range(14, 29):
+            value = self.ws[f"B{i}"].value
+            if value is not None:
+                last_number = max(last_number, int(value))
+        
+        # Проверяем центральные номера (E14-E28)
+        for i in range(14, 29):
+            value = self.ws[f"E{i}"].value
+            if value is not None:
+                last_number = max(last_number, int(value))
+        
+        # Проверяем правые номера (H14-H28)
+        for i in range(14, 29):
+            value = self.ws[f"H{i}"].value
+            if value is not None:
+                last_number = max(last_number, int(value))
+        
+        # Теперь заполняем пропущенные номера
+        current_number = last_number + 1
+        boxes_filled = 0
+        
+        # Левые номера (B14-B28)
+        for i in range(14, 29):
+            if boxes_filled >= boxes_count:
+                break
+            if self.ws[f"B{i}"].value is None:
+                self._set_cell_value(f"B{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                current_number += 1
+                boxes_filled += 1
+        
+        # Центральные номера (E14-E28)
+        for i in range(14, 29):
+            if boxes_filled >= boxes_count:
+                break
+            if self.ws[f"E{i}"].value is None:
+                self._set_cell_value(f"E{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                current_number += 1
+                boxes_filled += 1
+        
+        # Правые номера (H14-H28)
+        for i in range(14, 29):
+            if boxes_filled >= boxes_count:
+                break
+            if self.ws[f"H{i}"].value is None:
+                self._set_cell_value(f"H{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                current_number += 1
+                boxes_filled += 1
     
     def _process_value_by_type(self, value: Any, data_type: DataType) -> Any:
         """Обрабатывает значение согласно типу данных"""
@@ -601,149 +768,3 @@ class SmartExporter:
         self.current_mapping = None
 
 
-# ==================== ФАБРИКА И АДАПТЕРЫ ====================
-
-class ExporterFactory:
-    """Фабрика для создания экспортеров по параметрам"""
-    
-    @staticmethod
-    def create_exporter(workshop: str, sheet_type: str, roll_module, config_manager=None):
-        """
-        Создает экспортер для указанных параметров.
-        
-        Args:
-            workshop: "1" или "2"
-            sheet_type: Тип листа
-            roll_module: UI модуль с данными
-            config_manager: Менеджер конфигурации
-            
-        Returns:
-            Настроенный SmartExporter
-        """
-        # Создаем провайдер данных
-        data_provider = ExportDataProvider(roll_module, config_manager)
-        
-        # Создаем экспортер
-        exporter = SmartExporter(data_provider, config_manager)
-        
-        return exporter
-
-
-class LegacyExporterAdapter:
-    """
-    Адаптер для обратной совместимости со старым кодом.
-    Позволяет постепенно мигрировать на новую архитектуру.
-    """
-    
-    def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None):
-        self.original_excel_path = excel_file_path
-        self.roll_module = roll_module
-        self.coordinator = coordinator
-        
-        # Создаем провайдер и экспортер новой архитектуры
-        self.data_provider = ExportDataProvider(roll_module)
-        self.exporter = SmartExporter(self.data_provider)
-    
-    def export_data(self, enable_pallet=False, pallet_data=None, multitype_mode=False):
-        """
-        Интерфейс, совместимый со старым WeightOrdersExporter.export_data
-        """
-        # TODO: Полная реализация с поддержкой всех режимов
-        # Пока демонстрация для цеха 1, коробка
-        
-        # Определяем цех (упрощенно)
-        workshop = "1"  # По умолчанию 1 цех
-        
-        # Определяем тип листа
-        if multitype_mode:
-            sheet_type = "multitype"
-        elif enable_pallet:
-            sheet_type = "pallet"
-        else:
-            sheet_type = "box"
-        
-        # Получаем маппинг
-        try:
-            from cell_mappers import get_mapping
-            mapping = get_mapping(workshop, sheet_type, "box" if not enable_pallet else "pallet")
-        except ValueError:
-            # Если маппинг не найден, используем fallback
-            return self._legacy_fallback_export(enable_pallet, pallet_data, multitype_mode)
-        
-        # Получаем путь к файлу
-        file_path = self._get_excel_file_path(workshop)
-        
-        # Выполняем экспорт
-        result = self.exporter.export_to_sheet(
-            file_path=file_path,
-            mapping=mapping,
-            mode="pallet" if enable_pallet else "box",
-            pallet_data=pallet_data
-        )
-        
-        # Отправляем уведомление через координатор
-        if result['success'] and self.coordinator and hasattr(self.coordinator, 'notify'):
-            self.coordinator.notify("excel_exported", {
-                'file_path': result['file_path'],
-                'sheet_name': result['sheet_name'],
-                'enable_pallet': enable_pallet,
-                'multitype_mode': multitype_mode,
-                'workshop': workshop
-            })
-        
-        return result
-    
-    def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
-        """Очистка листа (обратная совместимость)"""
-        # Аналогичная логика определения параметров
-        workshop = "1"
-        
-        if multitype_mode:
-            sheet_type = "multitype"
-        elif enable_pallet:
-            sheet_type = "pallet"
-        else:
-            sheet_type = "box"
-        
-        try:
-            from cell_mappers import get_mapping
-            mapping = get_mapping(workshop, sheet_type, "box" if not enable_pallet else "pallet")
-        except ValueError:
-            return self._legacy_fallback_clear(enable_pallet, multitype_mode)
-        
-        file_path = self._get_excel_file_path(workshop)
-        
-        success = self.exporter.clear_sheet(file_path, mapping)
-        
-        if success and self.coordinator and hasattr(self.coordinator, 'notify'):
-            self.coordinator.notify("excel_cleared", {
-                'file_path': file_path,
-                'enable_pallet': enable_pallet,
-                'multitype_mode': multitype_mode,
-                'workshop': workshop
-            })
-        
-        return success
-    
-    def _get_excel_file_path(self, workshop: str) -> str:
-        """Определяет путь к файлу Excel (упрощенно)"""
-        # TODO: Полная реализация с учетом настроек и координатора
-        import os
-        if workshop == "1":
-            filename = "weight_orders.xlsx"
-        else:
-            filename = "weight_orders_2.xlsx"
-        
-        # Пока возвращаем путь рядом с оригинальным файлом
-        return os.path.join(os.path.dirname(self.original_excel_path), filename)
-    
-    def _legacy_fallback_export(self, *args, **kwargs):
-        """Fallback на старую реализацию, если новая не поддерживается"""
-        print("Используется fallback на старую реализацию")
-        # TODO: Здесь можно вызвать старый WeightOrdersExporter
-        return {'success': False, 'error': 'Режим не поддерживается в новой архитектуре'}
-    
-    def _legacy_fallback_clear(self, *args, **kwargs):
-        """Fallback на старую очистку"""
-        print("Используется fallback на старую очистку")
-        return False

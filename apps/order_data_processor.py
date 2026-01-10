@@ -6,7 +6,7 @@ import sys
 import shutil
 import xml.etree.ElementTree as ET
 from core.config_manager import ConfigManager
-from core.excel_exporter.excel_exporter import WeightOrdersExporter
+from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
 from core.parse.xml_order_parser import XMLOrderParser
 

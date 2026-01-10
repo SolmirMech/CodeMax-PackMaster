@@ -135,6 +135,54 @@ class ExportDataProvider:
             'sheet_type': 'pallet',
             'has_weight': all_data['metadata'].get('has_weight', False)
         }
+        
+    def get_data_for_workshop1_noweight(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 1 цеха, лист БезВеса (поддон без веса).
+        Только количество, без весовых полей.
+        """
+        all_data = self.collect_all_data()
+        
+        # Получаем количество коробок через preview_module (как в get_data_for_workshop1_pallet)
+        boxes_count = 0
+        try:
+            boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
+            boxes_count = self._convert_to_number(boxes_count_str, force_int=True) or 0
+        except Exception as e:
+            print(f"Ошибка получения количества коробок: {e}")
+            boxes_count = 0
+        
+        # Если 0 - устанавливаем 1
+        if boxes_count == 0:
+            boxes_count = 1
+        
+        # Получаем общее количество этикеток
+        total_quantity = all_data['quantities'].get('total_quantity', 0)
+        
+        return {
+            # Основная информация (как в NoWeightOrdersExporter)
+            'customer': all_data['common'].get('customer'),
+            'order_number': all_data['common'].get('order_number'),
+            'product_text': all_data['common'].get('product_text'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            
+            # Данные для динамических секций
+            'boxes_count': boxes_count,
+            'quantity_per_box': total_quantity,  # Только количество, без веса
+            
+            # Производитель (если нужен, хотя в БезВеса может не быть ячейки для него)
+            'show_manufacturer': all_data['manufacturer'].get('show_manufacturer'),
+            'manufacturer_name': all_data['manufacturer'].get('manufacturer_name'),
+            'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
+            
+            # Дополнительно
+            'workshop': '1',
+            'sheet_type': 'noweight',
+            'has_weight': False  # Всегда False для этого метода
+        }
     
     # ==================== ПРИВАТНЫЕ МЕТОДЫ СБОРА ====================
     

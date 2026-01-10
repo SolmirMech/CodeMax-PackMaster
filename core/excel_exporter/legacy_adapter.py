@@ -15,7 +15,6 @@ from core.config_manager import ConfigManager
 class LegacyExporterAdapter:
     """
     Адаптер, имитирующий старый WeightOrdersExporter.
-    Поддерживает ТОЧНО ТАКОЙ ЖЕ интерфейс.
     """
     
     def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None):
@@ -24,6 +23,10 @@ class LegacyExporterAdapter:
         self.preview_module = preview_module
         self.coordinator = coordinator
         self.config_manager = ConfigManager()
+        self.has_weight = True
+        if coordinator and hasattr(coordinator, 'subscribe'):
+            # Подписываемся на уведомления координатора
+            coordinator.subscribe(self.on_settings_changed)        
         
         # Создаем провайдер и экспортер новой архитектуры
         self.data_provider = ExportDataProvider(roll_module, self.config_manager)
@@ -37,40 +40,48 @@ class LegacyExporterAdapter:
     def create_exporter(excel_file_path, roll_module, preview_module, coordinator=None):
         """
         Фабричный метод - полная совместимость со старым конструктором.
-        Позволяет создавать либо WeightOrdersExporter, либо NoWeightOrdersExporter.
+        Просто создает экземпляр LegacyExporterAdapter.
         """
-        # Проверяем вес (ТОЧНО ТАКАЯ ЖЕ логика как в старом коде)
-        has_weight = False
-        if roll_module and hasattr(roll_module, 'total_gross_var'):
-            weight_value = roll_module.total_gross_var.get()
-            if weight_value and str(weight_value).strip() and str(weight_value).strip() != '0':
-                has_weight = True
-        
-        if has_weight:
-            return LegacyExporterAdapter(excel_file_path, roll_module, preview_module, coordinator)
-        else:
-            return NoWeightExporterAdapter(excel_file_path, roll_module, preview_module, coordinator)
+        return LegacyExporterAdapter(excel_file_path, roll_module, preview_module, coordinator)
     
     def export_data(self, enable_pallet=False, pallet_data=None, multitype_mode=False):
         """
         Интерфейс, совместимый со старым WeightOrdersExporter.export_data
+        Теперь с автоматическим выбором между pallet и noweight
         """
-        # Определяем цех (упрощенно)
-        workshop = "1"  # По умолчанию 1 цех
-        if hasattr(self, 'coordinator') and self.coordinator:
-            workshop = self.coordinator.get_workshop()
+        # Обновляем статус веса перед каждым экспортом
+        self.on_settings_changed()
+        
+        # Определяем цех
+        workshop = self._determine_workshop()
         
         # Определяем тип листа
         if multitype_mode:
             sheet_type = "multitype"
         elif enable_pallet:
-            sheet_type = "pallet"
+            # Автоматический выбор на основе веса
+            if self.has_weight:
+                sheet_type = "pallet"    # Лист для паллеты (с весом)
+                print(f"Используется лист для паллеты (с весом)")
+            else:
+                sheet_type = "noweight"  # Лист БезВеса (без веса)
+                print(f"Используется лист БезВеса (без веса)")
         else:
             sheet_type = "box"
         
+        # Для режима pallet (с весом) обновляем box_type из pallet_data
+        if enable_pallet and self.has_weight and pallet_data:
+            pallet_type = pallet_data.get("pallet_type", "")
+            if pallet_type and hasattr(self.data_provider.roll_module, 'box_size_var'):
+                # Временно обновляем box_type для этого экспорта
+                original_box_type = self.data_provider.roll_module.box_size_var.get()
+                self.data_provider.roll_module.box_size_var.set(pallet_type)
+                self.data_provider.clear_cache()  # Очищаем кеш для обновления данных
+        
         # Получаем маппинг
         try:
-            mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, "box" if not enable_pallet else "pallet")
+            mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, 
+                                                     "box" if not enable_pallet else ("pallet" if self.has_weight else "noweight"))
         except ValueError as e:
             # Если маппинг не найден, используем fallback
             print(f"Маппинг не найден, используем старый экспорт: {e}")
@@ -78,17 +89,6 @@ class LegacyExporterAdapter:
         
         # Получаем путь к файлу
         file_path = self._get_excel_file_path(workshop)
-        
-        # Для поддона передаем данные из pallet_data
-        if enable_pallet and pallet_data:
-            # Обновляем box_type в данных из pallet_data
-            box_type_from_data = pallet_data.get("pallet_type", "")
-            if box_type_from_data:
-                # Нужно обновить данные в data_provider
-                if hasattr(self.data_provider.roll_module, 'box_size_var'):
-                    self.data_provider.roll_module.box_size_var.set(box_type_from_data)
-                    # Очищаем кеш, чтобы данные обновились
-                    self.data_provider.clear_cache()
         
         # Выполняем экспорт
         try:
@@ -106,13 +106,23 @@ class LegacyExporterAdapter:
                     'sheet_name': result['sheet_name'],
                     'enable_pallet': enable_pallet,
                     'multitype_mode': multitype_mode,
-                    'workshop': workshop
+                    'workshop': workshop,
+                    'has_weight': self.has_weight  # Добавляем информацию о весе
                 })
+            
+            # Восстанавливаем оригинальный box_type если меняли
+            if enable_pallet and self.has_weight and pallet_data and 'original_box_type' in locals():
+                self.data_provider.roll_module.box_size_var.set(original_box_type)
+                self.data_provider.clear_cache()
             
             return result
             
         except Exception as e:
             print(f"Ошибка в новом экспортере: {e}")
+            # Восстанавливаем box_type при ошибке
+            if enable_pallet and self.has_weight and pallet_data and 'original_box_type' in locals():
+                self.data_provider.roll_module.box_size_var.set(original_box_type)
+                self.data_provider.clear_cache()
             return self._legacy_fallback_export(enable_pallet, pallet_data, multitype_mode)
     
     def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
@@ -121,13 +131,20 @@ class LegacyExporterAdapter:
             workshop = self._determine_workshop()
             
             if multitype_mode:
-                # Много-видовой режим (пока старый)
                 return self._legacy_multitype_clear(workshop, enable_pallet)
             
-            # Определяем тип листа
+            # ОБНОВЛЯЕМ статус веса перед очисткой
+            self.on_settings_changed()
+            
+            # Определяем тип листа (КАК В export_data!)
             if enable_pallet:
-                sheet_type = "pallet"
-                mode = "pallet"
+                # Автоматический выбор на основе веса
+                if self.has_weight:
+                    sheet_type = "pallet"    # Лист для паллеты (с весом)
+                    mode = "pallet"
+                else:
+                    sheet_type = "noweight"  # Лист БезВеса (без веса)
+                    mode = "noweight"
             else:
                 sheet_type = "box"
                 mode = "box"
@@ -143,7 +160,8 @@ class LegacyExporterAdapter:
                         'file_path': file_path,
                         'enable_pallet': enable_pallet,
                         'multitype_mode': multitype_mode,
-                        'workshop': workshop
+                        'workshop': workshop,
+                        'has_weight': self.has_weight  # Добавляем информацию о весе
                     })
                 
                 return success
@@ -249,36 +267,7 @@ class LegacyExporterAdapter:
         return workshop == "2"
     
     def on_settings_changed(self):
-        """Для совместимости с координатором"""
-        pass
-
-
-class NoWeightExporterAdapter(LegacyExporterAdapter):
-    """Адаптер для заказов без веса"""
-    
-    def export_data(self, enable_pallet=False, pallet_data=None, multitype_mode=False):
-        """Экспорт для заказов без веса"""
-        # Пока используем старую реализацию
-        from .excel_exporter import NoWeightOrdersExporter
-        
-        old_exporter = NoWeightOrdersExporter(
-            excel_file_path=self.original_excel_path,
-            roll_module=self.roll_module,
-            preview_module=self.preview_module,
-            coordinator=self.coordinator
-        )
-        
-        return old_exporter.export_data(enable_pallet, pallet_data, multitype_mode)
-    
-    def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
-        """Очистка для заказов без веса"""
-        from .excel_exporter import NoWeightOrdersExporter
-        
-        old_exporter = NoWeightOrdersExporter(
-            excel_file_path=self.original_excel_path,
-            roll_module=self.roll_module,
-            preview_module=self.preview_module,
-            coordinator=self.coordinator
-        )
-        
-        return old_exporter.clear_all_rolls(enable_pallet, multitype_mode)
+        """Обработчик изменения настроек от координатора"""
+        # Обновляем статус веса (как в excel_preview_module)
+        if self.coordinator and hasattr(self.coordinator, 'get_weight_status'):
+            self.has_weight = self.coordinator.get_weight_status()
