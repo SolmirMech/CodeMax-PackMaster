@@ -254,12 +254,12 @@ class RollLabelPrinter:
             width=2,
             state="disabled"
         )
-        self.comment_button.grid(row=3, column=1, padx=(160, 0), pady=5, sticky="w")
+        self.comment_button.grid(row=3, column=1, padx=(150, 0), pady=5, sticky="w")
         self.comment_button.grid_remove()
         
         # Дата
         self.date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
-        self.date_entry.grid(row=3, column=1, padx=(145, 0), pady=5, sticky="e")        
+        self.date_entry.grid(row=3, column=1, padx=(240, 0), pady=5, sticky="w")        
         
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
             row=4, column=0, sticky="w", pady=2
@@ -280,7 +280,7 @@ class RollLabelPrinter:
             variable=self.show_weight_var,
             command=self.toggle_weight_visibility
         )
-        self.weight_checkbutton.grid(row=4, column=1, padx=(240, 0), pady=2, sticky="w")
+        self.weight_checkbutton.grid(row=4, column=1, padx=(240, 10), pady=2, sticky="w")
         
         # Дополнительные поля:
         
@@ -293,58 +293,57 @@ class RollLabelPrinter:
         
         # Вес втулки
         self.sleeve_label = ttk.Label(data_frame, text="Вес втулки, г:")
-        self.sleeve_label.grid(row=5, column=1, sticky="w", padx=(115, 0), pady=3)        
-        
-        self.sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=10)
-        self.sleeve_entry.grid(row=5, column=1, padx=(260, 0), pady=3, sticky="w")             
-        
-        # Длина этикетки
-        self.label_length_label = ttk.Label(data_frame, text="Длина этикетки, мм:")
-        self.label_length_label.grid(row=6, column=0, sticky="w", pady=2)
-        self.label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
-        self.label_length_entry.grid(row=6, column=0, padx=(195, 0), pady=2, sticky="w")
+        self.sleeve_label.grid(row=5, column=1, sticky="w", padx=(115, 0), pady=3)
+        self.sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=7)
+        self.sleeve_entry.grid(row=5, column=1, padx=(265, 0), pady=3, sticky="w")
         
         # Длина ролика
         self.roll_length_label = ttk.Label(data_frame, text="Длина ролика, м:")
-        self.roll_length_label.grid(row=6, column=1, sticky="w", pady=2)
+        self.roll_length_label.grid(row=6, column=0, sticky="w", pady=2)
         self.roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        self.roll_length_entry.grid(row=6, column=1, padx=(165, 0), pady=2, sticky="w")
+        self.roll_length_entry.grid(row=6, column=0, padx=(183, 0), pady=2, sticky="w")
         
-        # Row 8: Поля для номеров съёмов и роликов       
-        self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
-        self.streams_label.grid(row=8, column=0, sticky="w", pady=3)
-        self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=6)
-        self.streams_entry.grid(row=8, column=0, padx=(160, 0), pady=3, sticky="w")
-
+        # № съёма
         self.batch_label = ttk.Label(data_frame, text="№ съёма:")
-        self.batch_label.grid(row=8, column=1, sticky="w", pady=3)
+        self.batch_label.grid(row=6, column=1, sticky="w", pady=3)
         self.batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
-        self.batch_entry.grid(row=8, column=1, padx=(110, 0), pady=3, sticky="w")
+        self.batch_entry.grid(row=6, column=1, padx=(100, 0), pady=3, sticky="w")
 
+        # № ролика
         self.roll_label = ttk.Label(data_frame, text="№ ролика:")
-        self.roll_label.grid(row=8, column=1, sticky="w", padx=(160, 0), pady=3)
-        self.roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=6)
-        self.roll_entry.grid(row=8, column=1, padx=(275, 0), pady=3, sticky="w")
+        self.roll_label.grid(row=6, column=1, sticky="w", padx=(160, 0), pady=3)
+        self.roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=7)
+        self.roll_entry.grid(row=6, column=1, padx=(265, 0), pady=3, sticky="w")               
         
-        # Row 9: Ширина ручья
+        # Ширина ручья
         self.stream_width_label = ttk.Label(data_frame, text="Ширина ручья, мм:")
-        self.stream_width_label.grid(row=9, column=0, sticky="w", pady=2)
+        self.stream_width_label.grid(row=7, column=0, sticky="w", pady=2)
         self.stream_width_entry = ttk.Entry(data_frame, textvariable=self.stream_width_var, width=8)
-        self.stream_width_entry.grid(row=9, column=0, padx=(200, 0), pady=2, sticky="w")
+        self.stream_width_entry.grid(row=7, column=0, padx=(183, 0), pady=2, sticky="w")
+        
+        # Длина этикетки
+        self.label_length_label = ttk.Label(data_frame, text="Длина этикетки, мм:")
+        self.label_length_label.grid(row=7, column=1, sticky="w", pady=2)
+        self.label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
+        self.label_length_entry.grid(row=7, column=1, padx=(265, 0), pady=2, sticky="w")         
         
         # Схема намотки
         self.winding_label = ttk.Label(data_frame, text="Схема намотки:")
-        self.winding_label.grid(row=10, column=0, sticky="w", pady=3)
-        
-        self.winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=5)
-        self.winding_entry.grid(row=10, column=0, padx=(160, 0), pady=3, sticky="w")
+        self.winding_label.grid(row=8, column=0, sticky="w", pady=3)       
+        self.winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=8)
+        self.winding_entry.grid(row=8, column=0, padx=(183, 0), pady=3, sticky="w")
         
         # Диаметр втулки
         self.diameter_label = ttk.Label(data_frame, text="Диаметр втулки, мм:")
-        self.diameter_label.grid(row=10, column=1, sticky="w", pady=3)
+        self.diameter_label.grid(row=8, column=1, sticky="w", pady=3)       
+        self.diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=7)
+        self.diameter_entry.grid(row=8, column=1, padx=(265, 0), pady=3, sticky="w")
         
-        self.diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=5)
-        self.diameter_entry.grid(row=10, column=1, padx=(205, 0), pady=3, sticky="w")        
+        # Кол-во ручьев      
+        self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
+        self.streams_label.grid(row=9, column=0, sticky="w", pady=3)
+        self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=8)
+        self.streams_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")        
         
         self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
         self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
@@ -632,30 +631,18 @@ class RollLabelPrinter:
         # Управление видимостью полей автогенерации (row=8) и ширины ручья (row=9)
         if workshop == "1":
             # Цех 1 - скрываем поля
-            self.streams_label.grid_remove()
-            self.streams_entry.grid_remove()
             self.batch_label.grid_remove()
             self.batch_entry.grid_remove()
             self.roll_label.grid_remove()
             self.roll_entry.grid_remove()
-            self.stream_width_label.grid_remove()
-            self.stream_width_entry.grid_remove()
-            self.label_length_label.grid_remove()
-            self.label_length_entry.grid_remove()
             self.roll_length_label.grid_remove()
             self.roll_length_entry.grid_remove()
         else:  # цех 2
             # Цех 2 - показываем все поля
-            self.streams_label.grid()
-            self.streams_entry.grid()
             self.batch_label.grid()
             self.batch_entry.grid()
             self.roll_label.grid()
             self.roll_entry.grid()
-            self.stream_width_label.grid()
-            self.stream_width_entry.grid()
-            self.label_length_label.grid()
-            self.label_length_entry.grid()
             self.roll_length_label.grid()
             self.roll_length_entry.grid()
             
@@ -689,18 +676,31 @@ class RollLabelPrinter:
                 else:
                     self.date_entry.grid_remove()
             
-            # Управляем видимостью схемы намотки и диаметра
+            # Управляем видимостью второстепенных элементов
             if hasattr(self, 'winding_label'):
                 if show_elements:
                     self.winding_label.grid()
                     self.winding_entry.grid()
                     self.diameter_label.grid()
                     self.diameter_entry.grid()
+                    self.streams_label.grid()
+                    self.streams_entry.grid()
+                    self.stream_width_label.grid()
+                    self.stream_width_entry.grid()
+                    self.label_length_label.grid()
+                    self.label_length_entry.grid()
                 else:
                     self.winding_label.grid_remove()
                     self.winding_entry.grid_remove()
                     self.diameter_label.grid_remove()
                     self.diameter_entry.grid_remove()
+                    self.streams_label.grid_remove()
+                    self.streams_entry.grid_remove()
+                    self.stream_width_label.grid_remove()
+                    self.stream_width_entry.grid_remove()
+                    self.label_length_label.grid_remove()
+                    self.label_length_entry.grid_remove()
+                    
                     
         except Exception as e:
             print(f"Ошибка обновления видимости элементов: {e}")            
