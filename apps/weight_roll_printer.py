@@ -662,6 +662,7 @@ class RollLabelPrinter:
             self.gross_entry.grid_remove()
             self.sleeve_label.grid_remove()
             self.sleeve_entry.grid_remove()
+            self.coordinator.check_weight_status(self)
             
     def update_elements_visibility(self):
         """Обновляет видимость дополнительных элементов на основе настроек"""
@@ -972,6 +973,10 @@ class RollLabelPrinter:
                 
         except (ValueError, TypeError):
             self.net_weight_kg_var.set("")
+            
+        # ВСЕГДА уведомляем координатор при изменении веса
+        if hasattr(self, 'coordinator') and self.coordinator:
+            self.coordinator.check_weight_status(self)
         
     # Раздел для настройки поля ввода
     def control_key_handler(self, event):

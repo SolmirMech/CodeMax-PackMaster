@@ -46,7 +46,17 @@ class ExcelPreviewModule:
             if multitype_mode:
                 return "Лист много видов"
             elif enable_pallet:
-                return "Лист для паллеты"
+                # Проверяем наличие веса через координатор
+                has_weight = True
+                if hasattr(self, 'coordinator') and self.coordinator:
+                    has_weight = self.coordinator.get_weight_status()
+                    print(f"DEBUG: has_weight={has_weight}")
+                
+                # Если нет веса и включен режим паллеты - показываем лист "БезВеса"
+                if not has_weight and enable_pallet:
+                    return "БезВеса"
+                else:
+                    return "Лист для паллеты"
             else:
                 return "Лист для коробки"
         else:  # workshop == "2"
@@ -143,7 +153,8 @@ class ExcelPreviewModule:
         """Обработчик изменения любых настроек от координатора"""
         if self.coordinator and hasattr(self.coordinator, 'get_archive_status'):
             status = self.coordinator.get_archive_status()
-            self.archive_enabled = (status == "on")                
+            self.archive_enabled = (status == "on")
+            has_weight = self.coordinator.get_weight_status()
 
     def excel_to_image_simple(self, excel_path, sheet_name):
         """Скриншот области печати Excel"""

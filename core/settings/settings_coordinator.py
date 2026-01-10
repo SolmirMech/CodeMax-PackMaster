@@ -21,6 +21,9 @@ class SettingsCoordinator:
         self.config_manager = ConfigManager()
         self._subscribers = []
         
+        # Инициализируем статус веса
+        self._has_weight = False
+        
         self._load_initial_settings()
         self._initialized = True       
     
@@ -56,6 +59,22 @@ class SettingsCoordinator:
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
         except Exception as e:
             print(f"Ошибка сохранения шаблона шрифтов: {e}")
+            
+    def check_weight_status(self, roll_module):
+        """Проверяет наличие веса и уведомляет подписчиков"""
+        has_weight = False
+        if roll_module and hasattr(roll_module, 'gross_weight_kg_var'):
+            weight_value = roll_module.gross_weight_kg_var.get()
+            if weight_value and str(weight_value).strip() and str(weight_value).strip() != '0':
+                has_weight = True
+        
+        # Сохраняем статус и уведомляем подписчиков
+        self._has_weight = has_weight
+        self._notify_subscribers()
+        
+    def get_weight_status(self):
+        """Возвращает статус наличия веса"""
+        return getattr(self, '_has_weight', False)
     
     def subscribe(self, callback: Callable):
         """Подписывает компонент на уведомления об изменениях"""

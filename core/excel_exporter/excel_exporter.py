@@ -25,8 +25,8 @@ class WeightOrdersExporter:
         """Фабричный метод - полная совместимость со старым конструктором"""
         # Проверяем вес
         has_weight = False
-        if roll_module and hasattr(roll_module, 'total_gross_var'):
-            weight_value = roll_module.total_gross_var.get()
+        if roll_module and hasattr(roll_module, 'gross_weight_kg_var'):
+            weight_value = roll_module.gross_weight_kg_var.get()
             if weight_value and str(weight_value).strip() and str(weight_value).strip() != '0':
                 has_weight = True
         
