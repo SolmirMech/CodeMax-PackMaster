@@ -2,6 +2,7 @@
 import os
 from core.config_manager import ConfigManager
 from typing import Dict, Any, Optional, Union
+from openpyxl import load_workbook
 
 class ExportDataProvider:
     """
@@ -9,7 +10,7 @@ class ExportDataProvider:
     Не знает о структуре Excel, только о данных.
     """
     
-    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None, excel_file_path: str = ""):
         """
         Инициализация сборщика данных.
         
@@ -19,6 +20,7 @@ class ExportDataProvider:
         """
         self.roll_module = roll_module
         self.config_manager = config_manager or ConfigManager()
+        self.original_excel_path = excel_file_path
         self._data_cache: Optional[Dict[str, Any]] = None
         
     def collect_all_data(self) -> Dict[str, Any]:
@@ -166,6 +168,32 @@ class ExportDataProvider:
             'workshop': '1',
             'sheet_type': 'noweight',
             'has_weight': False  # Всегда False для этого метода
+        }
+    
+    def get_data_for_workshop1_multitype(self) -> Dict[str, Any]:
+        all_data = self.collect_all_data()
+        excel_data = self._read_pallet_sheet_data()
+        
+        return {
+            # Основная информация
+            'customer': all_data['common'].get('customer'),
+            'order_number': all_data['common'].get('order_number'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            'product_text': all_data['common'].get('product_text'),  # Это же product_name
+            
+            # Данные из Excel
+            'boxes_count': excel_data.get('boxes_count', 0),
+            'gross_total': excel_data.get('gross_total', 0),
+            'net_total': excel_data.get('net_total', 0),
+            'labels_total': excel_data.get('labels_total', 0),
+            
+            # Дополнительно
+            'workshop': '1',
+            'sheet_type': 'multitype',
+            'has_weight': True
         }
     
     # ==================== ПРИВАТНЫЕ МЕТОДЫ СБОРА ====================
@@ -358,6 +386,58 @@ class ExportDataProvider:
             data['has_weight'] = False
             
         return data
+        
+    def _read_pallet_sheet_data(self) -> Dict[str, Any]:
+        """
+        Читает данные из листа поддона в Excel файле.
+        Возвращает суммы по колонкам B, C, D (левая секция) и F, G, H (правая секция).
+        """
+        try:
+            # Получаем путь к файлу
+            workshop = self._determine_workshop()
+            actual_file_path = self._get_excel_file_path(workshop)
+            
+            if not os.path.exists(actual_file_path):
+                return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
+            
+            workbook = load_workbook(actual_file_path, data_only=True)
+            pallet_sheet = workbook["Лист для паллеты"]
+            
+            boxes_count = 0
+            gross_total = 0
+            net_total = 0
+            labels_total = 0
+            
+            # Левая секция: колонки B, C, D
+            for row in range(14, 29):
+                if any(pallet_sheet[f'{col}{row}'].value is not None 
+                       for col in ['B', 'C', 'D']):
+                    boxes_count += 1
+                    gross_total += pallet_sheet[f'B{row}'].value or 0
+                    net_total += pallet_sheet[f'C{row}'].value or 0
+                    labels_total += pallet_sheet[f'D{row}'].value or 0
+            
+            # Правая секция: колонки F, G, H
+            for row in range(14, 29):
+                if any(pallet_sheet[f'{col}{row}'].value is not None 
+                       for col in ['F', 'G', 'H']):
+                    boxes_count += 1
+                    gross_total += pallet_sheet[f'F{row}'].value or 0
+                    net_total += pallet_sheet[f'G{row}'].value or 0
+                    labels_total += pallet_sheet[f'H{row}'].value or 0
+            
+            workbook.close()
+            
+            return {
+                'boxes_count': boxes_count,
+                'gross_total': gross_total,
+                'net_total': net_total,
+                'labels_total': labels_total
+            }
+            
+        except Exception as e:
+            print(f"Ошибка чтения Excel файла: {e}")
+            return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
     
     def _get_manufacturer_data(self) -> Dict[str, Any]:
         """Собирает данные по производителю"""
@@ -486,3 +566,43 @@ class ExportDataProvider:
             pass
         
         return None
+        
+    def _get_excel_file_path(self, workshop: str) -> str:
+        """Определяет путь к файлу Excel"""
+        # Копируем логику из старого get_excel_file_path
+        try:
+            # Получаем путь из настроек
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            excel_folder = settings.get("weight_orders_xlsx", "")
+            
+            if not excel_folder:
+                excel_folder = os.path.dirname(self.original_excel_path)
+            
+            # Определяем имя файла
+            filename = "weight_orders.xlsx" if workshop == "1" else "weight_orders_2.xlsx"
+            full_path = os.path.join(excel_folder, filename)
+            
+            # Проверяем существование файла
+            if not os.path.exists(full_path):
+                # Копируем из assets
+                assets_file = self.config_manager.get_asset_path(filename)
+                if os.path.exists(assets_file):
+                    import shutil
+                    shutil.copy2(assets_file, full_path)
+                    print(f"Файл {filename} скопирован в {full_path}")
+                else:
+                    raise FileNotFoundError(f"Файл {filename} не найден в assets")
+            
+            return full_path
+            
+        except Exception as e:
+            print(f"Ошибка получения пути к Excel файлу: {e}")
+            return self.original_excel_path
+            
+    def _determine_workshop(self) -> str:
+        """Определяет цех"""
+        # Простейшая реализация - всегда цех 1 для начала
+        return "1"
+    
+
+            

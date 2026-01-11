@@ -50,7 +50,7 @@ class SmartExporter:
     # ==================== ОСНОВНЫЕ МЕТОДЫ ЭКСПОРТА ====================
     
     def export_to_sheet(self, file_path: str, mapping: SheetMapping, 
-                       mode: str = "box", pallet_data: Optional[Dict] = None) -> Dict[str, Any]:
+                       mode: str = "box") -> Dict[str, Any]:
         """
         Основной метод экспорта в указанный лист.
         
@@ -58,7 +58,6 @@ class SmartExporter:
             file_path: Путь к файлу Excel
             mapping: Маппинг листа
             mode: Режим экспорта ('box', 'pallet', etc.)
-            pallet_data: Данные поддона (только для режима pallet)
             
         Returns:
             Словарь с результатами экспорта
@@ -95,13 +94,21 @@ class SmartExporter:
                     mapping.dynamic_sections, sheet_specific_data, boxes_count
                 )
                 all_fitted = boxes_fitted
+                
+            # Для много видов
+            elif mapping.sheet_name == "Лист много видов" or "много видов" in mapping.sheet_name.lower():
+                if mapping.dynamic_sections:
+                    # Вызываем распределение по секциям
+                    sections_fitted = self._fill_multitype_sections_with_distribution(
+                        mapping.dynamic_sections, sheet_specific_data, max_items=1  # Только одна строка!
+                    )
+                    all_fitted = sections_fitted and all_fitted
 
             # Для всех остальных листов
             else:
                 # Группируем секции по типу
                 boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
                 rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
-                other_sections = [s for s in mapping.dynamic_sections if "boxes" not in s.name and "rolls" not in s.name]
                 
                 # Заполняем коробки (для поддона)
                 if boxes_sections:
@@ -122,14 +129,6 @@ class SmartExporter:
                         rolls_sections, sheet_specific_data, rolls_count
                     )
                     all_fitted = rolls_fitted and all_fitted
-                
-                # Заполняем остальные секции (если есть)
-                for section in other_sections:
-                    section_fitted = self._fill_dynamic_section(
-                        section, sheet_specific_data, mode, pallet_data
-                    )
-                    if not section_fitted:
-                        all_fitted = False
             
             # 3. Выполняем пост-обработку
             self._run_post_processing_hooks(mapping.post_processing_hooks, sheet_specific_data)
@@ -236,7 +235,85 @@ class SmartExporter:
             except Exception as e:
                 print(f"Ошибка заполнения ячейки {cell_mapping.cell_reference}: {e}")
                 continue
-    
+                
+    def _fill_multitype_sections_with_distribution(self, sections: List[DynamicSection], 
+                                                  data: Dict[str, Any], max_items: int = 1) -> bool:
+        """Распределяет строки по секциям для multitype (ТОЧНО как для boxes)"""
+        filled_count = 0
+        
+        for section in sections:
+            if filled_count >= max_items:
+                break
+                
+            # Сколько осталось заполнить
+            items_left = max_items - filled_count
+            filled_in_section = self._fill_single_multitype_section(section, data, items_left)
+            filled_count += filled_in_section
+        
+        return filled_count >= max_items
+
+    def _fill_single_multitype_section(self, section: DynamicSection, data: Dict[str, Any], max_items: int) -> int:
+        """Заполняет одну секцию для multitype (ТОЧНО как _fill_boxes_section)"""
+        try:
+            # Данные для заполнения
+            boxes_count = data.get('boxes_count')
+            product_text = data.get('product_text')
+            gross_total = data.get('gross_total')
+            net_total = data.get('net_total')
+            labels_total = data.get('labels_total')
+            
+            # Если данных нет - пропускаем
+            if boxes_count is None and product_text is None and gross_total is None and net_total is None and labels_total is None:
+                return 0
+            
+            start_row, end_row = section.rows_range
+            filled_count = 0
+            
+            # Ищем пустые строки (ТОЧНАЯ ЛОГИКА!)
+            for row in range(start_row, end_row):
+                if filled_count >= max_items:
+                    break
+                
+                # Проверяем, пуста ли строка (ТОЧНО как в _fill_boxes_section)
+                is_empty = True
+                for col_config in section.columns_config:
+                    cell_ref = f"{col_config['column']}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+                
+                if is_empty:
+                    # Заполняем строку
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+                        
+                        # Сопоставляем ключи данных (аналогично _fill_boxes_section)
+                        if data_key == 'boxes_count':
+                            value = boxes_count
+                        elif data_key == 'product_text':
+                            value = product_text
+                        elif data_key == 'gross_total':
+                            value = gross_total
+                        elif data_key == 'net_total':
+                            value = net_total
+                        elif data_key == 'labels_total':
+                            value = labels_total
+                        else:
+                            value = None
+                        
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+                    
+                    filled_count += 1
+            
+            return filled_count
+                
+        except Exception as e:
+            print(f"Ошибка заполнения секции multitype '{section.name}': {e}")
+            return 0
+        
     def _fill_rolls_sections_with_distribution(self, sections: List[DynamicSection], 
                                               data: Dict[str, Any], total_rolls: int) -> bool:
         """Распределяет ролики по секциям последовательно"""
@@ -520,13 +597,17 @@ class SmartExporter:
         sheet_data['workshop'] = workshop
         sheet_data['sheet_name'] = sheet_name
         
-        # Для поддона используем специализированный метод DataProvider
+        # Для поддона 1 цех используем специализированный метод DataProvider
         if sheet_name == "Лист для паллеты" or "паллет" in sheet_name.lower():
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_pallet()}
             
-        # Для БезВеса используем специализированный метод DataProvider
+        # Для БезВеса 1 цех используем специализированный метод DataProvider
         if sheet_name == "БезВеса":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_noweight()}
+            
+        # Для листа "Много видов 1 цех" используем специализированный метод DataProvider
+        if sheet_name == "Лист много видов" or "много видов" in sheet_name.lower():
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype()}
         
         return sheet_data
     
@@ -541,6 +622,49 @@ class SmartExporter:
                     print(f"Внимание: хук '{hook_name}' не найден")
             except Exception as e:
                 print(f"Ошибка выполнения хука '{hook_name}': {e}")
+                
+    def _hook_clear_existing_row(self, data: Dict[str, Any]):
+        """Хук для очистки существующей строки с таким же product_name"""
+        if not self.current_mapping:
+            return
+        
+        product_name = data.get('product_text')  # product_name из данных
+        
+        if not product_name:
+            return
+        
+        # Ищем строку с таким product_name в колонке B
+        start_row, end_row = self.current_mapping.dynamic_sections[0].rows_range
+        
+        for row in range(start_row, end_row):
+            if self.ws[f'B{row}'].value == product_name:
+                # Очищаем всю строку (A, B, F, G, H)
+                for col in ['A', 'B', 'F', 'G', 'H']:
+                    self._set_cell_value(f'{col}{row}', None, CellFormat())
+                break
+
+    def _hook_find_available_row(self, data: Dict[str, Any]):
+        """Хук для поиска пустой строки"""
+        if not self.current_mapping:
+            return
+        
+        start_row, end_row = self.current_mapping.dynamic_sections[0].rows_range
+        
+        for row in range(start_row, end_row):
+            # Проверяем, пуста ли строка
+            is_empty = True
+            for col in ['A', 'B', 'F', 'G', 'H']:
+                if self.ws[f'{col}{row}'].value is not None:
+                    is_empty = False
+                    break
+            
+            if is_empty:
+                # Сохраняем найденную строку в данных для заполнения
+                data['target_row'] = row
+                return
+        
+        # Если не нашли пустую строку
+        data['target_row'] = None
     
     def _hook_update_manufacturer_info(self, data: Dict[str, Any]):
         """Хук для обновления информации о производителе"""

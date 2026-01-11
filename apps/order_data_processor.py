@@ -181,17 +181,7 @@ class OrderDataProcessor:
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем превью для получения настроек экспорта"""
-        self.preview_module = preview_module
-        
-    def get_pallet_data(self):
-        """Получает данные паллеты из модуля предпросмотра"""
-        if hasattr(self, 'export_module') and self.export_module:
-            return {
-                "pallet_type": getattr(self.export_module, 'pallet_size_var', StringVar()).get(),
-                "boxes_count": getattr(self.export_module, 'boxes_count_var', StringVar()).get(),
-                "pallet_weight": getattr(self.export_module, 'pallet_weight_var', StringVar()).get()
-            }
-        return {"pallet_type": "", "boxes_count": "", "pallet_weight": ""}
+        self.preview_module = preview_module      
         
     def auto_clear_excel_data(self):
         """Автоматически очищает данные Excel при смене вида продукции"""
@@ -279,16 +269,6 @@ class OrderDataProcessor:
         """Экспортирует текущий вид продукции в лист много видов"""
         try:
             self.multitype_status_label.config(text="", foreground="black")
-            # Получаем данные паллеты из модуля предпросмотра
-            pallet_data = self.get_pallet_data()
-            
-            # Проверяем, что все необходимые данные заполнены
-            if not pallet_data["pallet_type"] or not pallet_data["boxes_count"]:
-                self.multitype_status_label.config(
-                    text="Введите данные для экспорта!", 
-                    foreground="orange"
-                )
-                return
 
             # Получаем название продукции - сначала из выбранного XML, если нет - из поля ролика
             product_name = ""
@@ -303,15 +283,7 @@ class OrderDataProcessor:
                     text="Сначала выберите или введите название продукции", 
                     foreground="orange"
                 )
-                return
-                
-            # Формируем данные для экспорта   
-            pallet_data = {
-                "pallet_type": pallet_data["pallet_type"],
-                "pallet_weight": pallet_data["pallet_weight"],
-                "boxes_count": pallet_data["boxes_count"],
-                "product_name": product_name
-            }
+                return              
 
             # Используем excel_file_path
             if not self.excel_file_path:
@@ -339,7 +311,7 @@ class OrderDataProcessor:
                 coordinator=self.coordinator
             )
             
-            result = exporter.export_data(multitype_mode=True, pallet_data=pallet_data)
+            result = exporter.export_data(multitype_mode=True)
             
             if result['success']:
                 self.multitype_status_label.config(

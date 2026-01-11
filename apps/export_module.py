@@ -443,13 +443,6 @@ class ExportModule:
                 )
                 return
 
-            # Получаем данные для экспорта
-            pallet_data = {
-                "pallet_type": self.pallet_size_var.get(),
-                "pallet_weight": self.pallet_weight_var.get(),
-                "boxes_count": self.boxes_count_var.get()
-            }
-
             # Используем excel_file_path
             if not self.excel_file_path:
                 self.load_excel_folder_path()
@@ -470,7 +463,7 @@ class ExportModule:
                 coordinator=self.coordinator
             )
             
-            result = exporter.export_data(enable_pallet=True, pallet_data=pallet_data)
+            result = exporter.export_data(enable_pallet=True)
             
             if result['success']:
                 # Проверяем поместились ли все коробки
