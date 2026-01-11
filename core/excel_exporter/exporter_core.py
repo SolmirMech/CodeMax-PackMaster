@@ -379,14 +379,11 @@ class SmartExporter:
     def _fill_quantity_sections_with_distribution(self, sections: List[DynamicSection], 
                                                 data: Dict[str, Any], total_boxes: int) -> bool:
         """Распределяет количество по 3 секциям для листа БезВеса"""
-        print(f"DEBUG: БезВеса: total_boxes={total_boxes}, sections={len(sections)} секции")
         
         filled_count = 0
         
         for i, section in enumerate(sections):
-            print(f"DEBUG: Секция {i}: {section.name}, filled_count={filled_count}")
             if filled_count >= total_boxes:
-                print(f"DEBUG: Выход из цикла, т.к. filled_count({filled_count}) >= total_boxes({total_boxes})")
                 break
                 
             # Сколько осталось заполнить
@@ -394,7 +391,6 @@ class SmartExporter:
             filled_in_section = self._fill_quantity_section(section, data, boxes_left)
             filled_count += filled_in_section
         
-        print(f"DEBUG: Итого заполнено {filled_count} из {total_boxes}")
         return filled_count >= total_boxes
 
     def _fill_quantity_section(self, section: DynamicSection, data: Dict[str, Any], max_boxes: int) -> int:
@@ -508,7 +504,7 @@ class SmartExporter:
             if isinstance(category_data, dict):
                 sheet_data.update(category_data)
         
-        # ДОБАВИТЬ: специальная обработка для производителя
+        # Специальная обработка для производителя
         if 'manufacturer' in all_data and isinstance(all_data['manufacturer'], dict):
             manufacturer_data = all_data['manufacturer']
             
@@ -516,7 +512,7 @@ class SmartExporter:
             if 'display_text' in manufacturer_data:
                 sheet_data['manufacturer_display_text'] = manufacturer_data['display_text']
             
-            # Также добавляем другие поля производителя для возможных будущих нужд
+            # Также добавляем другие поля производителя
             sheet_data['manufacturer_name'] = manufacturer_data.get('manufacturer_name', '')
             sheet_data['show_manufacturer'] = manufacturer_data.get('show_manufacturer', True)
         

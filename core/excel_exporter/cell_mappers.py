@@ -212,7 +212,7 @@ class CellMappingRegistry:
                         wrap_text=True
                     ),
                     required=False,
-                    is_merged_cell=True  # Вероятно объединенная ячейка
+                    is_merged_cell=True  # объединенная ячейка
                 ),
             ],
             
@@ -330,7 +330,7 @@ class CellMappingRegistry:
                 
                 CellMapping(
                     cell_reference="D6",
-                    data_key="box_type",  # Здесь будет тип поддона из pallet_data
+                    data_key="pallet_type",
                     data_type=DataType.TEXT,
                     format=CellFormat(
                         horizontal_alignment=HorizontalAlignment.LEFT,
@@ -685,6 +685,7 @@ class CellMappingRegistry:
             ],
             
             post_processing_hooks=[
+                "update_manufacturer_info",
                 "validate_boxes_count_noweight",
                 "fill_box_numbers"
             ]

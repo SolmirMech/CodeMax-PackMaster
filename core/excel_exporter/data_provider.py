@@ -92,23 +92,14 @@ class ExportDataProvider:
         """
         all_data = self.collect_all_data()
         
-        # Получаем количество коробок через preview_module
-        boxes_count = 0
-        try:
-            boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
-            boxes_count = self._convert_to_number(boxes_count_str, force_int=True) or 0
-        except Exception as e:
-            print(f"Ошибка получения количества коробок: {e}")
-            boxes_count = 0
-        
-        # Если 0 - устанавливаем 1
+        # Получаем количество коробок
+        boxes_count = all_data['quantities'].get('boxes_count', 0)
         if boxes_count == 0:
             boxes_count = 1
         
         return {
             # Основная информация (как для коробки)
-            'customer': all_data['common'].get('customer'),
-            'box_type': all_data['common'].get('box_type'),
+            'customer': all_data['common'].get('customer'),            
             'order_number': all_data['common'].get('order_number'),
             'product_text': all_data['common'].get('product_text'),
             'date': all_data['common'].get('date'),
@@ -117,7 +108,8 @@ class ExportDataProvider:
             'tu_number': all_data['common'].get('tu_number'),
             
             # Данные поддона
-            'pallet_weight': all_data['weights'].get('box_weight'),  # Вес поддона в том же поле
+            'pallet_type': all_data['common'].get('pallet_type'),
+            'pallet_weight': all_data['weights'].get('pallet_weight'),
             'boxes_count': boxes_count,
             
             # Данные одной коробки (для заполнения в динамические секции)
@@ -143,16 +135,8 @@ class ExportDataProvider:
         """
         all_data = self.collect_all_data()
         
-        # Получаем количество коробок через preview_module (как в get_data_for_workshop1_pallet)
-        boxes_count = 0
-        try:
-            boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
-            boxes_count = self._convert_to_number(boxes_count_str, force_int=True) or 0
-        except Exception as e:
-            print(f"Ошибка получения количества коробок: {e}")
-            boxes_count = 0
-        
-        # Если 0 - устанавливаем 1
+        # Получаем количество коробок
+        boxes_count = all_data['quantities'].get('boxes_count', 0)
         if boxes_count == 0:
             boxes_count = 1
         
@@ -160,7 +144,7 @@ class ExportDataProvider:
         total_quantity = all_data['quantities'].get('total_quantity', 0)
         
         return {
-            # Основная информация (как в NoWeightOrdersExporter)
+            # Основная информация
             'customer': all_data['common'].get('customer'),
             'order_number': all_data['common'].get('order_number'),
             'product_text': all_data['common'].get('product_text'),
@@ -171,9 +155,9 @@ class ExportDataProvider:
             
             # Данные для динамических секций
             'boxes_count': boxes_count,
-            'quantity_per_box': total_quantity,  # Только количество, без веса
+            'quantity_per_box': total_quantity,  # Только количество
             
-            # Производитель (если нужен, хотя в БезВеса может не быть ячейки для него)
+            # Производитель
             'show_manufacturer': all_data['manufacturer'].get('show_manufacturer'),
             'manufacturer_name': all_data['manufacturer'].get('manufacturer_name'),
             'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
@@ -198,10 +182,13 @@ class ExportDataProvider:
             if hasattr(self.roll_module, 'customer_var'):
                 data['customer'] = self.roll_module.customer_var.get()
             
-            # Тип упаковки (коробка/поддон)
+            # Название коробки
             if hasattr(self.roll_module, 'box_size_var'):
                 data['box_type'] = self.roll_module.box_size_var.get()
-            
+                
+            # Название паллеты
+            data['pallet_type'] = self.roll_module.preview_module.export_module.pallet_size_var.get()
+                         
             # Полный номер заказа
             if hasattr(self.roll_module, 'order_prefix'):
                 order_prefix = self.roll_module.order_prefix.get()
@@ -260,6 +247,10 @@ class ExportDataProvider:
             if hasattr(self.roll_module, 'box_weight_var'):
                 weight_str = self.roll_module.box_weight_var.get()
                 data['box_weight'] = self._convert_to_number(weight_str)
+                
+            # Вес паллеты
+            weight_str = self.roll_module.preview_module.export_module.pallet_weight_var.get()
+            data['pallet_weight'] = self._convert_to_number(weight_str)
             
             # Общий вес брутто
             if hasattr(self.roll_module, 'total_gross_var'):
@@ -301,6 +292,10 @@ class ExportDataProvider:
         data = {}
         
         try:
+            
+            boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
+            data['boxes_count'] = self._convert_to_number(boxes_count_str, force_int=True)
+            
             # Количество роликов
             if hasattr(self.roll_module, 'rolls_count_var'):
                 count_str = self.roll_module.rolls_count_var.get()
@@ -425,7 +420,7 @@ class ExportDataProvider:
                     return spec["product"]["tu_number"]
                     
         except Exception as e:
-            print(f"Ошибка получения TU номера: {e}")
+            print(f"Ошибка получения ТУ номера: {e}")
         
         return "ТУ технические условия"  # Fallback
         
@@ -444,7 +439,7 @@ class ExportDataProvider:
                     return spec["product"]["name"]
                     
         except Exception as e:
-            print(f"Ошибка получения типа продукта по TU номеру: {e}")
+            print(f"Ошибка получения типа продукта по ТУ номеру: {e}")
         
         # Fallback - возвращаем текущее значение из UI
         return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""

@@ -62,21 +62,10 @@ class LegacyExporterAdapter:
             # Автоматический выбор на основе веса
             if self.has_weight:
                 sheet_type = "pallet"    # Лист для паллеты (с весом)
-                print(f"Используется лист для паллеты (с весом)")
             else:
                 sheet_type = "noweight"  # Лист БезВеса (без веса)
-                print(f"Используется лист БезВеса (без веса)")
         else:
-            sheet_type = "box"
-        
-        # Для режима pallet (с весом) обновляем box_type из pallet_data
-        if enable_pallet and self.has_weight and pallet_data:
-            pallet_type = pallet_data.get("pallet_type", "")
-            if pallet_type and hasattr(self.data_provider.roll_module, 'box_size_var'):
-                # Временно обновляем box_type для этого экспорта
-                original_box_type = self.data_provider.roll_module.box_size_var.get()
-                self.data_provider.roll_module.box_size_var.set(pallet_type)
-                self.data_provider.clear_cache()  # Очищаем кеш для обновления данных
+            sheet_type = "box"      
         
         # Получаем маппинг
         try:
@@ -108,21 +97,12 @@ class LegacyExporterAdapter:
                     'multitype_mode': multitype_mode,
                     'workshop': workshop,
                     'has_weight': self.has_weight  # Добавляем информацию о весе
-                })
-            
-            # Восстанавливаем оригинальный box_type если меняли
-            if enable_pallet and self.has_weight and pallet_data and 'original_box_type' in locals():
-                self.data_provider.roll_module.box_size_var.set(original_box_type)
-                self.data_provider.clear_cache()
+                })          
             
             return result
             
         except Exception as e:
             print(f"Ошибка в новом экспортере: {e}")
-            # Восстанавливаем box_type при ошибке
-            if enable_pallet and self.has_weight and pallet_data and 'original_box_type' in locals():
-                self.data_provider.roll_module.box_size_var.set(original_box_type)
-                self.data_provider.clear_cache()
             return self._legacy_fallback_export(enable_pallet, pallet_data, multitype_mode)
     
     def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
@@ -133,10 +113,10 @@ class LegacyExporterAdapter:
             if multitype_mode:
                 return self._legacy_multitype_clear(workshop, enable_pallet)
             
-            # ОБНОВЛЯЕМ статус веса перед очисткой
+            # Обновляем статус веса перед очисткой
             self.on_settings_changed()
             
-            # Определяем тип листа (КАК В export_data!)
+            # Определяем тип листа (Как в export_data!)
             if enable_pallet:
                 # Автоматический выбор на основе веса
                 if self.has_weight:
