@@ -50,7 +50,6 @@ class ExcelPreviewModule:
                 has_weight = True
                 if hasattr(self, 'coordinator') and self.coordinator:
                     has_weight = self.coordinator.get_weight_status()
-                    print(f"DEBUG: has_weight={has_weight}")
                 
                 # Если нет веса и включен режим паллеты - показываем лист "БезВеса"
                 if not has_weight and enable_pallet:

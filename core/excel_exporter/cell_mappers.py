@@ -196,7 +196,7 @@ class CellMappingRegistry:
                     format=CellFormat(
                         horizontal_alignment=HorizontalAlignment.CENTER,
                         vertical_alignment=VerticalAlignment.CENTER,
-                        number_format="0.000"
+                        number_format="0.00"
                     ),
                     required=False
                 ),
@@ -230,7 +230,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -240,7 +240,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -270,7 +270,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -280,7 +280,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -414,7 +414,7 @@ class CellMappingRegistry:
                     format=CellFormat(
                         horizontal_alignment=HorizontalAlignment.CENTER,
                         vertical_alignment=VerticalAlignment.CENTER,
-                        number_format="0.000"
+                        number_format="0.00"
                     ),
                     required=False
                 ),
@@ -448,7 +448,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -458,7 +458,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -488,7 +488,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -498,7 +498,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -801,7 +801,7 @@ class CellMappingRegistry:
                     format=CellFormat(
                         horizontal_alignment=HorizontalAlignment.CENTER,
                         vertical_alignment=VerticalAlignment.CENTER,
-                        number_format="0.000"
+                        number_format="0.00"
                     ),
                     required=False
                 ),
@@ -839,7 +839,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {
@@ -849,7 +849,7 @@ class CellMappingRegistry:
                             "format": CellFormat(
                                 horizontal_alignment=HorizontalAlignment.CENTER,
                                 vertical_alignment=VerticalAlignment.CENTER,
-                                number_format="0.000"
+                                number_format="0.00"
                             )
                         },
                         {

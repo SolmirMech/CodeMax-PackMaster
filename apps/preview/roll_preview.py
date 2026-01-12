@@ -318,6 +318,7 @@ class RollPreview:
         
         if templates_ok:
             self.status_label.config(text="Шаблоны загружены", foreground="green")
+            self.parent.after(5000, lambda: self.status_label.config(text=""))
             # Сразу запускаем отрисовку превью
             self.load_and_show_previews()
         
@@ -605,6 +606,7 @@ class RollPreview:
                 self._update_canvas_preview(self.box_canvas, box_preview_image)
             
             self.status_label.config(text="Превью обновлены", foreground="green")
+            self.parent.after(5000, lambda: self.status_label.config(text=""))
             
         except Exception as e:
             self.status_label.config(text=f"Ошибка обновления: {e}", foreground="red")

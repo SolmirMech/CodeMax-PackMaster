@@ -136,6 +136,7 @@ class PrintModule:
         """Универсальный метод установки статуса"""
         if hasattr(self, 'print_status_label'):
             self.print_status_label.config(text=message, foreground=color)
+            self.parent.after(5000, lambda: self.print_status_label.config(text=""))
             
     def set_order_data_module(self, order_data_module):
         self.order_data_module = order_data_module
@@ -168,7 +169,6 @@ class PrintModule:
                 self.batch_print_data = filtered_data
                 self.current_batch_index = 0
                 self.is_batch_printing = True
-                self.print_status_label.config(text=f"Печать тиража ({len(filtered_data)} видов)...", foreground="blue")
                 
                 self.print_next_in_batch()
             else:
@@ -187,7 +187,7 @@ class PrintModule:
             
             self.copies_var.set("1")
             self.is_batch_printing = False
-            self.print_status_label.config(text=f"Печать завершена ({self.current_batch_index} шт)", foreground="green")
+            self.set_status(f"Печать завершена ({self.current_batch_index} шт)", "green")
             return
             
         try:
@@ -300,10 +300,8 @@ class PrintModule:
             all_settings["weight_box_print"] = self.settings
 
             if self.config_manager.save_json_settings(self.settings_file, all_settings):
-                self.print_status_label.config(
-                    text="✅ Настройки печати сохранены!",
-                    foreground="green"
-                )
+                self.set_status("✅ Настройки печати сохранены!", "green")
+                
         except Exception as e:
             self.print_status_label.config(
                 text=f"❌ Не удалось сохранить настройки: {str(e)}",

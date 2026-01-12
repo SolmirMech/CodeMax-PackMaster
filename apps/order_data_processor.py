@@ -200,19 +200,7 @@ class OrderDataProcessor:
                 # Очищаем коробку
                 box_cleared = exporter.clear_all_rolls()  
                 # Очищаем поддон  
-                pallet_cleared = exporter.clear_all_rolls(enable_pallet=True)
-                
-                # Показываем статус в UI
-                if box_cleared and pallet_cleared:                    
-                    self.multitype_status_label.config(
-                        text="Данные очищены при смене вида", 
-                        foreground="green"
-                    )
-                else:
-                    self.multitype_status_label.config(
-                        text="Ошибка очистки (файл открыт?)", 
-                        foreground="orange"
-                    )
+                pallet_cleared = exporter.clear_all_rolls(enable_pallet=True)            
                 
         except Exception as e:
             print(f"Ошибка автоматической очистки Excel: {e}")
@@ -253,6 +241,7 @@ class OrderDataProcessor:
                     text="Лист 'Много видов' очищен", 
                     foreground="green"
                 )
+                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
             else:
                 self.multitype_status_label.config(
                     text="Ошибка при очистке листа", 
@@ -283,6 +272,7 @@ class OrderDataProcessor:
                     text="Сначала выберите или введите название продукции", 
                     foreground="orange"
                 )
+                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
                 return              
 
             # Используем excel_file_path
@@ -318,8 +308,7 @@ class OrderDataProcessor:
                     text="✅ Вид отправлен в лист 'Много видов'", 
                     foreground="green"
                 )
-                # Очищаем статус
-                self.parent.after(9000, lambda: self.multitype_status_label.config(text=""))
+                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
             else:
                 # Обработка ошибок из экспортера
                 error_msg = result.get('error', '')
@@ -552,6 +541,7 @@ class OrderDataProcessor:
                     self.selected_name.set(selected_data['name'])
                     self.send_to_roll_module(selected_data)
                     self.parse_status.config(text=f"Найден {found_by}", foreground="green")
+                    self.parent.after(5000, lambda: self.parse_status.config(text=""))
                 else:
                     # Если несколько - показываем выбор
                     names_list = [item['name'] for item in found_products]
@@ -559,7 +549,8 @@ class OrderDataProcessor:
                     self.parse_status.config(
                         text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", 
                         foreground="orange"
-                    )                    
+                    )
+                    self.parent.after(5000, lambda: self.parse_status.config(text=""))                    
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
@@ -569,6 +560,7 @@ class OrderDataProcessor:
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
+                self.parent.after(5000, lambda: self.parse_status.config(text=""))
                 self.filtered_parsed_data = self.parsed_data                
         
         else:
@@ -579,6 +571,7 @@ class OrderDataProcessor:
                 self.selected_name.set(selected_data['name'])
                 self.send_to_roll_module(selected_data)
                 self.parse_status.config(text="Данные отправлены", foreground="green")
+                self.parent.after(5000, lambda: self.parse_status.config(text=""))
             else:
                 # Если несколько - показываем выбор
                 names_list = [item['name'] for item in self.parsed_data]
@@ -587,6 +580,7 @@ class OrderDataProcessor:
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
+                self.parent.after(5000, lambda: self.parse_status.config(text=""))
                     
         if self.name_combobox['values']:
             # Откладываем установку фокуса, чтобы UI успел отрендерить комбобокс
@@ -607,6 +601,7 @@ class OrderDataProcessor:
             if selected_data:
                 self.send_to_roll_module(selected_data)
                 self.parse_status.config(text="Все данные отправлены", foreground="green")
+                self.parent.after(5000, lambda: self.parse_status.config(text=""))
             else:
                 self.parse_status.config(text="Ошибка: данные не найдены", foreground="red")
 

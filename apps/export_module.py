@@ -233,6 +233,7 @@ class ExportModule:
         """Универсальный метод установки статуса"""
         if hasattr(self, 'export_status_label'):
             self.export_status_label.config(text=message, foreground=color)
+            self.parent.after(5000, lambda: self.export_status_label.config(text=""))
         
     def set_order_data_module(self, order_data_module):
         self.order_data_module = order_data_module
@@ -425,7 +426,7 @@ class ExportModule:
             success = exporter.clear_all_rolls(enable_pallet=False)
             
             if success:
-                self.export_status_label.config(text="Данные коробки очищены", foreground="green")
+                self.set_status("Данные коробки очищены", "green")
             else:
                 self.export_status_label.config(text="Ошибка очистки коробки", foreground="red")
                 
@@ -437,10 +438,7 @@ class ExportModule:
         try:
             # Проверяем, что все необходимые данные заполнены
             if not self.pallet_size_var.get() or not self.boxes_count_var.get():
-                self.export_status_label.config(
-                    text="Введите данные для экспорта!", 
-                    foreground="orange"
-                )
+                self.set_status("Введите данные для экспорта!", "orange")
                 return
 
             # Используем excel_file_path
@@ -508,7 +506,7 @@ class ExportModule:
             success = exporter.clear_all_rolls(enable_pallet=True)
             
             if success:
-                self.export_status_label.config(text="Данные поддона очищены", foreground="green")
+                self.set_status("Данные поддона очищены", "green")
             else:
                 self.export_status_label.config(text="Ошибка при очистке данных", foreground="red")
             
