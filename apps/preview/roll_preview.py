@@ -93,6 +93,16 @@ class RollPreview:
         )
         self.status_label.grid(row=2, column=0, pady=5)
         
+        # Строка для тиража
+        self.tirazh_label = ttk.Label(
+            frame,
+            text="",
+            foreground="green",
+            font=("Arial", 16),
+            wraplength=450
+        )
+        self.tirazh_label.grid(row=3, column=0, pady=(0, 5))
+        
         # Сразу загружаем PDF и показываем превью
         self.load_and_show_previews()
         

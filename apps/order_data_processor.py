@@ -361,9 +361,7 @@ class OrderDataProcessor:
         self.selected_name.set("")
         self.name_combobox.set('')
         self.name_combobox['values'] = []
-        
-        if self.roll_module and hasattr(self.roll_module, 'date_emission_var'):
-            self.roll_module.date_emission_var.set("")
+        self.roll_module.date_emission_var.set("")      
         
         # Получаем номер заказа из roll_module
         order_num = ""
@@ -398,7 +396,6 @@ class OrderDataProcessor:
             # Отправляем "Ассортимент" в поле названия продукции
             self.roll_module.product_text.delete("1.0", tk.END)
             self.roll_module.product_text.insert("1.0", "Ассортимент")
-            self.parse_status.config(text="Найдено несколько видов. Установлено 'Ассортимент'", foreground="green")
         
         # Ищем конкретный вид или тираж
         search_digits = self.detail_num_search.get().strip()
@@ -408,7 +405,7 @@ class OrderDataProcessor:
         if search_digits and len(search_digits) < 3:
             self.parse_status.config(
                 text=f"Введите минимум 3 цифры для поиска (введено: {len(search_digits)})", 
-                foreground="red"
+                foreground="orange"
             )
             return
         
@@ -561,6 +558,14 @@ class OrderDataProcessor:
                 # устанавливаем дату эмиссии если она есть в данных
                 if 'date_emission' in product_data and product_data['date_emission']:
                     self.roll_module.date_emission_var.set(product_data['date_emission'])
+                    
+                # Отправляем тираж в preview_module
+                tirazh_value = product_data.get('tirazh')
+                formatted_tirazh = f"{int(tirazh_value):,}".replace(",", " ")
+                self.preview_module.tirazh_label.config(
+                    text=f"Тираж: {formatted_tirazh} шт",
+                    foreground="green"
+                )
                 
                 # Автоматически очищаем Excel данные при смене продукции
                 self.auto_clear_excel_data()
