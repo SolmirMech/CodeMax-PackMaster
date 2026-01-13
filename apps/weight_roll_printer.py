@@ -6,7 +6,6 @@ from tkinter import ttk, messagebox, StringVar, BooleanVar
 import math
 from datetime import datetime
 from core.config_manager import ConfigManager
-from core.parse.xml_order_parser import XMLOrderParser
 from core.ui.comment_manager import CommentManager
 
 class RollLabelPrinter:
@@ -17,7 +16,6 @@ class RollLabelPrinter:
         self.data_manager = data_manager
         self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator
-        # self.xml_parser = XMLOrderParser()
 
         self.order_data_module = None
         self.preview_module = None

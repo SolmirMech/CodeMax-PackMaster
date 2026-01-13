@@ -8,7 +8,6 @@ import xml.etree.ElementTree as ET
 from core.config_manager import ConfigManager
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
-from core.parse.xml_order_parser import XMLOrderParser
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
@@ -18,7 +17,6 @@ class OrderDataProcessor:
         self.config_manager = ConfigManager()
         self.data_manager = data_manager
         self.coordinator = coordinator
-        # self.xml_parser = XMLOrderParser()
         
         # Переменные для парсинга
         self.folder_path = StringVar(value="")

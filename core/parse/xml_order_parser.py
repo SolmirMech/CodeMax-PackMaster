@@ -167,7 +167,7 @@ class XMLOrderParser:
                         code = prop.get('Код', '')
                         value = prop.get('Значение', '')
                         
-                        # Берем только нужные свойства из OPERATION_PROPERTIES
+                        # Берем только нужные свойства
                         if code in self.OPERATION_PROPERTIES and value:
                             operations[self.OPERATION_PROPERTIES[code]] = value            
         
