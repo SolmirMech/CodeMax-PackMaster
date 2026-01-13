@@ -766,6 +766,8 @@ class RollLabelPrinter:
     def on_product_selected(self, event=None):
         """Обрабатывает выбор типа продукта"""
         self.manual_product_selection = True
+        self.xml_tu_number = ""
+        self.preview_module._update_from_connected_roll_module()
 
     def on_order_number_changed(self, *args):
         """Автоматически выбирает производителя для IE заказов"""
@@ -794,6 +796,7 @@ class RollLabelPrinter:
 
     def on_manufacturer_selected(self, event=None):
         """Обрабатывает выбор производителя"""
+        self.xml_tu_number = ""
         # Запоминаем, что для текущего заказа сделан ручной выбор
         self.last_manual_order = self.order_number.get()
         self.update_product_options()

@@ -76,6 +76,7 @@ class PrintModule:
         )
         copies_entry.pack(side=tk.LEFT)
         copies_entry.bind('<FocusIn>', lambda e: copies_entry.select_range(0, tk.END))
+        copies_entry.bind('<Return>', lambda e: self.print_rolls_with_box())
         
         # Основные кнопки печати
         buttons_frame = ttk.Frame(control_frame)
@@ -329,6 +330,80 @@ class PrintModule:
         """Обновляет настройки шрифтов в preview_module"""
         self.font_settings = new_settings
         self.preview_module.update_font_settings(new_settings)
+        
+    def print_rolls_with_box(self):
+        """Печатает N копий ролика и одну коробку с N роликами"""
+        try:
+            # === Проверка полей ===
+            required_fields = [
+                (self.connected_roll_module.quantity_var, "Количество"),
+                (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
+                (self.connected_roll_module.customer_var, "Заказчик", None),
+            ]
+
+            empty_fields = self._validate_required_fields(required_fields)
+            if empty_fields:
+                self.preview_module.status_label.config(
+                    text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
+                    foreground="red"
+                )
+                self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
+                return
+            
+            # === Получение данных ===
+            copies_text = self.copies_var.get().strip()
+            copies = int(copies_text) if copies_text else 1
+            
+            if copies < 1:
+                copies = 1
+            
+            # Сохраняем оригинальное количество роликов
+            original_rolls_count = self.connected_roll_module.rolls_count_var.get()
+            
+            printer_name = self._find_printer()
+            if not printer_name:
+                self.print_status_label.config(text="Принтер не найден!", foreground="red")
+                return
+            
+            # === печать роликов (rolls_count = 1) ===
+            # Временно ставим 1 ролик для печати этикеток роликов
+            self.connected_roll_module.rolls_count_var.set("1")
+            self.connected_roll_module.calculate_total_quantity()
+            
+            # Готовим данные для ролика (rolls_count = 1)
+            data_map = self.preview_module._prepare_roll_data_map()
+            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+            
+            # Печатаем N копий ролика
+            for i in range(copies):
+                self._print_image_gdi(print_image, printer_name)
+            
+            # === Печать коробки (rolls_count = copies) ===
+            # Меняем rolls_count на copies для коробки
+            self.connected_roll_module.rolls_count_var.set(str(copies))
+            self.connected_roll_module.calculate_total_quantity()
+            
+            # Готовим данные для коробки (rolls_count = copies)
+            box_data_map = self.preview_module._prepare_box_data_map()
+            box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map)
+            
+            # Печатаем одну коробку
+            self._print_image_gdi(box_print_image, printer_name)
+            
+            # === Восстанавливаем оригинальное значение ===
+            self.connected_roll_module.rolls_count_var.set(original_rolls_count)
+            self.connected_roll_module.calculate_total_quantity()
+            
+            # === Статус завершения ===
+            self.set_status(f"✅ Печать завершена: {copies} роликов + 1 коробка", "green")
+            
+        except Exception as e:
+            # Восстанавливаем в случае ошибки
+            if hasattr(self, 'connected_roll_module') and 'original_rolls_count' in locals():
+                self.connected_roll_module.rolls_count_var.set(original_rolls_count)
+                self.connected_roll_module.calculate_total_quantity()
+            
+            self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")
 
     def print_label(self):
         """Печатает выбранную этикетку с поддержкой автогенерации"""

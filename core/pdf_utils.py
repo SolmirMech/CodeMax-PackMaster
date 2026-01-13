@@ -130,7 +130,7 @@ class PDFTemplateFiller:
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
             "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
-            "$batch_num", "$roul_num"
+            "$batch_num", "$roul_num", "$issue"
         ]
         
         # Очищаем области пустых плейсхолдеров

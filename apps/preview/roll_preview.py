@@ -549,7 +549,7 @@ class RollPreview:
             "$onum": order_full,
             "$date": data.get('date', ''),
             "$packer": data.get('packer', ''),
-            "$rol": data.get('quantity', ''),
+            "$rol": self._format_number_with_spaces(data.get('quantity', '')),
             "$tr": data.get('rolls_count', ''),
             "$emission": data.get('date_emission', ''),
             
@@ -580,28 +580,26 @@ class RollPreview:
         # Берем базовые данные из ролика
         data_map = self._prepare_roll_data_map()
         
-        data = self.current_data or {}
-        
-        # Форматируем общее количество с разделителем
-        total_quantity = data.get('total_quantity', '')
-        if total_quantity:
-            try:
-                # Преобразуем в число и форматируем с разделителем тысяч
-                total_quantity_int = int(total_quantity)
-                formatted_total = f"{total_quantity_int:,}".replace(",", " ")
-            except (ValueError, TypeError):
-                formatted_total = total_quantity
-        else:
-            formatted_total = ''
+        data = self.current_data or {}      
         
         # Добавляем специфичные для коробки поля
         data_map.update({
-            "$total": formatted_total,
+            "$total": self._format_number_with_spaces(data.get('total_quantity', '')),
             "$box_brut": data.get('box_brut', ''),
             "$box_net": data.get('box_net', ''),
         })
         
         return data_map
+        
+    def _format_number_with_spaces(self, number_str):
+        """Форматирует число с пробелами между тысячами"""
+        if not number_str or not str(number_str).strip():
+            return ""
+        try:
+            cleaned = str(number_str).strip().replace(" ", "")
+            return f"{int(cleaned):,}".replace(",", " ")
+        except (ValueError, TypeError):
+            return str(number_str)
     
     def update_preview_displays(self):
         """Обновляет оба превью"""
