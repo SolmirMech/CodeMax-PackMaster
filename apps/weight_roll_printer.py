@@ -11,12 +11,13 @@ from core.ui.comment_manager import CommentManager
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
-    def __init__(self, parent, coordinator=None):
+    def __init__(self, parent, coordinator=None, data_manager=None):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.data_manager = data_manager
         self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator
-        self.xml_parser = XMLOrderParser()
+        # self.xml_parser = XMLOrderParser()
 
         self.order_data_module = None
         self.preview_module = None
@@ -440,73 +441,19 @@ class RollLabelPrinter:
             return
         
         try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            folder_path = settings.get("weight_data_base", "")
+            # Ищем заказ через DataManager
+            results = self.data_manager.search_combined(order_number)
             
-            if not folder_path or not os.path.exists(folder_path):
-                return
-                
-            matching_files = []
-            
-            for filename in os.listdir(folder_path):
-                if not filename.endswith('.xml'):
-                    continue
-                    
-                file_path = os.path.join(folder_path, filename)
-                
-                try:
-                    with open(file_path, 'rb') as f:
-                        raw_data = f.read()
-                    
-                    content = self._decode_xml_content(raw_data)
-                    
-                    # Ищем номер заказа в XML
-                    match = re.search(r'<НомерЗаказа>(.*?)</НомерЗаказа>', content)
-                    if match:
-                        xml_order_number = match.group(1).strip()
-                        
-                        # Извлекаем цифры из номера (первые цифры после букв)
-                        # "Ф0221/6" → "0221", "SA221/5" → "221"
-                        digits_match = re.search(r'(\d+)', xml_order_number)
-                        if digits_match:
-                            xml_digits = digits_match.group(1)
-                            
-                            if xml_digits == order_number:
-                                matching_files.append(file_path)
-                                
-                except Exception:
-                    continue          
-            
-            if not matching_files:
+            if not results:
                 print(f"Файлы для заказа {order_number} не найдены")
                 return
                 
-            # Читаем первый подходящий файл
-            with open(matching_files[0], 'rb') as f:
-                raw_data = f.read()
-                content = self._decode_xml_content(raw_data)
-                parsed_result = self.xml_parser.parse(content)
-                self._fill_technical_fields_only(parsed_result)
-                
+            # Берём первый найденный заказ
+            parsed_result = results[0]
+            self._fill_technical_fields_only(parsed_result)
+            
         except Exception as e:
             print(f"Ошибка автозаполнения из XML: {e}")
-
-    def _decode_xml_content(self, raw_data):
-        """Декодирует XML контент с учетом кодировки."""
-        if raw_data.startswith(b'\xff\xfe'):  # UTF-16 LE
-            return raw_data.decode('utf-16')
-        elif raw_data.startswith(b'\xfe\xff'):  # UTF-16 BE
-            return raw_data.decode('utf-16')
-        else:
-            try:
-                return raw_data.decode('utf-8')
-            except UnicodeDecodeError:
-                try:
-                    import chardet
-                    encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
-                    return raw_data.decode(encoding)
-                except:
-                    return raw_data.decode('utf-8', errors='ignore')
 
     def _fill_technical_fields_only(self, parsed_data: dict):
         """Заполняет только технические поля (НЕ product_text!)."""

@@ -69,6 +69,10 @@ class WeightOrdersApp:
         from core.config_manager import ConfigManager
         self.config_manager = ConfigManager()
         
+        from core.data_manager import XMLDataManager
+        self.data_manager = XMLDataManager(self.config_manager)
+        self.data_manager.initial_scan()  # Запуск фонового сканирования        
+        
         self.create_ui()
         self.center_window()
         root.after(100, self.set_initial_focus)
@@ -138,12 +142,12 @@ class WeightOrdersApp:
         # Верх - RollLabelPrinter
         roll_frame = ttk.Frame(left_frame)
         roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator)
+        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator, self.data_manager)
 
         # Низ - OrderDataProcessor
         order_data_frame = ttk.Frame(left_frame)
         order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.order_data_module = OrderDataProcessor(order_data_frame, self.coordinator)
+        self.order_data_module = OrderDataProcessor(order_data_frame, self.coordinator, self.data_manager)
 
         # Правая часть - RollPreview (слева)
         preview_frame = ttk.Frame(right_frame)

@@ -113,6 +113,7 @@ class XMLOrderParser:
                 'customer': customer,
                 'executor': executor,
                 'tu_number': tu_number,
+                'order_number': order_number,
                 'order_prefix': order_prefix,
                 'order_suffix': order_suffix,
                 'products': products,

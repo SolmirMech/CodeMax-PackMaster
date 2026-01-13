@@ -13,11 +13,12 @@ from core.parse.xml_order_parser import XMLOrderParser
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
     
-    def __init__(self, parent, coordinator=None):
+    def __init__(self, parent, coordinator=None, data_manager=None):
         self.parent = parent
         self.config_manager = ConfigManager()
+        self.data_manager = data_manager
         self.coordinator = coordinator
-        self.xml_parser = XMLOrderParser()
+        # self.xml_parser = XMLOrderParser()
         
         # Переменные для парсинга
         self.folder_path = StringVar(value="")
@@ -345,102 +346,7 @@ class OrderDataProcessor:
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
-        self.roll_module = roll_module       
-        
-    def parse_xml_for_product_names(self, order_number):
-        """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
-        if not self.folder_path.get():
-            return []
-
-        folder = self.folder_path.get()
-        if not os.path.exists(folder):
-            return []
-
-        product_data = []
-        
-        for filename in os.listdir(folder):
-            if not filename.endswith('.xml'):
-                continue
-                
-            file_path = os.path.join(folder, filename)
-            try:
-                with open(file_path, 'rb') as f:
-                    raw_data = f.read()
-                
-                # Используем общий метод декодирования
-                content = self._decode_xml_content(raw_data)
-                
-                # Ищем номер заказа в XML
-                match = re.search(r'<НомерЗаказа>(.*?)</НомерЗаказа>', content)
-                if not match:
-                    continue
-                    
-                xml_order_number = match.group(1).strip()
-                
-                # Извлекаем цифры из номера
-                digits_match = re.search(r'(\d+)', xml_order_number)
-                if not digits_match:
-                    continue
-                    
-                xml_digits = digits_match.group(1)
-                
-                # Строгое сравнение как в auto_fill_from_xml
-                if xml_digits != order_number:
-                    continue  # Пропускаем файлы с другими номерами
-                
-                # Только если номер совпал - парсим файл
-                parsed_result = self.xml_parser.parse(content)
-                
-                # Преобразуем в старый формат
-                for product in parsed_result.get('products', []):
-                    sheet_name = product.get('sheet_name', '')
-                    sheet_number = ""
-                    if sheet_name:
-                        match = re.search(r'[A-Za-zА-Яа-я]-?(\d+)', sheet_name)
-                        if match:
-                            sheet_number = match.group(1)
-                    
-                    product_dict = {
-                        'name': product.get('full_name', product.get('product_name', '')),
-                        'detail_num': product.get('detail_number', ''),
-                        'sheet_number': product.get('sheet_number', ''),
-                        'customer': parsed_result.get('customer', ''),
-                        'winding_scheme': parsed_result.get('operations', {}).get('winding_scheme', ''),
-                        'sleeve_diameter': parsed_result.get('operations', {}).get('sleeve_diameter', ''),
-                        'date_emission': product.get('date_emission', ''),
-                        'manufacturer': "",
-                        'gtin': product.get('gtin', ''),
-                        'tirazh': product.get('quantity', ''),
-                        'stream': product.get('stream', '1')
-                    }
-                    
-                    if not any(item['name'] == product_dict['name'] and 
-                              item['detail_num'] == product_dict['detail_num'] 
-                              for item in product_data):
-                        product_data.append(product_dict)
-                        
-            except Exception as e:
-                print(f"Ошибка парсинга файла {filename}: {e}")
-                continue
-
-        return product_data
-        
-    def _decode_xml_content(self, raw_data):
-        """Декодирует XML контент с учетом кодировки."""
-        if raw_data.startswith(b'\xff\xfe'):  # UTF-16 LE
-            return raw_data.decode('utf-16')
-        elif raw_data.startswith(b'\xfe\xff'):  # UTF-16 BE
-            return raw_data.decode('utf-16')
-        else:
-            try:
-                return raw_data.decode('utf-8')
-            except UnicodeDecodeError:
-                try:
-                    import chardet
-                    encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
-                    return raw_data.decode(encoding)
-                except:
-                    return raw_data.decode('utf-8', errors='ignore')
+        self.roll_module = roll_module
 
     def get_product_name(self):
         """Получает данные продукта из XML файлов с поддержкой поиска по detail_num и номеру тиража"""
@@ -586,6 +492,37 @@ class OrderDataProcessor:
             # Откладываем установку фокуса, чтобы UI успел отрендерить комбобокс
             self.parent.after(120, lambda: self.name_combobox.focus_set())
             self.parent.after(140, lambda: self.name_combobox.event_generate('<Down>'))
+            
+    def parse_xml_for_product_names(self, order_number):
+        """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
+        # Используем DataManager вместо ручного парсинга
+        results = self.data_manager.search_combined(order_number)
+        
+        product_data = []
+        
+        for order in results:
+            # Преобразуем в старый формат
+            for product in order.get('products', []):
+                product_dict = {
+                    'name': product.get('full_name', product.get('product_name', '')),
+                    'detail_num': product.get('detail_number', ''),
+                    'sheet_number': product.get('sheet_number', ''),
+                    'customer': order.get('customer', ''),
+                    'winding_scheme': order.get('operations', {}).get('winding_scheme', ''),
+                    'sleeve_diameter': order.get('operations', {}).get('sleeve_diameter', ''),
+                    'date_emission': product.get('date_emission', ''),
+                    'manufacturer': "",
+                    'gtin': product.get('gtin', ''),
+                    'tirazh': product.get('quantity', ''),
+                    'stream': product.get('stream', '1')
+                }
+                
+                if not any(item['name'] == product_dict['name'] and 
+                          item['detail_num'] == product_dict['detail_num'] 
+                          for item in product_data):
+                    product_data.append(product_dict)
+        
+        return product_data
             
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""
