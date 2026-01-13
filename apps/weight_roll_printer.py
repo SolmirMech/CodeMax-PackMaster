@@ -212,11 +212,10 @@ class RollLabelPrinter:
         customer_entry.bind("<Control-KeyPress>", self.control_key_handler)
         self.customer_var.trace_add("write", self.on_customer_changed)
 
-        # Изделие (многострочное поле)
+        # Изделие
         ttk.Label(data_frame, text="Изделие:").grid(
             row=2, column=0, sticky="nw", pady=5
-        )
-        
+        )       
         # Многострочное текстовое поле
         self.product_text = tk.Text(data_frame, width=35, height=4, font=("Arial", 12))
         self.product_text.grid(row=2, column=1, padx=5, pady=5, sticky="w")
@@ -423,14 +422,15 @@ class RollLabelPrinter:
         """Обрабатывает нажатие Enter в поле номера заказа."""
         self.xml_tu_number = ""
         self.quantity_var.set("")
+        self.customer_var.set("")
         self.rolls_count_var.set("1")
+        self.product_text.delete("1.0", tk.END)
+        self.product_text.insert("1.0", "")
         
         # 1. Автоматическое заполнение из XML
-        self.auto_fill_from_xml()
-        
+        self.auto_fill_from_xml()      
         # 2. Вызываем поиск в модуле order_data если он есть
-        if hasattr(self, 'order_data_module') and self.order_data_module:
-            self.order_data_module.get_product_name()
+        self.order_data_module.get_product_name()
         
     def auto_fill_from_xml(self):
         """Автоматически заполняет ТОЛЬКО технические поля из XML."""
@@ -573,7 +573,7 @@ class RollLabelPrinter:
                 self.cutter_label.grid()
                 self.cutter_combo.grid()
                 
-        # Управление видимостью полей автогенерации (row=8) и ширины ручья (row=9)
+        # Управление видимостью полей автогенерации и ширины ручья
         if workshop == "1":
             # Цех 1 - скрываем поля
             self.batch_label.grid_remove()

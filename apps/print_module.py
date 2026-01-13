@@ -152,14 +152,20 @@ class PrintModule:
                     self.print_status_label.config(text="Нет данных для печати", foreground="red")
                     return
                 
-                # === Проверка количества для тиража ===
-                quantity = self.connected_roll_module.quantity_var.get().strip()
-                if not quantity or int(quantity) <= 0:
-                    self.print_status_label.config(
-                        text="❌ Введите кол-во этикеток", 
+                # === Проверка необходимых полей ===
+                required_fields = [
+                    (self.connected_roll_module.quantity_var, "Количество"),
+                    (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
+                    (self.connected_roll_module.customer_var, "Заказчик", None),
+                ]
+
+                empty_fields = self._validate_required_fields(required_fields)
+                if empty_fields:
+                    self.preview_module.status_label.config(
+                        text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
                         foreground="red"
                     )
-                    self.parent.after(5000, lambda: self.print_status_label.config(text="", foreground="green"))
+                    self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
                     return
                 
                 # Сохраняем оригинальное название для восстановления
@@ -328,11 +334,17 @@ class PrintModule:
         """Печатает выбранную этикетку с поддержкой автогенерации"""
         try:
             
-            # === Проверка количества ===
-            quantity = self.connected_roll_module.quantity_var.get().strip()
-            if not quantity or int(quantity) <= 0:
+            # === Проверка необходимых полей ===
+            required_fields = [
+                (self.connected_roll_module.quantity_var, "Количество"),
+                (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
+                (self.connected_roll_module.customer_var, "Заказчик", None),
+            ]
+
+            empty_fields = self._validate_required_fields(required_fields)
+            if empty_fields:
                 self.preview_module.status_label.config(
-                    text="❌ Введите кол-во этикеток", 
+                    text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
                     foreground="red"
                 )
                 self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
@@ -571,3 +583,31 @@ class PrintModule:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.connected_roll_module = roll_module
+        
+    def _validate_required_fields(self, field_vars):
+        """
+        Проверяет список полей на пустоту.
+        field_vars: список кортежей (var, field_name, widget)
+                    где var - StringVar/Tkinter var,
+                    field_name - название поля для сообщения,
+                    widget - виджет Text (если нужно) или None
+        """
+        empty_fields = []
+        
+        for item in field_vars:
+            if len(item) == 3:
+                var, field_name, widget = item
+                # Для Text виджета
+                if widget:
+                    value = widget.get("1.0", "end-1c").strip()
+                else:
+                    value = var.get().strip()
+            else:
+                var, field_name = item
+                value = var.get().strip()
+                widget = None
+                
+            if not value:
+                empty_fields.append(field_name)
+        
+        return empty_fields

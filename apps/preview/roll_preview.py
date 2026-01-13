@@ -85,7 +85,12 @@ class RollPreview:
         self.box_canvas.bind("<Return>", lambda e: self.print_selected_preview())
         
         # Общий Статус
-        self.status_label = ttk.Label(frame, text="Загрузка шаблонов...", foreground="gray")
+        self.status_label = ttk.Label(
+            frame, 
+            text="", 
+            foreground="gray",
+            wraplength=450
+        )
         self.status_label.grid(row=2, column=0, pady=5)
         
         # Сразу загружаем PDF и показываем превью
@@ -317,8 +322,6 @@ class RollPreview:
                 templates_ok = False
         
         if templates_ok:
-            self.status_label.config(text="Шаблоны загружены", foreground="green")
-            self.parent.after(5000, lambda: self.status_label.config(text=""))
             # Сразу запускаем отрисовку превью
             self.load_and_show_previews()
         
@@ -603,10 +606,7 @@ class RollPreview:
             if self.box_pdf_filler:
                 box_data_map = self._prepare_box_data_map()
                 box_preview_image = self.box_pdf_filler.generate_preview(box_data_map)
-                self._update_canvas_preview(self.box_canvas, box_preview_image)
-            
-            self.status_label.config(text="Превью обновлены", foreground="green")
-            self.parent.after(5000, lambda: self.status_label.config(text=""))
+                self._update_canvas_preview(self.box_canvas, box_preview_image)         
             
         except Exception as e:
             self.status_label.config(text=f"Ошибка обновления: {e}", foreground="red")
