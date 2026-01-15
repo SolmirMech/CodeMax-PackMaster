@@ -59,6 +59,8 @@ class RollLabelPrinter:
         self.streams_var = StringVar(value="")    # Кол-во ручьёв
         self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
         self.xml_tu_number = ""
+        self.cached_order_data = None
+        self.cached_order_number = ""
                     
         self.create_ui()
         self.comment_manager = CommentManager(self.parent, self.comment_button)
@@ -427,9 +429,15 @@ class RollLabelPrinter:
         self.product_text.delete("1.0", tk.END)
         self.product_text.insert("1.0", "")
         
+        self.cached_order_data = None
+        self.cached_order_number = ""
+        
         # 1. Автоматическое заполнение из XML
-        self.auto_fill_from_xml()      
-        # 2. Вызываем поиск в модуле order_data если он есть
+        cached_data = self.auto_fill_from_xml()      
+        # 2. Вызываем поиск в модуле order_data
+        # Сохраняем кэш в order_data_module
+        self.order_data_module.cached_order_data = cached_data
+        self.order_data_module.cached_order_number = self.order_number.get().strip()
         self.order_data_module.get_product_name()
         
     def auto_fill_from_xml(self):
@@ -449,6 +457,12 @@ class RollLabelPrinter:
             # Берём первый найденный заказ
             parsed_result = results[0]
             self._fill_technical_fields_only(parsed_result)
+            
+            # Сохраняем в локальный кэш
+            self.cached_order_data = results
+            self.cached_order_number = order_number
+            
+            return results
             
         except Exception as e:
             print(f"Ошибка автозаполнения из XML: {e}")

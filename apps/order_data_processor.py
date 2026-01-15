@@ -180,29 +180,7 @@ class OrderDataProcessor:
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем превью для получения настроек экспорта"""
-        self.preview_module = preview_module      
-        
-    def auto_clear_excel_data(self):
-        """Автоматически очищает данные Excel при смене вида продукции"""
-        try:
-            if not self.excel_file_path:
-                self.load_excel_folder_path()
-                
-            if self.excel_file_path and os.path.exists(self.excel_file_path):
-                # Очищаем оба листа: коробку и поддон
-                exporter = WeightOrdersExporter.create_exporter(
-                    excel_file_path=self.excel_file_path,
-                    roll_module=self.roll_module,
-                    preview_module=self.preview_module
-                )
-                
-                # Очищаем коробку
-                box_cleared = exporter.clear_all_rolls()  
-                # Очищаем поддон  
-                pallet_cleared = exporter.clear_all_rolls(enable_pallet=True)            
-                
-        except Exception as e:
-            print(f"Ошибка автоматической очистки Excel: {e}")
+        self.preview_module = preview_module
         
     def clear_multitype_sheet(self):
         """Очищает лист 'Много видов' в Excel"""
@@ -490,8 +468,16 @@ class OrderDataProcessor:
             
     def parse_xml_for_product_names(self, order_number):
         """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
-        # Используем DataManager вместо ручного парсинга
-        results = self.data_manager.search_combined(order_number)
+        # Используем кэш из roll_module, если данные уже получены
+        if (hasattr(self, 'cached_order_data') and 
+            self.cached_order_data and 
+            hasattr(self, 'cached_order_number') and 
+            self.cached_order_number == order_number):
+            
+            results = self.cached_order_data
+        else:
+            # Иначе получаем данные из DataManager
+            results = self.data_manager.search_combined(order_number)
         
         product_data = []
         
@@ -565,10 +551,7 @@ class OrderDataProcessor:
                 self.preview_module.tirazh_label.config(
                     text=f"Тираж: {formatted_tirazh} шт",
                     foreground="green"
-                )
-                
-                # Автоматически очищаем Excel данные при смене продукции
-                self.auto_clear_excel_data()
+                )              
                 
                 # Сбрасываем статусные сообщения
                 self.reset_status_messages()
