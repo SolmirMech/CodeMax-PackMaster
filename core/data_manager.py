@@ -31,6 +31,7 @@ class XMLDataManager:
             config_manager: Экземпляр ConfigManager для получения путей
         """
         self.config = config_manager
+        self.status_callback = None
         
         # Получаем путь к XML заказам (ТОТ ЖЕ САМЫЙ, что использует UI)
         settings = config_manager.load_json_settings("shared_utils.json")
@@ -56,6 +57,18 @@ class XMLDataManager:
         
         logging.info(f"DataManager инициализирован. XML папка: {self.xml_folder}")
         logging.info(f"БД: {self.db_path}")
+        
+    def set_status_callback(self, callback):
+        """Устанавливает callback для отправки статусных сообщений в UI"""
+        self.status_callback = callback
+    
+    def _notify_status(self, message: str):
+        """Отправляет статусное сообщение в UI"""
+        if self.status_callback:
+            try:
+                self.status_callback(message)
+            except Exception as e:
+                logging.error(f"Ошибка вызова callback: {e}")        
     
     def _setup_logging(self):
         """Настройка логгирования."""
@@ -317,6 +330,19 @@ class XMLDataManager:
         def scan_in_background():
             try:
                 logging.info("Начато первичное сканирование папки XML")
+                
+                # Проверяем есть ли данные в бд
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM orders")
+                    count = cursor.fetchone()[0]
+                    conn.close()
+                
+                if count > 0:
+                    logging.info(f"БД уже содержит {count} записей. Пропускаем полное сканирование.")
+                    self._notify_status(f"База загружена ({count} записей)")
+                    return
                 
                 # Проверяем доступность папки
                 if not self.xml_folder.exists():

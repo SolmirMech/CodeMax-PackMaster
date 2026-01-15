@@ -70,11 +70,11 @@ class WeightOrdersApp:
         self.config_manager = ConfigManager()
         
         from core.data_manager import XMLDataManager
-        self.data_manager = XMLDataManager(self.config_manager)
-        self.data_manager.initial_scan()  # Запуск фонового сканирования        
+        self.data_manager = XMLDataManager(self.config_manager)        
         
         self.create_ui()
         self.center_window()
+        self.root.after(200, self.data_manager.initial_scan) # Запуск фонового сканирования
         root.after(100, self.set_initial_focus)
         
     def set_initial_focus(self):
