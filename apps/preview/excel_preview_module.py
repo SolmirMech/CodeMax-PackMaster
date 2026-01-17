@@ -3,15 +3,15 @@ import tkinter as tk
 from tkinter import ttk
 import os
 from PIL import Image, ImageDraw
-from core.config_manager import ConfigManager
+
 
 class ExcelPreviewModule:
     """Модуль предпросмотра Excel файла"""
     
-    def __init__(self, parent, coordinator=None):
+    def __init__(self, parent, coordinator=None, config_manager=None):
         self.parent = parent
         self.coordinator = coordinator
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         
         # Переменные
         self.excel_path = None

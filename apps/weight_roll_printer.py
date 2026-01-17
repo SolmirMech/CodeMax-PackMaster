@@ -5,14 +5,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, StringVar, BooleanVar
 import math
 from datetime import datetime
-from core.config_manager import ConfigManager
 from core.ui.comment_manager import CommentManager
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
-    def __init__(self, parent, coordinator=None, data_manager=None):
+    def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
         self.parent = parent
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.data_manager = data_manager
         self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator

@@ -4,8 +4,7 @@ import re
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
-from core.config_manager import ConfigManager
-from core.excel_exporter.excel_exporter import WeightOrdersExporter
+from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 
 class ArchiveManager:
     """Менеджер архива: поиск, восстановление, управление для всех цехов и режимов"""

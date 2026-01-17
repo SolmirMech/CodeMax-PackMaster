@@ -5,7 +5,6 @@ import win32print
 import win32ui
 from PIL import Image, ImageTk
 from core.settings.settings_dialog import SettingsDialog
-from core.config_manager import ConfigManager
 from core.settings.font_settings_dialog import FontSettingsDialog
 from apps.weight_orders_printer import WeightOrdersPrinter
 from core.shared_utils import (
@@ -17,12 +16,12 @@ from core.shared_utils import (
 class PrintModule:
     """Модуль управления печатью этикеток"""
     
-    def __init__(self, parent, preview_module, coordinator=None):
+    def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
         self.parent = parent
         self.preview_module = preview_module
         self.coordinator = coordinator
         self.settings_file = "print_settings.json"
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.manufacturer = self.config_manager.get_manufacturer()
         
         self.default_settings = {
@@ -279,7 +278,10 @@ class PrintModule:
         self.weight_orders_window.bind("<Escape>", lambda e: self.on_weight_orders_close())
         
         # Создаем модуль втулки в этом окне
-        self.weight_orders_module = WeightOrdersPrinter(self.weight_orders_window)
+        self.weight_orders_module = WeightOrdersPrinter(
+            self.weight_orders_window,
+            config_manager=self.config_manager
+        )
         
         # Устанавливаем обработчик закрытия окна
         self.weight_orders_window.protocol("WM_DELETE_WINDOW", self.on_weight_orders_close)

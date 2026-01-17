@@ -12,8 +12,9 @@ class ArchiveSearchWindow:
         self.parent = parent
         self.order_processor = order_processor
         
-        # Создаём менеджер архива
-        self.archive_manager = ArchiveManager(ConfigManager())
+        # Берем config_manager из order_processor
+        config = order_processor.config_manager
+        self.archive_manager = ArchiveManager(config)
         
         self.selected_pallet = None
         self.create_window()

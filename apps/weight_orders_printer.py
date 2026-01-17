@@ -3,7 +3,6 @@ from tkinter import ttk, StringVar, BooleanVar
 from datetime import datetime
 import win32print
 import win32ui
-from core.config_manager import ConfigManager
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
@@ -13,9 +12,9 @@ from core.shared_utils import (
 class WeightOrdersPrinter:
     """Принтер этикеток для втулок (левая часть интерфейса)."""
     
-    def __init__(self, parent):
+    def __init__(self, parent, config_manager=None):
         self.parent = parent
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.settings_file = "print_settings.json"
         
         # Настройки по умолчанию

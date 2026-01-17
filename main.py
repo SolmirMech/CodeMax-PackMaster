@@ -142,17 +142,22 @@ class WeightOrdersApp:
         # Верх - RollLabelPrinter
         roll_frame = ttk.Frame(left_frame)
         roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator, self.data_manager)
+        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator, self.data_manager, self.config_manager)
 
         # Низ - OrderDataProcessor
         order_data_frame = ttk.Frame(left_frame)
         order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.order_data_module = OrderDataProcessor(order_data_frame, self.coordinator, self.data_manager)
+        self.order_data_module = OrderDataProcessor(
+            order_data_frame, 
+            self.coordinator, 
+            self.data_manager,
+            self.config_manager
+)
 
         # Правая часть - RollPreview (слева)
         preview_frame = ttk.Frame(right_frame)
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
-        self.preview_module = RollPreview(preview_frame, self.coordinator)
+        self.preview_module = RollPreview(preview_frame, self.coordinator, self.config_manager)
         
         # Правая часть - PrintModule и ExportModule (справа)
         print_export_frame = ttk.Frame(right_frame)
@@ -166,12 +171,12 @@ class WeightOrdersApp:
         # Модуль Печати (верх)
         print_frame = ttk.Frame(print_export_frame)
         print_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator)
+        self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator, self.config_manager)
 
         # Модуль Экспорта (низ)
         export_frame = ttk.Frame(print_export_frame)
         export_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.export_module = ExportModule(export_frame, self.preview_module, self.coordinator)
+        self.export_module = ExportModule(export_frame, self.preview_module, self.coordinator, self.config_manager)
 
         self.setup_module_connections()
 

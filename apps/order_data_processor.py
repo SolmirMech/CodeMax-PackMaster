@@ -5,16 +5,15 @@ import re
 import sys
 import shutil
 import xml.etree.ElementTree as ET
-from core.config_manager import ConfigManager
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
     
-    def __init__(self, parent, coordinator=None, data_manager=None):
+    def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
         self.parent = parent
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.data_manager = data_manager
         self.coordinator = coordinator
         
@@ -31,7 +30,11 @@ class OrderDataProcessor:
         # Ссылки на другие модули
         self.roll_module = None
         self.preview_module = None
-        self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+        self.excel_preview_module = ExcelPreviewModule(
+            self.parent, 
+            self.coordinator,
+            config_manager=self.config_manager
+        )
         
         self.load_initial_settings()
         self.detail_num_search = StringVar(value="")
@@ -276,7 +279,7 @@ class OrderDataProcessor:
             from core.archive.archive_search_window import ArchiveSearchWindow
             ArchiveSearchWindow(self.parent, self)
         except Exception as e:
-            self.multitype_status_label.config(text="Не удалось открыть окно поиска: {str(e)}", foreground="red")
+            self.multitype_status_label.config(text=f"Не удалось открыть окно поиска: {str(e)}", foreground="red")
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем превью для получения настроек экспорта"""

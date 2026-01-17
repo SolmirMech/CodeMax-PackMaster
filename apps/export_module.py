@@ -2,17 +2,16 @@
 import tkinter as tk
 from tkinter import ttk, StringVar
 import os
-from core.config_manager import ConfigManager
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 
 class ExportModule:
     """Модуль управления экспортом в Excel"""
     
-    def __init__(self, parent, preview_module, coordinator=None):
+    def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
         self.parent = parent
         self.preview_module = preview_module
         self.coordinator = coordinator
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         
         order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
         self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
@@ -166,7 +165,11 @@ class ExportModule:
         """Открывает предпросмотр для коробки"""
         if not hasattr(self, 'excel_preview_module'):
             from apps.preview.excel_preview_module import ExcelPreviewModule
-            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+            self.excel_preview_module = ExcelPreviewModule(
+                self.parent, 
+                self.coordinator,
+                config_manager=self.config_manager
+            )
         
         # Определяем текущий цех
         workshop = "1"
@@ -197,7 +200,11 @@ class ExportModule:
         """Открывает предпросмотр для поддона"""
         if not hasattr(self, 'excel_preview_module'):
             from apps.preview.excel_preview_module import ExcelPreviewModule
-            self.excel_preview_module = ExcelPreviewModule(self.parent, self.coordinator)
+            self.excel_preview_module = ExcelPreviewModule(
+                self.parent, 
+                self.coordinator,
+                config_manager=self.config_manager
+            )
         
         # Определяем текущий цех
         workshop = "1"

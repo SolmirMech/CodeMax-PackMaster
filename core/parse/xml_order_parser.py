@@ -19,14 +19,15 @@ class XMLOrderParser:
         '8516': 'streams_count',         # Количество ручьев для резки
         '8585': 'label_length_with_gap', # Длина этикетки с учетом зазора
         '8517': 'stream_width',           # Ширина ручья
-        '32543': 'aggregation_status'    # Статус агрегации
+        '32543': 'aggregation_status',    # Статус агрегации
+        '8519': 'max_labels_per_roll'
     }
     
     # Код свойства для комментариев
     COMMENT_PROPERTY_CODE = '65000'    
     
     def __init__(self, custom_replacements=None):
-        self.shortener = NameShortener(custom_replacements) 
+        self.shortener = NameShortener(custom_replacements)
     
     def parse(self, xml_content: str) -> Dict[str, Any]:
         """
@@ -43,24 +44,24 @@ class XMLOrderParser:
             root = ET.fromstring(xml_content)
             
             # Базовые данные заказа
-            customer = self._get_text(root, './/Заказчик')
-            
+            raw_customer = self._get_text(root, './/Заказчик', '')
             executor = self._get_text(root, './/Исполнитель')
-            
             tu_number = self._get_text(root, './/ТУ')
+            order_name = self._get_text(root, './/НаименЗаказа', '').lower()
             
-            # Добавляем парсинг номера заказа
+            # Нормализация заказчика
+            customer_info = self._normalize_customer(raw_customer, order_name)
+            
+            # Парсинг номера заказа
             order_number = self._get_text(root, './/НомерЗаказа')
             order_prefix = ""
             order_suffix = ""
             
             if order_number:
-                # Извлекаем префикс (буквы в начале) и суффикс (после цифр)
                 prefix_match = re.match(r'^([A-ZА-Я]+)', order_number)
                 if prefix_match:
                     order_prefix = prefix_match.group(1)
                 
-                # Ищем суффикс после цифр (например, /5)
                 suffix_match = re.search(r'(\/\d+)$', order_number)
                 if suffix_match:
                     order_suffix = suffix_match.group(1)
@@ -68,10 +69,10 @@ class XMLOrderParser:
             # Общая дата эмиссии
             parent_sheet_date = self._get_text(root, './/parent_sheet/ДатаЭмиссии')
             
-            # Словарь для быстрого поиска: id_order_sheet -> sheet_number
+            # 1. Сначала собираем sheet_number для каждого parent_sheet
             sheet_mapping = {}
+            sheet_name_mapping = {}  # id -> полное название оттиска
             
-            # Сначала собираем все sheet_number для каждого parent_sheet
             for parent_sheet in root.findall('.//parent_sheet'):
                 id_elem = parent_sheet.find('id_order_sheet')
                 sheet_name_elem = parent_sheet.find('НаименОттиска')
@@ -79,38 +80,68 @@ class XMLOrderParser:
                 if id_elem is not None and id_elem.text and sheet_name_elem is not None and sheet_name_elem.text:
                     sheet_id = id_elem.text.strip()
                     sheet_name = sheet_name_elem.text.strip()
+                    sheet_name_mapping[sheet_id] = sheet_name
                     
                     # Извлекаем цифры из НаименОттиска
                     match = re.search(r'(\d+)', sheet_name)
                     if match:
                         sheet_mapping[sheet_id] = match.group(1)
             
-            # Теперь парсим продукты
+            # 2. Собираем метраж (Выработка) для каждого оттиска из операций резки
+            sheet_metrage_mapping = {}  # id_order_sheet -> order_metrage
+            
+            # Ищем все операции резки
+            for operation in root.findall('.//ОперацииЗаказа//Операция'):
+                op_id = operation.get('ВнутреннийИдентификатор', '')
+                if op_id not in ['31', '230']:  # Только операции резки
+                    continue
+                
+                # Название элемента операции (должно совпадать с НаименОттиска)
+                op_element_name = operation.get('НаименованиеЭлементаОперации', '')
+                if not op_element_name:
+                    continue
+                
+                # Ищем, к какому sheet_id относится эта операция
+                for sheet_id, sheet_name in sheet_name_mapping.items():
+                    if sheet_name in op_element_name:
+                        output = operation.get('Выработка')
+                        if output:
+                            try:
+                                sheet_metrage_mapping[sheet_id] = float(output)
+                            except ValueError:
+                                pass
+                        break
+            
+            # 3. Теперь парсим продукты с добавлением order_metrage
             products = []
             for product_elem in root.findall('.//product'):
                 # Получаем id_order_sheet этого продукта
                 sheet_id_elem = product_elem.find('id_order_sheet')
                 sheet_number = ""
+                order_metrage = ""
                 
                 if sheet_id_elem is not None and sheet_id_elem.text:
                     sheet_id = sheet_id_elem.text.strip()
                     sheet_number = sheet_mapping.get(sheet_id, "")
+                    order_metrage = sheet_metrage_mapping.get(sheet_id, "")
                 
                 product = self._parse_product(
-                    product_elem,
-                    parent_sheet_date,
-                    root,
-                    sheet_number
+                    product_elem=product_elem,
+                    parent_sheet_date=parent_sheet_date,
+                    root=root,
+                    sheet_number=sheet_number,
+                    order_metrage=order_metrage  # ← новый параметр
                 )
                 if product:
                     products.append(product)
                                 
-            # Данные из операций
+            # Данные из операций (технические свойства и комментарии)
             operations, comments = self._parse_operations_and_comments(root)
             
             return {
                 'format': 'NEW_FORMAT',
-                'customer': customer,
+                'customer': customer_info['customer'],
+                '_customer_info': customer_info,
                 'executor': executor,
                 'tu_number': tu_number,
                 'order_number': order_number,
@@ -125,6 +156,81 @@ class XMLOrderParser:
             raise ValueError(f"Ошибка парсинга XML: {e}")
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
+            
+    def _normalize_customer(self, raw_customer: str, order_name: str) -> Dict:
+        """
+        Возвращает словарь с заказчиком(-ами) и информацией для статистики.
+        
+        Правила:
+        1. Если один заказчик — возвращаем его
+        2. Если несколько и есть совпадение в названии — выбираем этого
+        3. Если несколько и НЕТ совпадений — возвращаем всех через запятую
+        """
+        # Проверяем входные данные
+        if not raw_customer or not isinstance(raw_customer, str):
+            return {
+                'customer': '',
+                'all_customers': [],
+                'has_multiple': False,
+                'selected_index': -1,
+                'selection_method': 'empty'
+            }
+        
+        # Разделяем заказчиков
+        customers = [c.strip() for c in raw_customer.split(',') if c.strip()]
+        
+        # Если один заказчик — просто возвращаем
+        if len(customers) <= 1:
+            return {
+                'customer': raw_customer,
+                'all_customers': customers,
+                'has_multiple': False,
+                'selected_index': 0,
+                'selection_method': 'single'
+            }
+        
+        # Если несколько и есть название заказа — пробуем найти совпадение
+        selected_customer = None
+        selected_index = -1
+        method = 'no_match_returns_all'
+        
+        if order_name:
+            order_name_lower = order_name.lower()
+            
+            # Ищем совпадения
+            for i, cust in enumerate(customers):
+                cust_lower = cust.lower()
+                
+                # Разбиваем на слова и ищем частичные совпадения
+                words = order_name_lower.split()
+                for word in words:
+                    if len(word) >= 3 and word in cust_lower:
+                        selected_customer = cust
+                        selected_index = i
+                        method = 'auto_match'
+                        break
+                
+                if selected_customer:
+                    break
+        
+        # Если нашли совпадение — возвращаем этого заказчика
+        if selected_customer:
+            return {
+                'customer': selected_customer,
+                'all_customers': customers,
+                'has_multiple': True,
+                'selected_index': selected_index,
+                'selection_method': method
+            }
+        else:
+            # ЕСЛИ НЕТ СОВПАДЕНИЙ — ВОЗВРАЩАЕМ ВСЕХ ЗАКАЗЧИКОВ
+            return {
+                'customer': raw_customer,  # ← оригинальная строка со всеми
+                'all_customers': customers,
+                'has_multiple': True,
+                'selected_index': -1,  # -1 значит "все"
+                'selection_method': 'no_match_returns_all'
+            }
             
     def _parse_operations_and_comments(self, root: ET.Element) -> tuple[Dict[str, str], Dict[str, str]]:
         """
@@ -167,9 +273,21 @@ class XMLOrderParser:
                         code = prop.get('Код', '')
                         value = prop.get('Значение', '')
                         
-                        # Берем только нужные свойства
-                        if code in self.OPERATION_PROPERTIES and value:
-                            operations[self.OPERATION_PROPERTIES[code]] = value            
+                        # Обработка диаметра ролика
+                        if code == '8519':  # Внешн. диаметр ролика
+                            # Ищем единицу измерения
+                            unit_prop = operation.find('.//Свойство[@Код="8522"]')
+                            unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
+                            
+                            if unit == 'шт.':
+                                operations['max_labels_per_roll'] = value  # Кол-во в штуках
+                            else:
+                                operations['diameter_mm'] = value  # Диаметр в мм
+                                operations['diameter_unit'] = unit
+                        
+                        # Остальные свойства
+                        elif code in self.OPERATION_PROPERTIES and value:
+                            operations[self.OPERATION_PROPERTIES[code]] = value
         
         except Exception as e:
             print(f"Ошибка парсинга операций и комментариев: {e}")
@@ -177,7 +295,8 @@ class XMLOrderParser:
         return operations, comments
     
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", 
-                       root: ET.Element = None, sheet_number: str = "") -> Optional[Dict[str, str]]:
+                       root: ET.Element = None, sheet_number: str = "", 
+                       order_metrage: Any = None) -> Optional[Dict[str, Any]]:
         """Парсит элемент <product>."""
         try:
             detail_number = self._get_text(product_elem, 'НомерДетали')
@@ -219,7 +338,8 @@ class XMLOrderParser:
                 'date_emission': date_emission,  # С приоритетом
                 'quantity': quantity,  # ТиражДетали
                 'sheet_number': sheet_number,  # Только цифры из тиража (57043, 57044 и т.д.)
-                'stream': stream  # количество ручьёв для этого вида
+                'stream': stream,  # количество ручьёв для этого вида
+				'order_metrage': order_metrage
             }
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")

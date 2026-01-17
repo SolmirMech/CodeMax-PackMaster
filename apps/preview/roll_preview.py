@@ -3,7 +3,6 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 from core.pdf_utils import PDFTemplateFiller
-from core.config_manager import ConfigManager
 from core.settings.font_settings_dialog import FontSettingsDialog
 import os
 import json
@@ -13,9 +12,9 @@ from typing import Dict
 class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
-    def __init__(self, parent, coordinator=None):
+    def __init__(self, parent, coordinator=None, config_manager=None):
         self.parent = parent
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.coordinator = coordinator
         self._update_template_paths()
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")

@@ -33,9 +33,9 @@ class XMLDataManager:
         self.config = config_manager
         self.status_callback = None
         
-        # Получаем путь к XML заказам (ТОТ ЖЕ САМЫЙ, что использует UI)
-        settings = config_manager.load_json_settings("shared_utils.json")
-        self.xml_folder = Path(settings.get("weight_data_base", ""))
+        # Получаем путь к XML заказам
+        xml_path = config_manager.get_data_base_path()
+        self.xml_folder = Path(xml_path)
         
         # Путь к БД в папке data AppData
         self.db_path = config_manager.data_dir / "orders_cache.db"
@@ -68,7 +68,7 @@ class XMLDataManager:
             try:
                 self.status_callback(message)
             except Exception as e:
-                logging.error(f"Ошибка вызова callback: {e}")        
+                logging.error(f"Ошибка вызова callback: {e}")
     
     def _setup_logging(self):
         """Настройка логгирования."""
@@ -210,6 +210,13 @@ class XMLDataManager:
             # Парсим через существующий парсер
             parsed_data = parse_xml(content)
             
+            # Собираем статистику
+            self._analyze_and_log_statistics(parsed_data, file_path.name)
+            
+            # Удаляем служебные поля перед сохранением в БД
+            if '_customer_info' in parsed_data:
+                del parsed_data['_customer_info']
+            
             # Добавляем имя файла в данные для совместимости
             parsed_data['file_name'] = file_path.name
             parsed_data['file_path'] = str(file_path)
@@ -219,6 +226,35 @@ class XMLDataManager:
         except Exception as e:
             logging.error(f"Ошибка парсинга файла {file_path}: {e}")
             return None
+            
+    def _analyze_and_log_statistics(self, parsed_data: Dict[str, Any], file_name: str):
+        """
+        Анализирует данные и сразу логирует ВСЕ статистические случаи.
+        """
+        # 1. Множественные заказчики
+        customer_info = parsed_data.get('_customer_info', {})
+        if customer_info.get('has_multiple', False):
+            all_customers = customer_info.get('all_customers', [])
+            chosen_customer = customer_info.get('customer', '')
+            
+            logging.info(
+                f"МНОГИЕ ЗАКАЗЧИКИ | Файл: {file_name} | "
+                f"Всего заказчиков: {len(all_customers)} | "
+                f"Выбран: {chosen_customer} | "
+                f"Список: {', '.join(all_customers)}"
+            )
+        
+        # 2. Даты эмиссии - просто факт наличия
+        products = parsed_data.get('products', [])
+        has_emission_date = False
+        
+        for product in products:
+            if product.get('date_emission', ''):
+                has_emission_date = True
+                break
+        
+        if has_emission_date:
+            logging.info(f"ДАТА ЭМИССИИ | Файл: {file_name}")
     
     def _calculate_file_hash(self, file_path: Path) -> str:
         """Вычисляет MD5 хэш файла для отслеживания изменений."""
@@ -314,7 +350,6 @@ class XMLDataManager:
                     VALUES (?, ?, ?)
                 """, (file_name, sheet_num, sheet_name))
             
-            logging.info(f"Файл сохранён в БД: {file_name}")
             return True
             
         except Exception as e:
@@ -343,6 +378,8 @@ class XMLDataManager:
                     logging.info(f"БД уже содержит {count} записей. Пропускаем полное сканирование.")
                     self._notify_status(f"База загружена ({count} записей)")
                     return
+                
+                self._notify_status("Идёт создание базы...")
                 
                 # Проверяем доступность папки
                 if not self.xml_folder.exists():
@@ -388,16 +425,13 @@ class XMLDataManager:
                             if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
                                 processed += 1
                             conn.commit()
-                            conn.close()
-                        
-                        # Логируем прогресс каждые 10 файлов
-                        if processed % 10 == 0:
-                            logging.info(f"Обработано: {processed}/{total_files} файлов")
+                            conn.close()                    
                         
                     except Exception as e:
                         errors += 1
                         logging.error(f"Ошибка обработки {file_path.name}: {e}")
                 
+                self._notify_status(f"База создана для {processed} файлов XML")
                 logging.info(f"Первичное сканирование завершено. Успешно: {processed}, Ошибок: {errors}")
                 
             except Exception as e:
