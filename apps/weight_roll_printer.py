@@ -237,9 +237,20 @@ class RollLabelPrinter:
         entry_number.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
         entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
         self.order_entry = entry_number
+        
+        # Добавляем комбобокс выбора заказа (скрыт изначально)
+        self.order_combobox = ttk.Combobox(
+            data_frame, 
+            width=7,
+            state="readonly"
+        )
+        self.order_combobox.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
+        self.order_combobox.bind("<<ComboboxSelected>>", self.on_order_selected)
+        self.order_combobox.grid_remove()  # Скрываем изначально
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
         entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
+        self.entry_suffix = entry_suffix
         
         # Иконка комментариев
         self.comment_button = tk.Button(
@@ -420,7 +431,6 @@ class RollLabelPrinter:
             print(f"Ошибка выбора веса втулки: {e}")
     
     def on_order_enter_pressed(self, event=None):
-        """Обрабатывает нажатие Enter в поле номера заказа."""
         self.xml_tu_number = ""
         self.quantity_var.set("")
         self.customer_var.set("")
@@ -428,16 +438,93 @@ class RollLabelPrinter:
         self.product_text.delete("1.0", tk.END)
         self.product_text.insert("1.0", "")
         
+        # Скрываем комбобокс выбора заказа если есть
+        if hasattr(self, 'order_combobox'):
+            self.order_combobox.set('')
+            self.order_combobox['values'] = []
+            self.order_combobox.grid_remove()
+        
         self.cached_order_data = None
         self.cached_order_number = ""
         
-        # 1. Автоматическое заполнение из XML
-        cached_data = self.auto_fill_from_xml()      
-        # 2. Вызываем поиск в модуле order_data
-        # Сохраняем кэш в order_data_module
-        self.order_data_module.cached_order_data = cached_data
-        self.order_data_module.cached_order_number = self.order_number.get().strip()
-        self.order_data_module.get_product_name()
+        # Получаем номер заказа
+        order_num = self.order_number.get().strip()
+        if not order_num:
+            self.order_data_module.parse_status.config(text="Введите номер заказа", foreground="red")
+            return
+        
+        # Ищем заказы
+        results = self.data_manager.search_combined(order_num)
+        
+        if not results:
+            self.order_data_module.parse_status.config(text="Заказ не найден", foreground="red")
+            return
+        
+        if len(results) == 1:
+            # Существующая логика
+            cached_data = self.auto_fill_from_xml()
+            self.order_data_module.cached_order_data = cached_data
+            self.order_data_module.cached_order_number = order_num
+            self.order_data_module.get_product_name()
+            
+        else:
+            # обработка нескольких заказов
+            self._show_multiple_orders(results)
+            
+    def _show_multiple_orders(self, results):
+        """Показывает выбор при нескольких найденных заказах"""
+        self.order_entry.grid_remove()  # Скрываем поле ввода
+        self.entry_suffix.grid_remove()  # Скрываем суффикс
+        
+        # Сохраняем данные заказов
+        self.multiple_orders_data = results
+        
+        # Собираем варианты для комбобокса
+        order_options = []
+        for order_data in results:
+            order_full = order_data.get('order_number', '')
+            order_options.append(order_full)
+        
+        # Устанавливаем значения в комбобокс
+        self.order_combobox['values'] = order_options
+        self.order_combobox.set(order_options[0])
+        self.order_combobox.grid()  # Показываем комбобокс
+        self.parent.after(100, lambda: self.order_combobox.focus_set())
+        self.parent.after(120, lambda: self.order_combobox.event_generate('<Down>'))
+        
+        # Информируем пользователя
+        self.order_data_module.parse_status.config(
+            text=f"Найдено {len(results)} заказов. Выберите нужный:", 
+            foreground="orange"
+        )
+        
+    def on_order_selected(self, event=None):
+        """Обрабатывает выбор заказа из комбобокса"""
+        selected_index = self.order_combobox.current()
+        if selected_index >= 0 and hasattr(self, 'multiple_orders_data'):
+            # Получаем выбранный заказ
+            selected_order_data = self.multiple_orders_data[selected_index]
+            
+            # Восстанавливаем обычные поля ввода
+            self.order_combobox.grid_remove()
+            self.order_entry.grid()
+            self.entry_suffix.grid()
+            
+            # Автозаполняем поля из выбранного заказа
+            self._fill_technical_fields_only(selected_order_data)
+            
+            # Сохраняем в кэш order_data_module
+            self.order_data_module.cached_order_data = [selected_order_data]
+            self.order_data_module.cached_order_number = self.order_number.get().strip()
+            
+            # Получаем виды из выбранного заказа
+            self.order_data_module.get_product_name()
+            
+            # Сбрасываем временные данные
+            delattr(self, 'multiple_orders_data')
+            
+            # Сбрасываем статус
+            self.order_data_module.parse_status.config(text="Заказ выбран", foreground="green")
         
     def auto_fill_from_xml(self):
         """Автоматически заполняет ТОЛЬКО технические поля из XML."""
