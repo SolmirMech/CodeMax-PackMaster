@@ -689,6 +689,7 @@ class TechnicalSpecificationsDialog:
         manufacturer_entry.insert(0, manufacturer)
         manufacturer_entry.pack(side=tk.LEFT, padx=2)
         self.manufacturer_entries.append(manufacturer_entry)
+        self.add_context_menu_to_entry(manufacturer_entry)
         
         # Поле для адреса (многострочное)
         address_frame = ttk.Frame(row_frame)
@@ -696,6 +697,7 @@ class TechnicalSpecificationsDialog:
         
         address_text = tk.Text(address_frame, width=35, height=3, wrap=tk.WORD)
         address_text.insert("1.0", address)
+        self.add_context_menu_to_text(address_text)
         
         address_scrollbar = ttk.Scrollbar(address_frame, orient=tk.VERTICAL, command=address_text.yview)
         address_text.configure(yscrollcommand=address_scrollbar.set)
@@ -710,12 +712,14 @@ class TechnicalSpecificationsDialog:
         product_entry.insert(0, product_name)
         product_entry.pack(side=tk.LEFT, padx=2)
         self.product_name_entries.append(product_entry)
+        self.add_context_menu_to_entry(product_entry)
         
         # Поле для номера ТУ
         tu_entry = ttk.Entry(row_frame, width=35)
         tu_entry.insert(0, tu_number)
         tu_entry.pack(side=tk.LEFT, padx=2)
         self.tu_number_entries.append(tu_entry)
+        self.add_context_menu_to_entry(tu_entry)
         
         # Кнопка удаления
         ttk.Button(row_frame, text="×", width=2,
@@ -732,6 +736,60 @@ class TechnicalSpecificationsDialog:
             self.address_entries.remove(addr_widget)
             self.product_name_entries.remove(prod_entry)
             self.tu_number_entries.remove(tu_entry)
+            
+    def add_context_menu_to_text(self, text_widget):
+        """Добавляет контекстное меню к текстовому виджету."""
+        menu = tk.Menu(text_widget, tearoff=0)
+        menu.add_command(label="Копировать", command=lambda: self.copy_text_from_text_widget(text_widget))
+        menu.add_command(label="Вставить", command=lambda: self.paste_text_to_text_widget(text_widget))
+        text_widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def copy_text_from_text_widget(self, widget):
+        """Копирует текст из текстового виджета."""
+        try:
+            text = widget.get("1.0", "end-1c")
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception as e:
+            print(f"Ошибка копирования: {e}")
+
+    def paste_text_to_text_widget(self, widget):
+        """Вставляет текст в текстовый виджет."""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete("1.0", tk.END)
+                widget.insert("1.0", text)
+        except Exception as e:
+            print(f"Ошибка вставки: {e}")
+
+    def add_context_menu_to_entry(self, entry_widget):
+        """Добавляет контекстное меню к полю ввода Entry."""
+        menu = tk.Menu(entry_widget, tearoff=0)
+        menu.add_command(label="Копировать", command=lambda: self.copy_text_from_entry(entry_widget))
+        menu.add_command(label="Вставить", command=lambda: self.paste_text_to_entry(entry_widget))
+        entry_widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def copy_text_from_entry(self, widget):
+        """Копирует текст из поля ввода Entry."""
+        try:
+            text = widget.get()
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception as e:
+            print(f"Ошибка копирования: {e}")
+
+    def paste_text_to_entry(self, widget):
+        """Вставляет текст в поле ввода Entry."""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete(0, tk.END)
+                widget.insert(0, text)
+        except Exception as e:
+            print(f"Ошибка вставки: {e}")
     
     def get_current_specifications(self):
         """Возвращает текущий список ТУ"""

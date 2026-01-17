@@ -62,7 +62,7 @@ class RollLabelPrinter:
         self.cached_order_number = ""
                     
         self.create_ui()
-        self.comment_manager = CommentManager(self.parent, self.comment_button)
+        self.comment_manager = CommentManager(self.parent, self.comment_button, self.config_manager, self.customer_var)
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)

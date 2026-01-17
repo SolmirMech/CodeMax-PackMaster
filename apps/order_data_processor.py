@@ -15,6 +15,7 @@ class OrderDataProcessor:
         self.parent = parent
         self.config_manager = config_manager
         self.data_manager = data_manager
+        self.data_manager.set_status_callback(self.update_status_message)
         self.coordinator = coordinator
         
         # Переменные для парсинга
@@ -140,6 +141,16 @@ class OrderDataProcessor:
         
         # Инициализируем статусы
         self.reset_status_messages()
+        
+    def update_status_message(self, message: str):
+        """Обновляет сообщение в multitype_status_label"""       
+        try:
+            self.multitype_status_label.config(text=message)
+            if "Идёт создание" in message or "База создана" in message or "База загружена" in message:
+                self.multitype_status_label.config(foreground="blue", font=("Arial", 12, "bold"))
+                self.parent.after(9000, lambda: self.multitype_status_label.config(text="\n"))
+        except Exception as e:
+            print(f"UI DEBUG: ошибка обновления UI: {e}")        
         
     def handle_detail_num_enter(self, event=None):
         """Обработчик Enter для поля поиска вида с поддержкой сканирования"""
