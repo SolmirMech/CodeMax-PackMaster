@@ -219,10 +219,10 @@ class RollLabelPrinter:
         )       
         # Многострочное текстовое поле
         self.product_text = tk.Text(data_frame, width=35, height=4, font=("Arial", 12))
-        self.product_text.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        
+        self.product_text.grid(row=2, column=1, padx=5, pady=5, sticky="w")        
         # Контекстное меню для текстового поля
         self.add_context_menu_to_text(self.product_text)
+        self.product_text.bind("<Return>", self.search_in_product_text)
         
         # Основные поля ввода
         
@@ -365,6 +365,36 @@ class RollLabelPrinter:
         self.comment_manager = CommentManager(self.parent, self.comment_button)
         self.toggle_weight_visibility()
         self.update_elements_visibility()
+        
+    def search_in_product_text(self, event=None):
+        """Ищет продукты по тексту в поле изделия"""
+        search_text = self.product_text.get("1.0", "end-1c").strip()
+        
+        if not search_text or not hasattr(self, 'cached_order_data'):
+            self.order_data_module.parse_status.config(
+                text="Сначала загрузите заказ", 
+                foreground="orange"
+            )
+            return
+        
+        found_products = []
+        
+        for order_data in self.cached_order_data:
+            for product in order_data.get('products', []):
+                product_name = product.get('product_name', '')
+                detail_number = product.get('detail_number', '')
+                
+                if (search_text.lower() in product_name.lower() or 
+                    search_text in detail_number):
+                    found_products.append(product)
+        
+        if found_products:
+            self.order_data_module.show_product_results(found_products, search_text)
+        else:
+            self.order_data_module.parse_status.config(
+                text=f"Не найдено видов по запросу '{search_text}'", 
+                foreground="red"
+            )
     
     def load_sleeve_weights(self):
         """Загружает данные о весе втулок из настроек"""

@@ -142,6 +142,34 @@ class OrderDataProcessor:
         # Инициализируем статусы
         self.reset_status_messages()
         
+    def show_product_results(self, products, search_text):
+        """Показывает найденные продукты в комбобоксе"""
+        names_list = []
+        self.filtered_parsed_data = []
+        
+        for product in products:
+            name = product.get('full_name', product.get('product_name', ''))
+            names_list.append(name)
+            product_dict = {
+                'name': name,
+                'detail_num': product.get('detail_number', ''),
+                'sheet_number': product.get('sheet_number', ''),
+                'date_emission': product.get('date_emission', ''),
+                'gtin': product.get('gtin', ''),
+                'tirazh': product.get('quantity', ''),
+                'stream': product.get('stream', '1')
+            }
+            self.filtered_parsed_data.append(product_dict)
+        
+        if names_list:
+            self.name_combobox['values'] = names_list
+            self.parse_status.config(
+                text=f"Найдено {len(names_list)} видов по '{search_text}'",
+                foreground="green"
+            )
+            self.parent.after(100, lambda: self.name_combobox.focus_set())
+            self.parent.after(120, lambda: self.name_combobox.event_generate('<Down>'))
+        
     def update_status_message(self, message: str):
         """Обновляет сообщение в multitype_status_label"""       
         try:
