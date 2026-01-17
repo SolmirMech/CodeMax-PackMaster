@@ -58,34 +58,17 @@ class OrderDataProcessor:
         main_container.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
 
         # Верхняя часть: Парсинг XML
-        xml_frame = ttk.LabelFrame(main_container, text="Получение названия из xml", padding=5)
+        xml_frame = ttk.LabelFrame(main_container, text="Получение названия", padding=5)
         xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
         
-        ttk.Label(xml_frame, text="Поиск вида:").grid(
+        ttk.Label(xml_frame, text="Поиск/сканирование оттиска/вида:").grid(
             row=0, column=0, sticky="w", pady=5
         )
         
-        detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=10)
-        detail_num_entry.grid(row=0, column=0, padx=(130, 0), pady=5, sticky="w")
-        # Заменяем прямое связывание на кастомный обработчик
-        def handle_detail_num_enter(event):
-            """Обработчик Enter для поля поиска вида"""
-            # 1. Сохраняем текущее значение поля поиска
-            search_value = self.detail_num_search.get()
-            
-            # 2. Сначала запускаем on_order_enter_pressed из roll_module
-            if self.roll_module and hasattr(self.roll_module, 'on_order_enter_pressed'):
-                self.roll_module.on_order_enter_pressed(event)
-            
-            # 3. Восстанавливаем значение поиска после автозаполнения
-            self.parent.after(50, lambda: self.detail_num_search.set(search_value))
-            
-            # 4. Запускаем поиск продукта
-            self.parent.after(100, self.get_product_name)  # Чуть позже чтобы восстановилось значение
-            
-            return "break"
-
-        detail_num_entry.bind("<Return>", handle_detail_num_enter)
+        detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=12)
+        detail_num_entry.grid(row=0, column=0, padx=(340, 0), pady=5, sticky="w")
+        # Ручной ввод + сканирование кода
+        detail_num_entry.bind("<Return>", self.handle_detail_num_enter)  
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
@@ -155,6 +138,123 @@ class OrderDataProcessor:
         # Инициализируем статусы
         self.reset_status_messages()
         
+    def handle_detail_num_enter(self, event=None):
+        """Обработчик Enter для поля поиска вида с поддержкой сканирования"""
+        # 1. Получаем данные из виджета события ИЛИ из переменной
+        if event and hasattr(event, 'widget'):
+            # Берем из виджета, который вызвал событие
+            input_value = event.widget.get().strip()
+        else:
+            # Берем из переменной
+            input_value = self.detail_num_search.get().strip()
+        
+        # 2. Проверяем, не сканирование ли это (ищем GTIN)
+        gtin = self._extract_gtin_from_input(input_value)
+        
+        if gtin:
+            # 3. Это сканирование - обрабатываем GTIN
+            self._process_scanned_gtin(gtin)
+            return "break"
+        
+        # 4. Это обычный ручной ввод
+        search_value = input_value
+        
+        # 5. Сначала запускаем on_order_enter_pressed из roll_module
+        if self.roll_module and hasattr(self.roll_module, 'on_order_enter_pressed'):
+            self.roll_module.on_order_enter_pressed(event)
+        
+        # 6. Восстанавливаем значение поиска после автозаполнения
+        # НЕ используем lambda с self напрямую
+        def restore_search():
+            self.detail_num_search.set(search_value)
+        
+        self.parent.after(50, restore_search)
+        
+        # 7. Запускаем поиск продукта
+        self.parent.after(100, self.get_product_name)
+        
+        return "break"
+        
+    def _extract_gtin_from_input(self, text):
+        """Извлекает GTIN из введённого текста"""
+        
+        if not text:
+            return None
+        
+        # Паттерны для кодов GS1
+        patterns = [
+            r'\(01\)(\d{14})',           # (01)04680328050213...
+            r'01(\d{14})',               # 0104680328050213...
+            r'^\d{14}$',                 # 04680328050213 (чистый GTIN)
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1) if match.lastindex else match.group(0)
+        
+        return None
+        
+    def _get_detail_num_by_gtin(self, gtin):
+        """
+        Находит detail_num по GTIN в parsed_data
+        Возвращает последние 3 цифры detail_num или None если не найден
+        """
+        if not hasattr(self, 'parsed_data') or not self.parsed_data:
+            return None
+        
+        for product in self.parsed_data:
+            product_gtin = product.get('gtin', '')
+            if product_gtin == gtin:
+                detail_num = product.get('detail_num', '')
+                if detail_num:
+                    # Ищем цифры в detail_num
+                    import re
+                    digits = re.findall(r'\d+', detail_num)
+                    if digits:
+                        # Берём последнюю группу цифр
+                        last_digits = digits[-1]
+                        # Возвращаем последние 3 цифры
+                        return last_digits[-3:] if len(last_digits) >= 3 else last_digits
+                return None
+        
+        return None
+        
+    def _process_scanned_gtin(self, gtin):
+        """Обрабатывает отсканированный GTIN"""
+        # 1. Ищем detail_num для этого GTIN
+        detail_num_suffix = self._get_detail_num_by_gtin(gtin)
+        
+        if not detail_num_suffix:
+            # GTIN не найден в текущем заказе
+            self.parse_status.config(
+                text=f"GTIN {gtin} не найден в заказе {self.current_order}", 
+                foreground="red"
+            )
+            self.parent.after(5000, lambda: self.parse_status.config(text=""))
+            return
+        
+        # 2. Показываем статус
+        self.parse_status.config(
+            text=f"Найден GTIN: {gtin}", 
+            foreground="blue"
+        )
+        
+        # 3. Устанавливаем найденный detail_num в поле поиска
+        self.parent.after(100, lambda: self.detail_num_search.set(detail_num_suffix))
+        
+        # 4. Запускаем поиск продукта по detail_num
+        self.parent.after(150, self.get_product_name)
+        
+        # 5. Обновляем статус
+        self.parent.after(200, lambda: self.parse_status.config(
+            text=f"Поиск по коду: {detail_num_suffix}", 
+            foreground="green"
+        ))
+        
+        # 6. Сбрасываем статус через 5 секунд
+        self.parent.after(5500, lambda: self.parse_status.config(text=""))        
+            
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""
         # Определяем текущий цех
