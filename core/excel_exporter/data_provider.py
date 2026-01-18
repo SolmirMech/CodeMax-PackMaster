@@ -343,6 +343,46 @@ class ExportDataProvider:
             print(f"Ошибка сбора данных количества: {e}")
             
         return data
+        
+    def get_data_for_workshop2_box(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 2 цеха, лист 'Поддон' (коробка).
+        Только нетто вес, длины роликов, данные о втулке.
+        """
+        all_data = self.collect_all_data()
+        
+        return {
+            # Основная информация
+            'customer': all_data['common'].get('customer'),
+            'pallet_type': all_data['common'].get('pallet_type'),  # Тип упаковки (D3)
+            'order_number': all_data['common'].get('order_number'),
+            'product_text': all_data['common'].get('product_text'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            
+            # Вес поддона
+            'pallet_weight': all_data['weights'].get('pallet_weight'),
+            
+            # Данные втулки
+            'sleeve_weight_kg': all_data['weights'].get('sleeve_weight_kg'),  # Конвертировано из граммов
+            'sleeve_diameter': all_data['dimensions'].get('sleeve_diameter'),
+            
+            # Данные роликов
+            'rolls_count': all_data['quantities'].get('rolls_count'),
+            'net_weight_per_roll': all_data['weights'].get('net_weight_per_roll'),  # Только нетто!
+            'quantity_per_roll': all_data['quantities'].get('quantity_per_roll'),
+            'roll_length': all_data['dimensions'].get('roll_length'),  # Длина ролика
+            
+            # Производитель
+            'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
+            
+            # Дополнительно
+            'workshop': '2',
+            'sheet_type': 'box',
+            'has_weight': all_data['metadata'].get('has_weight', False)
+        }
     
     def _get_dimension_data(self) -> Dict[str, Any]:
         """Собирает данные по размерам"""

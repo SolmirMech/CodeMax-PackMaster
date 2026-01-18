@@ -123,11 +123,16 @@ class SmartExporter:
                 # Заполняем ролики (для коробки)
                 if rolls_sections:
                     rolls_count = sheet_specific_data.get('rolls_count', 1)
-                    if rolls_count == 0:
-                        rolls_count = 1
-                    rolls_fitted = self._fill_rolls_sections_with_distribution(
-                        rolls_sections, sheet_specific_data, rolls_count
-                    )
+                    if mapping.workshop == "2":
+                        # Для 2 цеха используем специальную логику
+                        rolls_fitted = self._fill_rolls_sections_with_distribution_workshop2(
+                            rolls_sections, sheet_specific_data, rolls_count
+                        )
+                    else:
+                        # Для 1 цеха используем стандартную логику
+                        rolls_fitted = self._fill_rolls_sections_with_distribution(
+                            rolls_sections, sheet_specific_data, rolls_count
+                        )
                     all_fitted = rolls_fitted and all_fitted
             
             # 3. Выполняем пост-обработку
@@ -517,6 +522,91 @@ class SmartExporter:
             print(f"Ошибка заполнения секции количества '{section.name}': {e}")
             return 0
 
+    def _fill_single_rolls_section_workshop2(self, section: DynamicSection, data: Dict[str, Any], max_rolls: int) -> int:
+        """Заполняет одну секцию роликов ТОЛЬКО для 2 цеха (с L колонкой)"""
+        try:
+            # Данные одного ролика для 2 цеха
+            net_weight = data.get('net_weight_per_roll')  # Только нетто!
+            quantity = data.get('quantity_per_roll')
+            roll_length = data.get('roll_length')
+            
+            start_row, end_row = section.rows_range
+            filled_count = 0
+            
+            # Определяем смещение для L на основе имени секции
+            l_offset = 0
+            if section.name == "rolls_column_2":
+                l_offset = 20  # E,F → L+20
+            elif section.name == "rolls_column_3":
+                l_offset = 40  # H,I → L+40
+            
+            # Ищем пустые строки
+            for row in range(start_row, end_row):
+                if filled_count >= max_rolls:
+                    break
+                
+                # Проверяем, пуста ли строка (только B,C или E,F или H,I)
+                is_empty = True
+                for col_config in section.columns_config:
+                    cell_ref = f"{col_config['column']}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+                
+                if is_empty:
+                    # 1. Заполняем основные колонки (B/C, E/F, H/I)
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+                        
+                        if data_key == 'net_weight_per_roll':
+                            value = net_weight
+                        elif data_key == 'quantity_per_roll':
+                            value = quantity
+                        else:
+                            value = None
+                        
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+                    
+                    # 2. Заполняем соответствующую строку в L
+                    if roll_length is not None:
+                        l_row = row + l_offset
+                        l_cell = f"L{l_row}"
+                        
+                        # Форматирование для L
+                        l_format = CellFormat(
+                            horizontal_alignment=HorizontalAlignment.CENTER,
+                            vertical_alignment=VerticalAlignment.CENTER,
+                            number_format="0.0"
+                        )
+                        
+                        self._set_cell_value(l_cell, roll_length, l_format)
+                    
+                    filled_count += 1
+            
+            return filled_count
+                
+        except Exception as e:
+            print(f"Ошибка заполнения секции роликов 2 цеха '{section.name}': {e}")
+            return 0
+
+    def _fill_rolls_sections_with_distribution_workshop2(self, sections: List[DynamicSection], 
+                                                       data: Dict[str, Any], total_rolls: int) -> bool:
+        """Распределяет ролики по секциям ТОЛЬКО для 2 цеха"""
+        filled_count = 0
+        
+        for section in sections:
+            if filled_count >= total_rolls:
+                break
+                
+            # Сколько осталось заполнить
+            rolls_left = total_rolls - filled_count
+            filled_in_section = self._fill_single_rolls_section_workshop2(section, data, rolls_left)
+            filled_count += filled_in_section
+        
+        return filled_count >= total_rolls
     
     # ==================== МЕТОДЫ ОЧИСТКИ ====================
     
@@ -608,6 +698,10 @@ class SmartExporter:
         # Для листа "Много видов 1 цех" используем специализированный метод DataProvider
         if sheet_name == "Лист много видов" or "много видов" in sheet_name.lower():
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype()}
+            
+        # Для поддона 2 цех
+        if sheet_name == "Поддон" and workshop == "2":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_box()}
         
         return sheet_data
     
@@ -621,7 +715,15 @@ class SmartExporter:
                 else:
                     print(f"Внимание: хук '{hook_name}' не найден")
             except Exception as e:
-                print(f"Ошибка выполнения хука '{hook_name}': {e}")
+                print(f"Ошибка выполнения хука '{hook_name}': {e}")               
+
+    def _hook_validate_rolls_count_workshop2(self, data: Dict[str, Any]):
+        """Хук для проверки количества роликов для 2 цеха (макс 60)"""
+        rolls_count = data.get('rolls_count', 0)
+        max_rolls = 60  # Максимум для 2 цеха (3 колонки по 20)
+        
+        if rolls_count > max_rolls:
+            print(f"Внимание: количество роликов ({rolls_count}) превышает максимальное ({max_rolls}) для 2 цеха")
                 
     def _hook_clear_existing_row(self, data: Dict[str, Any]):
         """Хук для очистки существующей строки с таким же product_name"""
