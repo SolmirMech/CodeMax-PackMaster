@@ -362,9 +362,19 @@ class RollLabelPrinter:
         self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
         self.stream_width_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
-        self.comment_manager = CommentManager(self.parent, self.comment_button)
         self.toggle_weight_visibility()
         self.update_elements_visibility()
+        
+    def _scan_gtin_in_product_text(self, event):
+        """Сканирует GTIN при вводе в поле product_text"""
+        text = self.product_text.get("1.0", "end-1c").strip()
+        if not text or not self.order_data_module:
+            return
+        
+        gtin = self.order_data_module._extract_gtin_from_input(text)
+        if gtin:
+            self.product_text.delete("1.0", tk.END)
+            self.order_data_module._process_scanned_gtin(gtin)
         
     def search_in_product_text(self, event=None):
         """Ищет продукты по тексту в поле изделия"""
@@ -376,6 +386,14 @@ class RollLabelPrinter:
                 foreground="orange"
             )
             return
+            
+        # Проверяем GTIN
+        gtin = self.order_data_module._extract_gtin_from_input(search_text)
+        if gtin:
+            # Это GTIN - обрабатываем сканирование
+            self.product_text.delete("1.0", tk.END)
+            self.order_data_module._process_scanned_gtin(gtin)
+            return "break"
         
         found_products = []
         
@@ -1023,7 +1041,7 @@ class RollLabelPrinter:
 
     def set_order_data_module(self, order_data_module):
         """Устанавливает прямую связь с модулем обработки данных заказов"""
-        self.order_data_module = order_data_module             
+        self.order_data_module = order_data_module
         
     def calculate_net_weight(self, *args):
         """Автоматически рассчитывает вес нетто"""

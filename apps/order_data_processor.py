@@ -202,8 +202,7 @@ class OrderDataProcessor:
         search_value = input_value
         
         # 5. Сначала запускаем on_order_enter_pressed из roll_module
-        if self.roll_module and hasattr(self.roll_module, 'on_order_enter_pressed'):
-            self.roll_module.on_order_enter_pressed(event)
+        self.roll_module.on_order_enter_pressed(event)
         
         # 6. Восстанавливаем значение поиска после автозаполнения
         # НЕ используем lambda с self напрямую
@@ -264,7 +263,7 @@ class OrderDataProcessor:
         
     def _process_scanned_gtin(self, gtin):
         """Обрабатывает отсканированный GTIN"""
-        # 1. Ищем detail_num для этого GTIN
+        # Ищем detail_num для этого GTIN
         detail_num_suffix = self._get_detail_num_by_gtin(gtin)
         
         if not detail_num_suffix:
@@ -276,26 +275,12 @@ class OrderDataProcessor:
             self.parent.after(5000, lambda: self.parse_status.config(text=""))
             return
         
-        # 2. Показываем статус
-        self.parse_status.config(
-            text=f"Найден GTIN: {gtin}", 
-            foreground="blue"
-        )
         
-        # 3. Устанавливаем найденный detail_num в поле поиска
+        # Устанавливаем найденный detail_num в поле поиска
         self.parent.after(100, lambda: self.detail_num_search.set(detail_num_suffix))
         
-        # 4. Запускаем поиск продукта по detail_num
-        self.parent.after(150, self.get_product_name)
-        
-        # 5. Обновляем статус
-        self.parent.after(200, lambda: self.parse_status.config(
-            text=f"Поиск по коду: {detail_num_suffix}", 
-            foreground="green"
-        ))
-        
-        # 6. Сбрасываем статус через 5 секунд
-        self.parent.after(5500, lambda: self.parse_status.config(text=""))        
+        # Запускаем поиск продукта по detail_num
+        self.parent.after(150, self.get_product_name)                  
             
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""
@@ -659,6 +644,7 @@ class OrderDataProcessor:
                     break
             
             if selected_data:
+                self.filtered_parsed_data = [selected_data]
                 self.send_to_roll_module(selected_data)
                 self.parse_status.config(text="Все данные отправлены", foreground="green")
                 self.parent.after(5000, lambda: self.parse_status.config(text=""))
