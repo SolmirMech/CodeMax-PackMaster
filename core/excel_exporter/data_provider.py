@@ -383,6 +383,53 @@ class ExportDataProvider:
             'sheet_type': 'box',
             'has_weight': all_data['metadata'].get('has_weight', False)
         }
+        
+    def get_data_for_workshop2_pallet_list(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 2 цеха, лист 'Список поддонов'.
+        Включает данные из листа 'Поддон' и рассчитывает итоги.
+        """
+        all_data = self.collect_all_data()
+        
+        # Читаем данные из листа 'Поддон' в Excel
+        pallet_data = self._read_workshop2_pallet_sheet_data()
+        
+        # Берем данные производителя из основного кэша
+        manufacturer_display_text = all_data['manufacturer'].get('display_text', '')
+        
+        return {
+            # Основная информация (копируется из листа 'Поддон')
+            'customer': all_data['common'].get('customer'),
+            'pallet_type': all_data['common'].get('pallet_type'),
+            'order_number': all_data['common'].get('order_number'),
+            'product_text': all_data['common'].get('product_text'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            
+            # Данные втулки
+            'sleeve_weight_kg': all_data['weights'].get('sleeve_weight_kg'),
+            'sleeve_diameter': all_data['dimensions'].get('sleeve_diameter'),
+            
+            # Данные поддона
+            'pallet_weight': all_data['weights'].get('pallet_weight'),
+            
+            # Итоговые данные (расчитываются из листа 'Поддон')
+            # Для заполнения в динамические секции:
+            'rolls_count': pallet_data.get('rolls_count', 0),  # Столбец D
+            'total_weight': pallet_data.get('total_weight', 0),  # Столбец F  
+            'total_quantity': pallet_data.get('total_quantity', 0),  # Столбец H
+            'total_length': pallet_data.get('total_length', 0),  # Столбец L
+            
+            # Производитель
+            'manufacturer_display_text': manufacturer_display_text,
+            
+            # Дополнительно
+            'workshop': '2',
+            'sheet_type': 'pallet_list',
+            'has_weight': all_data['metadata'].get('has_weight', False)
+        }        
     
     def _get_dimension_data(self) -> Dict[str, Any]:
         """Собирает данные по размерам"""
@@ -478,6 +525,85 @@ class ExportDataProvider:
         except Exception as e:
             print(f"Ошибка чтения Excel файла: {e}")
             return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
+            
+    def _read_workshop2_pallet_sheet_data(self) -> Dict[str, Any]:
+        """
+        Читает данные из листа 'Поддон' для 2 цеха и рассчитывает итоги.
+        Аналогично WeightOrdersExporter._calculate_pallet_totals
+        """
+        try:
+            # Получаем путь к файлу для 2 цеха
+            actual_file_path = self._get_excel_file_path("2")
+            
+            if not os.path.exists(actual_file_path):
+                return {
+                    'rolls_count': 0,
+                    'total_weight': 0,
+                    'total_quantity': 0,
+                    'total_length': 0
+                }
+            
+            workbook = load_workbook(actual_file_path, data_only=True)
+            
+            if "Поддон" not in workbook.sheetnames:
+                workbook.close()
+                return {
+                    'rolls_count': 0,
+                    'total_weight': 0,
+                    'total_quantity': 0,
+                    'total_length': 0
+                }
+            
+            pallet_sheet = workbook["Поддон"]
+            
+            total_quantity = 0
+            total_weight = 0
+            total_length = 0
+            rolls_count = 0
+            
+            # Пары колонок и соответствующие смещения для длины в L
+            column_pairs = [
+                ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
+                ('E', 'F', 20),  # E,F - длина в L со смещением +20
+                ('H', 'I', 40)   # H,I - длина в L со смещением +40
+            ]
+            
+            for weight_col, qty_col, l_offset in column_pairs:
+                for row in range(10, 30):  # строки 10-29
+                    weight = pallet_sheet[f'{weight_col}{row}'].value
+                    quantity = pallet_sheet[f'{qty_col}{row}'].value
+                    
+                    if weight is not None or quantity is not None:
+                        rolls_count += 1
+                        
+                        if weight is not None:
+                            total_weight += weight
+                        if quantity is not None:
+                            total_quantity += quantity
+                        
+                        # Длина из столбца L
+                        length_row = row + l_offset
+                        length = pallet_sheet[f'L{length_row}'].value
+                        if length is not None:
+                            total_length += length
+            
+            workbook.close()
+            
+            return {
+                'rolls_count': rolls_count,
+                'total_weight': total_weight,
+                'total_quantity': total_quantity,
+                'total_length': total_length
+            }
+            
+        except Exception as e:
+            print(f"Ошибка чтения листа 'Поддон' для 2 цеха: {e}")
+            return {
+                'rolls_count': 0,
+                'total_weight': 0,
+                'total_quantity': 0,
+                'total_length': 0
+            }            
     
     def _get_manufacturer_data(self) -> Dict[str, Any]:
         """Собирает данные по производителю"""

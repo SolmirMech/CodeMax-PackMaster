@@ -105,7 +105,15 @@ class SmartExporter:
                     all_fitted = sections_fitted and all_fitted
 
             # Для всех остальных листов
-            else:
+            else:                
+                # Специальная обработка для "Список поддонов"
+                if mapping.sheet_name == "Список поддонов":
+                    # Заполняем одну строку с данными поддона
+                    pallet_fitted = self._fill_pallet_list_sections(
+                        mapping.dynamic_sections, sheet_specific_data
+                    )
+                    all_fitted = pallet_fitted
+                    
                 # Группируем секции по типу
                 boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
                 rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
@@ -607,6 +615,74 @@ class SmartExporter:
             filled_count += filled_in_section
         
         return filled_count >= total_rolls
+        
+    def _fill_pallet_list_sections(self, sections: List[DynamicSection], 
+                                  data: Dict[str, Any]) -> bool:
+        """
+        Заполняет динамические секции для листа 'Список поддонов'.
+        Находит первую свободную строку и заполняет её данными одного поддона.
+        """
+        if not sections:
+            return True
+        
+        # Проверяем, что есть данные для заполнения
+        rolls_count = data.get('rolls_count', 0)
+        total_weight = data.get('total_weight', 0)
+        total_quantity = data.get('total_quantity', 0)
+        total_length = data.get('total_length', 0)
+        
+        # Если все данные пустые - пропускаем
+        if rolls_count == 0 and total_weight == 0 and total_quantity == 0 and total_length == 0:
+            return False
+        
+        # Берем первую секцию
+        section = sections[0]
+        start_row, end_row = section.rows_range
+        
+        # Ищем первую свободную строку
+        target_row = None
+        
+        for row in range(start_row, end_row):
+            is_empty = True
+            for col in ['D', 'F', 'H', 'L']:
+                if self.ws[f'{col}{row}'].value is not None:
+                    is_empty = False
+                    break
+            
+            if is_empty:
+                target_row = row
+                break
+        
+        # Если не нашли свободную строку - хуки уже показали ошибку
+        if target_row is None:
+            return False
+        
+        # Заполняем найденную строку
+        try:
+            for col_config in section.columns_config:
+                cell_ref = f"{col_config['column']}{target_row}"
+                data_key = col_config['data_key']
+                
+                if data_key == 'rolls_count':
+                    value = rolls_count
+                elif data_key == 'total_weight':
+                    value = total_weight
+                elif data_key == 'total_quantity':
+                    value = total_quantity
+                elif data_key == 'total_length':
+                    value = total_length
+                else:
+                    value = None
+                
+                if value is not None:
+                    processed_value = self._process_value_by_type(value, col_config['data_type'])
+                    self._set_cell_value(cell_ref, processed_value, col_config['format'])
+            
+            return True
+            
+        except Exception as e:
+            print(f"Ошибка заполнения строки {target_row}: {e}")
+            return False
     
     # ==================== МЕТОДЫ ОЧИСТКИ ====================
     
@@ -699,9 +775,13 @@ class SmartExporter:
         if sheet_name == "Лист много видов" or "много видов" in sheet_name.lower():
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype()}
             
-        # Для поддона 2 цех
+        # Для поддона 2 цех (коробка)
         if sheet_name == "Поддон" and workshop == "2":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_box()}
+            
+        # Для списка поддонов 2 цех
+        if sheet_name == "Список поддонов" and workshop == "2":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_pallet_list()}
         
         return sheet_data
     
@@ -715,7 +795,40 @@ class SmartExporter:
                 else:
                     print(f"Внимание: хук '{hook_name}' не найден")
             except Exception as e:
-                print(f"Ошибка выполнения хука '{hook_name}': {e}")               
+                print(f"Ошибка выполнения хука '{hook_name}': {e}")
+                
+    def _hook_validate_pallet_list_capacity(self, data: Dict[str, Any]):
+        """Хук для проверки заполнения листа 'Список поддонов'"""
+        if not self.current_mapping or self.current_mapping.sheet_name != "Список поддонов":
+            return
+        
+        if not self.current_mapping.dynamic_sections:
+            return
+        
+        section = self.current_mapping.dynamic_sections[0]
+        start_row, end_row = section.rows_range
+        
+        # Считаем заполненные строки
+        filled_rows = 0
+        for row in range(start_row, end_row):
+            is_filled = False
+            for col in ['D', 'F', 'H', 'L']:
+                if self.ws[f'{col}{row}'].value is not None:
+                    is_filled = True
+                    break
+            
+            if is_filled:
+                filled_rows += 1
+        
+        # Проверяем, есть ли свободные строки
+        free_rows = (end_row - start_row) - filled_rows
+        
+        if free_rows <= 0:
+            print(f"ОШИБКА: Лист 'Список поддонов' переполнен!")
+            # Можно добавить флаг в data для возврата ошибки
+            data['sheet_overflow'] = True
+        elif free_rows <= 3:
+            print(f"Внимание: в листе 'Список поддонов' осталось {free_rows} свободных строк")
 
     def _hook_validate_rolls_count_workshop2(self, data: Dict[str, Any]):
         """Хук для проверки количества роликов для 2 цеха (макс 60)"""
