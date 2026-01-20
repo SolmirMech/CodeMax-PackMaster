@@ -34,7 +34,7 @@ class XMLDataManager:
         self.status_callback = None
         
         # Получаем путь к XML заказам
-        xml_path = config_manager.get_data_base_path()
+        xml_path = config_manager.get_weight_data_base_path()
         self.xml_folder = Path(xml_path)
         
         # Путь к БД в папке data AppData
