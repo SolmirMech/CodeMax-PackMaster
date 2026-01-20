@@ -429,50 +429,7 @@ class ExportDataProvider:
             'workshop': '2',
             'sheet_type': 'pallet_list',
             'has_weight': all_data['metadata'].get('has_weight', False)
-        }        
-    
-    def _get_dimension_data(self) -> Dict[str, Any]:
-        """Собирает данные по размерам"""
-        if not self.roll_module:
-            return {}
-            
-        data = {}
-        
-        try:
-            # Диаметр втулки
-            if hasattr(self.roll_module, 'sleeve_diameter_var'):
-                diam_str = self.roll_module.sleeve_diameter_var.get()
-                data['sleeve_diameter'] = self._convert_to_number(diam_str)
-            
-            # Длина ролика
-            if hasattr(self.roll_module, 'roll_length'):
-                length_str = self.roll_module.roll_length.get()
-                data['roll_length'] = self._convert_to_number(length_str)
-            
-        except Exception as e:
-            print(f"Ошибка сбора данных размеров: {e}")
-            
-        return data
-    
-    def _get_metadata(self) -> Dict[str, Any]:
-        """Собирает метаданные и состояние"""
-        data = {}
-        
-        try:
-            # Есть ли вес (определяем по total_gross)
-            if hasattr(self.roll_module, 'total_gross_var'):
-                weight_value = self.roll_module.total_gross_var.get()
-                has_weight = bool(weight_value and str(weight_value).strip() and 
-                                str(weight_value).strip() != '0')
-                data['has_weight'] = has_weight
-            else:
-                data['has_weight'] = False
-                
-        except Exception as e:
-            print(f"Ошибка сбора метаданных: {e}")
-            data['has_weight'] = False
-            
-        return data
+        }
         
     def _read_pallet_sheet_data(self) -> Dict[str, Any]:
         """
@@ -480,22 +437,35 @@ class ExportDataProvider:
         Возвращает суммы по колонкам B, C, D (левая секция) и F, G, H (правая секция).
         """
         try:
-            # Получаем путь к файлу
-            workshop = self._determine_workshop()
-            actual_file_path = self._get_excel_file_path(workshop)
+            # Получаем путь к файлу ДЛЯ ЦЕХА 1 (фиксировано)
+            actual_file_path = self._get_excel_file_path("1")  # Явно указываем цех 1
             
             if not os.path.exists(actual_file_path):
                 return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
             
             workbook = load_workbook(actual_file_path, data_only=True)
-            pallet_sheet = workbook["Лист для паллеты"]
+            
+            # Ищем нужный лист (может быть "Лист для паллеты" или другой)
+            sheet_name = None
+            possible_sheet_names = ["Лист для паллеты"]
+            
+            for name in possible_sheet_names:
+                if name in workbook.sheetnames:
+                    sheet_name = name
+                    break
+            
+            if not sheet_name:
+                workbook.close()
+                return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
+                
+            pallet_sheet = workbook[sheet_name]
             
             boxes_count = 0
             gross_total = 0
             net_total = 0
             labels_total = 0
             
-            # Левая секция: колонки B, C, D
+            # Левая секция: колонки B, C, D (строки 14-28)
             for row in range(14, 29):
                 if any(pallet_sheet[f'{col}{row}'].value is not None 
                        for col in ['B', 'C', 'D']):
@@ -504,7 +474,7 @@ class ExportDataProvider:
                     net_total += pallet_sheet[f'C{row}'].value or 0
                     labels_total += pallet_sheet[f'D{row}'].value or 0
             
-            # Правая секция: колонки F, G, H
+            # Правая секция: колонки F, G, H (строки 14-28)
             for row in range(14, 29):
                 if any(pallet_sheet[f'{col}{row}'].value is not None 
                        for col in ['F', 'G', 'H']):
@@ -603,7 +573,170 @@ class ExportDataProvider:
                 'total_weight': 0,
                 'total_quantity': 0,
                 'total_length': 0
-            }            
+            }
+            
+    def get_data_for_workshop2_multitype(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 2 цеха, лист 'Много видов'.
+        Собирает данные из листа 'Список поддонов' для экспорта.
+        """
+        all_data = self.collect_all_data()
+        
+        # Читаем данные из листа 'Список поддонов' в Excel
+        pallet_list_data = self._read_workshop2_pallet_list_data()
+        
+        # Получаем данные о производителе
+        manufacturer_display_text = all_data['manufacturer'].get('display_text', '')
+        
+        return {
+            # Основная информация
+            'customer': all_data['common'].get('customer'),
+            'pallet_type': all_data['common'].get('pallet_type'),  # Тип упаковки (D3)
+            'order_number': all_data['common'].get('order_number'),
+            # Примечание: product_text НЕ заполняется для этого режима (skip_product_name=True)
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+            
+            # Данные втулки
+            'sleeve_weight_kg': all_data['weights'].get('sleeve_weight_kg'),
+            'sleeve_diameter': all_data['dimensions'].get('sleeve_diameter'),
+            
+            # Данные поддона
+            'pallet_weight': all_data['weights'].get('pallet_weight'),
+            
+            # Данные из листа 'Список поддонов' (для динамических секций)
+            'pallets_count': pallet_list_data.get('pallets_count', 0),     # Столбец A (количество поддонов)
+            'product_name': all_data['common'].get('product_text', ''),    # Наименование из UI (столбец B)
+            'total_weight': pallet_list_data.get('total_weight', 0),       # Столбец H (суммарный вес)
+            'total_quantity': pallet_list_data.get('total_quantity', 0),   # Столбец I (суммарное количество)
+            'total_length': pallet_list_data.get('total_length', 0),       # Столбец L (суммарная длина)
+            
+            # Производитель
+            'manufacturer_display_text': manufacturer_display_text,
+            
+            # Дополнительно
+            'workshop': '2',
+            'sheet_type': 'multitype',
+            'has_weight': all_data['metadata'].get('has_weight', True)  # Всегда true для этого режима
+        }
+        
+    def _read_workshop2_pallet_list_data(self) -> Dict[str, Any]:
+        """
+        Читает данные из листа 'Список поддонов' для 2 цеха.
+        Возвращает суммированные данные по листу.
+        """
+        try:
+            # Получаем путь к файлу для 2 цеха
+            actual_file_path = self._get_excel_file_path("2")
+            
+            if not os.path.exists(actual_file_path):
+                return {
+                    'pallets_count': 0,
+                    'total_weight': 0,
+                    'total_quantity': 0,
+                    'total_length': 0
+                }
+            
+            workbook = load_workbook(actual_file_path, data_only=True)
+            
+            if "Список поддонов" not in workbook.sheetnames:
+                workbook.close()
+                return {
+                    'pallets_count': 0,
+                    'total_weight': 0,
+                    'total_quantity': 0,
+                    'total_length': 0
+                }
+            
+            list_sheet = workbook["Список поддонов"]
+            
+            # Суммируем данные из столбцов D, F, H, L (строки 10-29)
+            total_weight = 0
+            total_quantity = 0
+            total_length = 0
+            pallets_count = 0
+            
+            for row in range(10, 30):  # строки 10-29
+                # Проверяем, есть ли данные в строке
+                if (list_sheet[f'D{row}'].value is not None or 
+                    list_sheet[f'F{row}'].value is not None or
+                    list_sheet[f'H{row}'].value is not None or
+                    list_sheet[f'L{row}'].value is not None):
+                    
+                    pallets_count += 1
+                    
+                    # Суммируем значения из столбцов
+                    if list_sheet[f'F{row}'].value is not None:
+                        total_weight += list_sheet[f'F{row}'].value
+                    
+                    if list_sheet[f'H{row}'].value is not None:
+                        total_quantity += list_sheet[f'H{row}'].value
+                    
+                    if list_sheet[f'L{row}'].value is not None:
+                        total_length += list_sheet[f'L{row}'].value
+            
+            workbook.close()
+            
+            return {
+                'pallets_count': pallets_count,
+                'total_weight': total_weight,
+                'total_quantity': total_quantity,
+                'total_length': total_length
+            }
+            
+        except Exception as e:
+            print(f"Ошибка чтения листа 'Список поддонов' для 2 цеха: {e}")
+            return {
+                'pallets_count': 0,
+                'total_weight': 0,
+                'total_quantity': 0,
+                'total_length': 0
+            }
+            
+    def _get_dimension_data(self) -> Dict[str, Any]:
+        """Собирает данные по размерам"""
+        if not self.roll_module:
+            return {}
+            
+        data = {}
+        
+        try:
+            # Диаметр втулки
+            if hasattr(self.roll_module, 'sleeve_diameter_var'):
+                diam_str = self.roll_module.sleeve_diameter_var.get()
+                data['sleeve_diameter'] = self._convert_to_number(diam_str)
+            
+            # Длина ролика
+            if hasattr(self.roll_module, 'roll_length'):
+                length_str = self.roll_module.roll_length.get()
+                data['roll_length'] = self._convert_to_number(length_str)
+            
+        except Exception as e:
+            print(f"Ошибка сбора данных размеров: {e}")
+            
+        return data
+    
+    def _get_metadata(self) -> Dict[str, Any]:
+        """Собирает метаданные и состояние"""
+        data = {}
+        
+        try:
+            # Есть ли вес (определяем по total_gross)
+            if hasattr(self.roll_module, 'total_gross_var'):
+                weight_value = self.roll_module.total_gross_var.get()
+                has_weight = bool(weight_value and str(weight_value).strip() and 
+                                str(weight_value).strip() != '0')
+                data['has_weight'] = has_weight
+            else:
+                data['has_weight'] = False
+                
+        except Exception as e:
+            print(f"Ошибка сбора метаданных: {e}")
+            data['has_weight'] = False
+            
+        return data            
     
     def _get_manufacturer_data(self) -> Dict[str, Any]:
         """Собирает данные по производителю"""
@@ -764,11 +897,4 @@ class ExportDataProvider:
         except Exception as e:
             print(f"Ошибка получения пути к Excel файлу: {e}")
             return self.original_excel_path
-            
-    def _determine_workshop(self) -> str:
-        """Определяет цех"""
-        # Простейшая реализация - всегда цех 1 для начала
-        return "1"
-    
-
             

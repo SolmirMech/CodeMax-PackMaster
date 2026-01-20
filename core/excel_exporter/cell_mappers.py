@@ -90,7 +90,6 @@ class CellMappingRegistry:
     def get_workshop1_box_mapping() -> SheetMapping:
         """
         Маппинг для 1 цеха, лист коробки ('Лист для коробки')
-        Соответствует текущей логике из WeightOrdersExporter._export_basic_info_for_first_workshop
         """
         return SheetMapping(
             sheet_name="Лист для коробки",
@@ -595,7 +594,7 @@ class CellMappingRegistry:
                     required=True
                 ),
                 
-                # Тип продукта - E39
+                # Производитель
                 CellMapping(
                     cell_reference="C1",
                     data_key="manufacturer_display_text",
@@ -608,6 +607,17 @@ class CellMappingRegistry:
                     required=False,
                     is_merged_cell=True
                 ),
+                
+                CellMapping(
+                    cell_reference="E39",
+                    data_key="product_type",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),                
                 
                 # TU номер - A39
                 CellMapping(
@@ -872,8 +882,6 @@ class CellMappingRegistry:
     def get_workshop2_box_mapping() -> SheetMapping:
         """
         Маппинг для 2 цеха, лист 'Поддон' (коробка)
-        Соответствует логике WeightOrdersExporter._export_basic_info_for_second_workshop
-        и _export_rolls_to_empty_cells_for_second_workshop
         """
         return SheetMapping(
             sheet_name="Поддон",
@@ -1155,7 +1163,6 @@ class CellMappingRegistry:
     def get_workshop2_pallet_list_mapping() -> SheetMapping:
         """
         Маппинг для 2 цеха, лист 'Список поддонов'
-        Соответствует логике WeightOrdersExporter.export_to_pallet_list_sheet()
         """
         return SheetMapping(
             sheet_name="Список поддонов",
@@ -1369,7 +1376,213 @@ class CellMappingRegistry:
                 "update_manufacturer_info",
                 "validate_pallet_list_capacity"
             ]
-        )    
+        )
+        
+    @staticmethod
+    def get_workshop2_multitype_mapping() -> SheetMapping:
+        """
+        Маппинг для 2 цеха, лист 'Много видов'
+        """
+        return SheetMapping(
+            sheet_name="Много видов",
+            workshop="2",
+            description="Лист много видов (цех 2)",
+            
+            static_cells=[
+                # Основная информация
+                CellMapping(
+                    cell_reference="D7",
+                    data_key="customer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="A1",
+                    data_key="manufacturer_display_text",
+                    data_type=DataType.MULTILINE_TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        wrap_text=True
+                    ),
+                    required=False,
+                    is_merged_cell=True
+                ),
+                
+                CellMapping(
+                    cell_reference="D3",
+                    data_key="pallet_type",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="D6",
+                    data_key="order_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),               
+                
+                CellMapping(
+                    cell_reference="D37",
+                    data_key="date",
+                    data_type=DataType.DATE,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="E41",
+                    data_key="packer",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="E39",
+                    data_key="product_type",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=True
+                ),
+                
+                CellMapping(
+                    cell_reference="A39",
+                    data_key="tu_number",
+                    data_type=DataType.TEXT,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.LEFT,
+                        vertical_alignment=VerticalAlignment.CENTER
+                    ),
+                    required=False
+                ),
+                
+                CellMapping(
+                    cell_reference="D4",
+                    data_key="sleeve_weight_kg",
+                    data_type=DataType.NUMBER,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        number_format="0.00"
+                    ),
+                    required=False
+                ),
+                
+                # Диаметр втулки - G4
+                CellMapping(
+                    cell_reference="G4",
+                    data_key="sleeve_diameter",
+                    data_type=DataType.NUMBER,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        number_format="0"
+                    ),
+                    required=False
+                ),
+                
+                # Вес поддона - H3
+                CellMapping(
+                    cell_reference="H3",
+                    data_key="pallet_weight",
+                    data_type=DataType.NUMBER,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        number_format="0"
+                    ),
+                    required=False
+                ),
+            ],
+            
+            dynamic_sections=[
+                # Динамическая секция для строк (10-29)
+                DynamicSection(
+                    name="multitype_rows",
+                    start_cell="A10",  # Начинаем с A10
+                    rows_range=(10, 30),  # Строки 10-29
+                    columns_config=[
+                        {
+                            "column": "A",
+                            "data_key": "pallets_count",  # Количество поддонов
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        },
+                        {
+                            "column": "B",
+                            "data_key": "product_text",  # Это product_name (наименование продукции)
+                            "data_type": DataType.TEXT,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.LEFT,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        },
+                        {
+                            "column": "H",
+                            "data_key": "total_weight",  # Суммарный вес
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.00"
+                            )
+                        },
+                        {
+                            "column": "I",
+                            "data_key": "total_quantity",  # Суммарное количество
+                            "data_type": DataType.INTEGER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER
+                            )
+                        },
+                        {
+                            "column": "L",
+                            "data_key": "total_length",  # Суммарная длина
+                            "data_type": DataType.NUMBER,
+                            "format": CellFormat(
+                                horizontal_alignment=HorizontalAlignment.CENTER,
+                                vertical_alignment=VerticalAlignment.CENTER,
+                                number_format="0.0"
+                            )
+                        }
+                    ],
+                    direction="vertical",  # Заполняем по строкам
+                    max_items=20  # Максимум 20 строк (10-29)
+                )
+            ],
+            
+            post_processing_hooks=[
+                "update_manufacturer_info"  # Производитель в A1
+            ]
+        )
     
     # ==================== МЕТОДЫ ДОСТУПА К МАППИНГАМ ====================
     
@@ -1391,7 +1604,6 @@ class CellMappingRegistry:
         """
         # Словарь доступных маппингов
         mappings = {
-            # TODO: Добавить другие маппинги по мере реализации
             # Цех 1
             ("1", "box"): cls.get_workshop1_box_mapping,           
             ("1", "pallet"): cls.get_workshop1_pallet_mapping,
@@ -1401,7 +1613,7 @@ class CellMappingRegistry:
             # Цех 2
             ("2", "box"): cls.get_workshop2_box_mapping,
             ("2", "pallet_list"): cls.get_workshop2_pallet_list_mapping,
-            # ("2", "multitype"): cls.get_workshop2_multitype_mapping,
+            ("2", "multitype"): cls.get_workshop2_multitype_mapping,
         }
         
         key = (workshop, sheet_type)
@@ -1425,13 +1637,51 @@ class CellMappingRegistry:
     def get_available_mappings(cls) -> List[Dict[str, Any]]:
         """Возвращает список всех доступных маппингов"""
         return [
+            # Цех 1
             {
                 "workshop": "1",
                 "sheet_type": "box",
                 "sheet_name": "Лист для коробки",
                 "description": "Этикетка для коробки (цех 1)"
             },
-            # TODO: Добавить остальные по мере реализации
+            {
+                "workshop": "1",
+                "sheet_type": "pallet",
+                "sheet_name": "Лист для паллеты",
+                "description": "Этикетка для поддона (цех 1)"
+            },
+            {
+                "workshop": "1",
+                "sheet_type": "noweight",
+                "sheet_name": "БезВеса",
+                "description": "Лист без веса для поддона (цех 1)"
+            },
+            {
+                "workshop": "1",
+                "sheet_type": "multitype",
+                "sheet_name": "Лист много видов",
+                "description": "Лист много видов (цех 1)"
+            },
+            
+            # Цех 2
+            {
+                "workshop": "2",
+                "sheet_type": "box",
+                "sheet_name": "Поддон",
+                "description": "Этикетка для коробки (цех 2)"
+            },
+            {
+                "workshop": "2",
+                "sheet_type": "pallet_list",
+                "sheet_name": "Список поддонов",
+                "description": "Список поддонов (цех 2)"
+            },
+            {
+                "workshop": "2",
+                "sheet_type": "multitype",
+                "sheet_name": "Много видов",
+                "description": "Лист много видов (цех 2)"
+            }
         ]
     
     # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
@@ -1492,10 +1742,32 @@ def get_mapping(workshop: str, sheet_type: str, mode: str = "box") -> SheetMappi
     """Краткая функция для получения маппинга"""
     return CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
 
+# Цех 1
 def get_workshop1_box_mapping() -> SheetMapping:
     """Краткая функция для получения маппинга коробки 1 цеха"""
     return CellMappingRegistry.get_workshop1_box_mapping()
 
+def get_workshop1_pallet_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга поддона 1 цеха"""
+    return CellMappingRegistry.get_workshop1_pallet_mapping()
+
+def get_workshop1_noweight_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга без веса 1 цеха"""
+    return CellMappingRegistry.get_workshop1_noweight_mapping()
+
+def get_workshop1_multitype_mapping() -> SheetMapping:
+    """Краткая функция для получения много-видового маппинга 1 цеха"""
+    return CellMappingRegistry.get_workshop1_multitype_mapping()
+
+# Цех 2
 def get_workshop2_box_mapping() -> SheetMapping:
     """Краткая функция для получения маппинга коробки 2 цеха"""
     return CellMappingRegistry.get_workshop2_box_mapping()
+
+def get_workshop2_pallet_list_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга списка поддонов 2 цеха"""
+    return CellMappingRegistry.get_workshop2_pallet_list_mapping()
+
+def get_workshop2_multitype_mapping() -> SheetMapping:
+    """Краткая функция для получения много-видового маппинга 2 цеха"""
+    return CellMappingRegistry.get_workshop2_multitype_mapping()

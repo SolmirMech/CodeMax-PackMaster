@@ -95,13 +95,19 @@ class SmartExporter:
                 )
                 all_fitted = boxes_fitted
                 
-            # Для много видов
-            elif mapping.sheet_name == "Лист много видов" or "много видов" in mapping.sheet_name.lower():
+            # Для много видов (оба цеха)
+            elif mapping.sheet_name == "Лист много видов" or mapping.sheet_name == "Много видов" or "много видов" in mapping.sheet_name.lower():
                 if mapping.dynamic_sections:
-                    # Вызываем распределение по секциям
-                    sections_fitted = self._fill_multitype_sections_with_distribution(
-                        mapping.dynamic_sections, sheet_specific_data, max_items=1  # Только одна строка!
-                    )
+                    # Для цеха 2 используем специальную логику
+                    if mapping.workshop == "2":
+                        sections_fitted = self._fill_multitype_sections_workshop2(
+                            mapping.dynamic_sections, sheet_specific_data, max_items=1
+                        )
+                    else:
+                        # Для цеха 1 используем стандартную логику
+                        sections_fitted = self._fill_multitype_sections_with_distribution(
+                            mapping.dynamic_sections, sheet_specific_data, max_items=1
+                        )
                     all_fitted = sections_fitted and all_fitted
 
             # Для всех остальных листов
@@ -683,6 +689,93 @@ class SmartExporter:
         except Exception as e:
             print(f"Ошибка заполнения строки {target_row}: {e}")
             return False
+            
+    def _fill_multitype_sections_workshop2(self, sections: List[DynamicSection], 
+                                          data: Dict[str, Any], max_items: int = 1) -> bool:
+        """Распределяет строки по секциям для multitype (цех 2)"""
+        filled_count = 0
+        
+        for section in sections:
+            if filled_count >= max_items:
+                break
+                
+            # Сколько осталось заполнить
+            items_left = max_items - filled_count
+            filled_in_section = self._fill_single_multitype_section_workshop2(section, data, items_left)
+            filled_count += filled_in_section
+        
+        return filled_count >= max_items
+
+    def _fill_single_multitype_section_workshop2(self, section: DynamicSection, data: Dict[str, Any], max_items: int) -> int:
+        """Заполняет одну секцию для multitype (цех 2) - логика с очисткой дублирующихся строк"""
+        try:
+            # Данные для заполнения
+            pallets_count = data.get('pallets_count', 0)
+            product_name = data.get('product_name', '')
+            total_weight = data.get('total_weight', 0)
+            total_quantity = data.get('total_quantity', 0)
+            total_length = data.get('total_length', 0)
+            
+            # Если данных нет - пропускаем
+            if not product_name:
+                return 0
+            
+            start_row, end_row = section.rows_range
+            filled_count = 0
+            
+            # 1. Сначала ищем строку с таким же product_name (для замены)
+            for row in range(start_row, end_row):
+                if self.ws[f'B{row}'].value == product_name:
+                    # Очищаем всю строку
+                    for col in ['A', 'B', 'H', 'I', 'L']:
+                        cell_ref = f"{col}{row}"
+                        self._set_cell_value(cell_ref, None, CellFormat())
+                    break
+            
+            # 2. Теперь ищем пустую строку
+            for row in range(start_row, end_row):
+                if filled_count >= max_items:
+                    break
+                
+                # Проверяем, пуста ли строка
+                is_empty = True
+                for col in ['A', 'B', 'H', 'I', 'L']:
+                    cell_ref = f"{col}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+                
+                if is_empty:
+                    # Заполняем строку
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+                        
+                        # Сопоставляем ключи данных
+                        if data_key == 'pallets_count':
+                            value = pallets_count
+                        elif data_key == 'product_text':  # Это product_name в маппинге
+                            value = product_name
+                        elif data_key == 'total_weight':
+                            value = total_weight
+                        elif data_key == 'total_quantity':
+                            value = total_quantity
+                        elif data_key == 'total_length':
+                            value = total_length
+                        else:
+                            value = None
+                        
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+                    
+                    filled_count += 1
+            
+            return filled_count
+                
+        except Exception as e:
+            print(f"Ошибка заполнения секции multitype цех 2 '{section.name}': {e}")
+            return 0
     
     # ==================== МЕТОДЫ ОЧИСТКИ ====================
     
@@ -772,8 +865,12 @@ class SmartExporter:
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_noweight()}
             
         # Для листа "Много видов 1 цех" используем специализированный метод DataProvider
-        if sheet_name == "Лист много видов" or "много видов" in sheet_name.lower():
+        if sheet_name == "Лист много видов" and workshop == "1":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype()}
+            
+        # Для листа "Много видов 2 цех" используем специализированный метод DataProvider
+        if (sheet_name == "Много видов" or "много видов" in sheet_name.lower()) and workshop == "2":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_multitype()}
             
         # Для поддона 2 цех (коробка)
         if sheet_name == "Поддон" and workshop == "2":
