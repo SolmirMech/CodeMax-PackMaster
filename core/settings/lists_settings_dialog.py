@@ -316,7 +316,7 @@ class CustomersEditorDialog:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("Список клиентов без Производителя")
-        self.window.geometry("380x400")
+        self.window.geometry("405x450")  # Увеличиваем высоту
         self.window.grab_set()
 
         # Центрирование окна
@@ -328,7 +328,8 @@ class CustomersEditorDialog:
         self.window.geometry(f"+{x}+{y}")
 
         self.window.bind("<Escape>", lambda e: self.window.destroy())
-
+        
+        # Фрейм для кнопок управления - ПЕРЕМЕЩАЕМ В НИЗ
         main_frame = ttk.Frame(self.window, padding=5)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -344,40 +345,107 @@ class CustomersEditorDialog:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        canvas.grid(row=1, column=0, sticky="nsew")
-        scrollbar.grid(row=1, column=1, sticky="ns")
-        
-        # Кнопки управления списка
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=2, column=0, pady=5, sticky="w")
-
-        ttk.Button(
-            button_frame, 
-            text="💾 Сохранить", 
-            command=self.save_customers_list
-        ).pack(side=tk.LEFT, padx=(100,50))
-
-        # Настраиваем веса для расширения
-        main_frame.rowconfigure(2, weight=1)
-        main_frame.columnconfigure(0, weight=1)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Загружаем текущий список заказчиков
         current_customers = self.config_manager.get_without_manufacturer_customers()
 
         # Создаем поля ввода для каждого заказчика
         for customer in current_customers:
-            entry = ttk.Entry(scrollable_frame, width=55)
-            entry.insert(0, customer)
-            entry.pack(pady=5, fill=tk.X, padx=5)
-            self.customer_entries.append(entry)
+            self._create_customer_row(scrollable_frame, customer)
 
         # Добавляем пустое поле для нового заказчика
-        new_customer_entry = ttk.Entry(scrollable_frame, width=55)
-        new_customer_entry.pack(pady=5, fill=tk.X, padx=5)
-        self.customer_entries.append(new_customer_entry)
+        self._create_customer_row(scrollable_frame, "")
+
+        # Фрейм для кнопок управления - ПОСЛЕ прокручиваемой области
+        button_frame = ttk.Frame(self.window)
+        button_frame.pack(fill=tk.X, pady=10, padx=10)
+        
+        ttk.Button(
+            button_frame, 
+            text="💾 Сохранить", 
+            command=self.save_customers_list
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            button_frame,
+            text="➕ Добавить строку",
+            command=lambda: self._create_customer_row(scrollable_frame, "")
+        ).pack(side=tk.LEFT, padx=5)
 
         # Привязка Enter к сохранению
         self.window.bind("<Return>", lambda e: self.save_customers_list())
+
+    def _create_customer_row(self, parent, customer):
+        """Создает строку с полем ввода для заказчика"""
+        row_frame = ttk.Frame(parent)
+        row_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        # Поле ввода
+        entry = ttk.Entry(row_frame, width=45)
+        entry.insert(0, customer)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # Добавляем контекстное меню и горячие клавиши
+        self.add_context_menu_to_entry(entry)
+        entry.bind("<Control-KeyPress>", self.control_key_handler_entry)
+        self.customer_entries.append(entry)
+        
+        # Кнопка удаления
+        ttk.Button(
+            row_frame,
+            text="×",
+            width=2,
+            command=lambda: self._remove_customer_row(row_frame, entry)
+        ).pack(side=tk.RIGHT)
+
+    def _remove_customer_row(self, row_frame, entry):
+        """Удаляет строку с полем ввода"""
+        if len(self.customer_entries) > 1:  # Не позволяем удалить последнюю строку
+            row_frame.destroy()
+            self.customer_entries.remove(entry)
+
+    def control_key_handler_entry(self, event):
+        """Обработчик горячих клавиш для Entry полей"""
+        widget = event.widget
+        if event.keycode in (86, 118):  # V key - вставка
+            self.paste_text_to_entry(widget)
+            return "break"
+        elif event.keycode in (67, 99):  # C key - копирование
+            self.copy_text_from_entry(widget)
+            return "break"
+        return None
+
+    def add_context_menu_to_entry(self, entry_widget):
+        """Добавляет контекстное меню к полю ввода Entry."""
+        menu = tk.Menu(entry_widget, tearoff=0)
+        menu.add_command(label="Копировать", 
+                        command=lambda: self.copy_text_from_entry(entry_widget))
+        menu.add_command(label="Вставить", 
+                        command=lambda: self.paste_text_to_entry(entry_widget))
+        entry_widget.bind("<Button-3>", 
+                         lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def copy_text_from_entry(self, widget):
+        """Копирует текст из поля ввода Entry."""
+        try:
+            text = widget.get()
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception as e:
+            print(f"Ошибка копирования: {e}")
+
+    def paste_text_to_entry(self, widget):
+        """Вставляет текст в поле ввода Entry."""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete(0, tk.END)
+                widget.insert(0, text)
+        except Exception as e:
+            print(f"Ошибка вставки: {e}")
 
     def save_customers_list(self):
         """Сохраняет список клиентов без производителя"""
@@ -513,6 +581,9 @@ class SpecialClientsEditorDialog:
         name_entry = ttk.Entry(row_frame, width=20)
         name_entry.insert(0, name)
         name_entry.pack(side=tk.LEFT, padx=(0, 10))
+        # Добавляем контекстное меню и горячие клавиши к полю ввода имени
+        self.add_context_menu_to_entry(name_entry)
+        name_entry.bind("<Control-KeyPress>", self.control_key_handler)        
         self.special_name_entries.append(name_entry)
 
         # Фрейм для текстового поля с прокруткой
@@ -530,6 +601,9 @@ class SpecialClientsEditorDialog:
 
         text_widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
         text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Добавляем контекстное меню и горячие клавиши к текстовому полю
+        self.add_context_menu_to_text(text_widget)
+        text_widget.bind("<Control-KeyPress>", self.control_key_handler_text)        
         self.special_text_entries.append(text_widget)
 
         # Кнопка удаления строки
@@ -549,6 +623,88 @@ class SpecialClientsEditorDialog:
             row_frame.destroy()
             self.special_name_entries.remove(name_entry)
             self.special_text_entries.remove(text_entry)
+            
+    def control_key_handler(self, event):
+        """Обработчик горячих клавиш для Entry полей"""
+        widget = event.widget
+        if event.keycode in (86, 118):  # V key - вставка
+            self.paste_text_to_entry(widget)
+            return "break"
+        elif event.keycode in (67, 99):  # C key - копирование
+            self.copy_text_from_entry(widget)
+            return "break"
+        return None
+
+    def control_key_handler_text(self, event):
+        """Обработчик горячих клавиш для Text виджетов"""
+        widget = event.widget
+        if event.keycode in (86, 118):  # V key - вставка
+            self.paste_text_to_text_widget(widget)
+            return "break"
+        elif event.keycode in (67, 99):  # C key - копирование
+            self.copy_text_from_text_widget(widget)
+            return "break"
+        return None
+
+    def add_context_menu_to_text(self, text_widget):
+        """Добавляет контекстное меню к текстовому виджету."""
+        menu = tk.Menu(text_widget, tearoff=0)
+        menu.add_command(label="Копировать", 
+                        command=lambda: self.copy_text_from_text_widget(text_widget))
+        menu.add_command(label="Вставить", 
+                        command=lambda: self.paste_text_to_text_widget(text_widget))
+        text_widget.bind("<Button-3>", 
+                        lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def copy_text_from_text_widget(self, widget):
+        """Копирует текст из текстового виджета."""
+        try:
+            text = widget.get("1.0", "end-1c")
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception as e:
+            print(f"Ошибка копирования: {e}")
+
+    def paste_text_to_text_widget(self, widget):
+        """Вставляет текст в текстовый виджет."""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete("1.0", tk.END)
+                widget.insert("1.0", text)
+        except Exception as e:
+            print(f"Ошибка вставки: {e}")
+
+    def add_context_menu_to_entry(self, entry_widget):
+        """Добавляет контекстное меню к полю ввода Entry."""
+        menu = tk.Menu(entry_widget, tearoff=0)
+        menu.add_command(label="Копировать", 
+                        command=lambda: self.copy_text_from_entry(entry_widget))
+        menu.add_command(label="Вставить", 
+                        command=lambda: self.paste_text_to_entry(entry_widget))
+        entry_widget.bind("<Button-3>", 
+                         lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def copy_text_from_entry(self, widget):
+        """Копирует текст из поля ввода Entry."""
+        try:
+            text = widget.get()
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception as e:
+            print(f"Ошибка копирования: {e}")
+
+    def paste_text_to_entry(self, widget):
+        """Вставляет текст в поле ввода Entry."""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete(0, tk.END)
+                widget.insert(0, text)
+        except Exception as e:
+            print(f"Ошибка вставки: {e}")
 
     def save_special_clients(self):
         """Сохраняет измененный список особых клиентов"""

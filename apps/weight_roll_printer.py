@@ -222,6 +222,7 @@ class RollLabelPrinter:
         self.product_text.grid(row=2, column=1, padx=5, pady=5, sticky="w")        
         # Контекстное меню для текстового поля
         self.add_context_menu_to_text(self.product_text)
+        self.product_text.bind("<Control-KeyPress>", self.control_key_handler_text)
         self.product_text.bind("<Return>", self.search_in_product_text)
         
         # Основные поля ввода
@@ -1084,6 +1085,17 @@ class RollLabelPrinter:
             self.copy_text(event.widget)
             return "break"
         return None
+        
+    def control_key_handler_text(self, event):
+        """Обработчик горячих клавиш для Text виджетов"""
+        widget = event.widget
+        if event.keycode == 86 or event.keycode == 118:  # V key - вставка
+            self.paste_text_to_text_widget(widget)
+            return "break"
+        elif event.keycode == 67 or event.keycode == 99:  # C key - копирование
+            self.copy_text_from_text_widget(widget)
+            return "break"
+        return None        
         
     def add_context_menu_to_text(self, text_widget):
         """Добавляет контекстное меню к текстовому виджету"""
