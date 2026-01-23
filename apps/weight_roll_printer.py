@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, StringVar, BooleanVar
 import math
 from datetime import datetime
-from core.ui.comment_manager import CommentManager
+
 
 class RollLabelPrinter:
     """Управление заказами с весом"""
@@ -18,7 +18,6 @@ class RollLabelPrinter:
 
         self.order_data_module = None
         self.preview_module = None
-        self.comment_manager = None
         
         order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
         self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
@@ -62,7 +61,6 @@ class RollLabelPrinter:
         self.cached_order_number = ""
                     
         self.create_ui()
-        self.comment_manager = CommentManager(self.parent, self.comment_button, self.config_manager, self.customer_var)
         self.load_box_sizes()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
@@ -251,22 +249,7 @@ class RollLabelPrinter:
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
         entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
-        self.entry_suffix = entry_suffix
-        
-        # Иконка комментариев
-        self.comment_button = tk.Button(
-            data_frame,
-            text="⚠",
-            font=("Arial", 12, "bold"),
-            foreground="#FF9900",
-            borderwidth=0,
-            highlightthickness=0,
-            relief="flat",
-            width=2,
-            state="disabled"
-        )
-        self.comment_button.grid(row=3, column=1, padx=(150, 0), pady=5, sticky="w")
-        self.comment_button.grid_remove()
+        self.entry_suffix = entry_suffix     
         
         # Дата
         self.date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
@@ -668,17 +651,7 @@ class RollLabelPrinter:
         # Комментарии
         comments = parsed_data.get('comments', {})
         operations = parsed_data.get('operations', {})
-        
-        cutting_comment = comments.get('cutting_comment', '')
-        packaging_comment = comments.get('packaging_comment', '')
-        aggregation_status = operations.get('aggregation_status', '')
-        
-        # Используем CommentManager для управления комментариями
-        self.comment_manager.set_comments(
-            cutting_comment=cutting_comment,
-            packaging_comment=packaging_comment,
-            aggregation_status=aggregation_status
-        )
+        self.order_data_module._display_comments(comments, operations)
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""

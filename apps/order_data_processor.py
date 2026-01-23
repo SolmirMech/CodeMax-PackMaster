@@ -7,6 +7,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
+from core.ui.comment_manager import CommentManager
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
@@ -40,6 +41,13 @@ class OrderDataProcessor:
         self.load_initial_settings()
         self.detail_num_search = StringVar(value="")
         self.create_ui()
+        # Инициализируем CommentManager
+        self.comment_manager = CommentManager(
+            parent=self.parent,
+            comment_button=None,  # Без кнопки
+            config_manager=self.config_manager,
+            customer_var=None  # Установим позже в set_roll_module
+        )
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             
@@ -109,8 +117,151 @@ class OrderDataProcessor:
         xml_frame.columnconfigure(0, weight=1)
         xml_frame.columnconfigure(1, weight=1)
         
+        # === Секция комментариев ===
+        self.comment_label_frame = ttk.LabelFrame(xml_frame, text="Комментарии", padding=5)
+        self.comment_label_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(5, 5))
+        
+        # Text виджет с прокруткой
+        self.comment_text = tk.Text(
+            self.comment_label_frame,
+            height=8,
+            width=70,
+            wrap=tk.WORD,
+            font=("Arial", 10),
+            background="#FFFFE0",
+            state="disabled"  # Только для чтения
+        )
+        self.comment_text.grid(row=0, column=0, sticky="nsew")
+        
+        # Scrollbar
+        comment_scrollbar = ttk.Scrollbar(
+            self.comment_label_frame,
+            command=self.comment_text.yview
+        )
+        comment_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.comment_text.config(yscrollcommand=comment_scrollbar.set)
+        
+        # Фрейм для статуса агрегации
+        self.aggregation_frame = ttk.Frame(self.comment_label_frame)
+        self.aggregation_frame.grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 0))
+        
+        # Скрываем по умолчанию
+        self.comment_label_frame.grid_remove()
+        
+        # Настраиваем grid weights
+        self.comment_label_frame.columnconfigure(0, weight=1)
+        self.comment_label_frame.rowconfigure(0, weight=1)        
+        
         # Инициализируем статусы
         self.reset_status_messages()
+        
+    def _display_comments(self, comments, operations):
+        """Отображает комментарии в интерфейсе"""
+        cutting_comment = comments.get('cutting_comment', '')
+        packaging_comment = comments.get('packaging_comment', '')
+        aggregation_status = operations.get('aggregation_status', '')
+        
+        # Устанавливаем комментарии в CommentManager
+        result = self.comment_manager.set_comments(
+            cutting_comment=cutting_comment,
+            packaging_comment=packaging_comment,
+            aggregation_status=aggregation_status
+        )
+        
+        # Обновляем Text виджет
+        self.comment_text.config(state="normal")
+        self.comment_text.delete("1.0", tk.END)
+        
+        # Формируем текст комментариев
+        comment_text = ""
+        
+        if cutting_comment:
+            comment_text += "📐 КОММЕНТАРИЙ РЕЗКИ:\n"
+            comment_text += f"{cutting_comment}\n\n"
+        
+        if packaging_comment:
+            comment_text += "📦 КОММЕНТАРИЙ УПАКОВКИ:\n"
+            comment_text += f"{packaging_comment}\n"
+        
+        # Проверяем особые требования
+        special_requirements = self.comment_manager._get_special_requirements()
+        if special_requirements:
+            comment_text += "\n🚨 Особые требования:\n"
+            comment_text += f"{special_requirements}\n"
+        
+        # Вставляем текст если есть
+        if comment_text:
+            self.comment_text.insert("1.0", comment_text.strip())
+            self.comment_text.config(state="disabled")
+            
+            # Показываем блок комментариев
+            self.comment_label_frame.grid()
+            
+            # Обновляем заголовок с треугольником
+            current_title = self.comment_label_frame.cget("text")
+            if "⚠" not in current_title:
+                self.comment_label_frame.config(text="⚠ " + current_title)
+            
+            # Запускаем мигание
+            self._blink_comment_title(blink_count=3)
+        else:
+            # Скрываем блок если нет комментариев
+            self.comment_label_frame.grid_remove()
+        
+        # Обрабатываем статус агрегации
+        if aggregation_status and aggregation_status.strip().lower() == "да":
+            self._show_aggregation_status()
+        else:
+            self._hide_aggregation_status()
+    
+    def _blink_comment_title(self, blink_count=3):
+        """Мигает треугольником в заголовке 2-3 раза"""
+        current_title = self.comment_label_frame.cget("text")
+        
+        def blink_sequence(step=0):
+            if step < blink_count * 2:
+                if step % 2 == 0:
+                    # Без треугольника
+                    title_without = current_title.replace("⚠ ", "")
+                    self.comment_label_frame.config(text=title_without)
+                else:
+                    # С треугольником
+                    self.comment_label_frame.config(text=current_title)
+                
+                # Следующий шаг через 500ms
+                self.parent.after(500, lambda: blink_sequence(step + 1))
+        
+        blink_sequence()
+    
+    def _show_aggregation_status(self):
+        """Показывает статус агрегации"""
+        # Очищаем фрейм
+        for widget in self.aggregation_frame.winfo_children():
+            widget.destroy()
+        
+        # Иконка информации
+        info_icon = ttk.Label(
+            self.aggregation_frame,
+            text="ℹ",
+            font=("Arial", 14, "bold"),
+            foreground="#0066CC"
+        )
+        info_icon.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Текст статуса
+        status_label = ttk.Label(
+            self.aggregation_frame,
+            text="ЕСТЬ АГРЕГАЦИЯ",
+            font=("Arial", 11, "bold"),
+            foreground="#006600"
+        )
+        status_label.pack(side=tk.LEFT)
+        
+        self.aggregation_frame.grid()
+    
+    def _hide_aggregation_status(self):
+        """Скрывает статус агрегации"""
+        self.aggregation_frame.grid_remove()        
         
     def show_product_results(self, products, search_text):
         """Показывает найденные продукты в комбобоксе"""
@@ -278,6 +429,7 @@ class OrderDataProcessor:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.roll_module = roll_module
+        self.comment_manager.customer_var = self.roll_module.customer_var
 
     def get_product_name(self):
         """Получает данные продукта из XML файлов с поддержкой поиска по detail_num и номеру тиража"""
@@ -450,7 +602,7 @@ class OrderDataProcessor:
                     'manufacturer': "",
                     'gtin': product.get('gtin', ''),
                     'tirazh': product.get('quantity', ''),
-                    'stream': product.get('stream', '1')
+                    'stream': product.get('stream', '1')                   
                 }
                 
                 if not any(item['name'] == product_dict['name'] and 
