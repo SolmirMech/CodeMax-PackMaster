@@ -55,65 +55,70 @@ class PrintModule:
             self.coordinator.subscribe(self.on_settings_changed)
     
     def create_print_ui(self):
-        """Создает интерфейс управления печатью"""
+        """Создает компактный интерфейс управления печатью"""
         frame = ttk.Frame(self.parent, padding=5)
         frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Основной фрейм управления
-        control_frame = ttk.Frame(frame)
-        control_frame.pack(fill=tk.BOTH, expand=True)
+        # Используем grid для компактного размещения
+        frame.grid_columnconfigure(0, weight=1)
         
-        # Кол-во копий
-        copies_frame = ttk.Frame(control_frame)
-        copies_frame.pack(fill=tk.X, pady=(0, 10))
-        ttk.Label(copies_frame, text="Копий:").pack(side=tk.LEFT, padx=(0, 5))
+        # Строка 1: Копий и Печать
+        row1_frame = ttk.Frame(frame)
+        row1_frame.grid(row=0, column=0, sticky="ew", pady=7)
+        row1_frame.grid_columnconfigure(1, weight=1)
+        
+        ttk.Label(row1_frame, text="Копий:").grid(row=0, column=0, padx=(0, 5), sticky="w")
         copies_entry = ttk.Entry(
-            copies_frame, 
-            width=5,
+            row1_frame, 
+            width=7,
             textvariable=self.copies_var,
             justify='center'
         )
-        copies_entry.pack(side=tk.LEFT)
+        copies_entry.grid(row=0, column=1, padx=(0, 10), sticky="w")
         copies_entry.bind('<FocusIn>', lambda e: copies_entry.select_range(0, tk.END))
         copies_entry.bind('<Return>', lambda e: self.print_rolls_with_box())
         
-        # Основные кнопки печати
-        buttons_frame = ttk.Frame(control_frame)
-        buttons_frame.pack(fill=tk.X, pady=5)
-        
         ttk.Button(
-            buttons_frame, 
+            row1_frame, 
             text="🖨 Печать", 
             command=self.print_label
-        ).pack(fill=tk.X, pady=5)
+        ).grid(row=0, column=2, sticky="ew")
+        row1_frame.grid_columnconfigure(2, weight=1)
+        
+        # Строка 2: Настройки и Втулка
+        row2_frame = ttk.Frame(frame)
+        row2_frame.grid(row=1, column=0, sticky="ew", pady=7)
+        row2_frame.grid_columnconfigure(0, weight=1, uniform="row2")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="row2")
         
         ttk.Button(
-            buttons_frame, 
+            row2_frame, 
             text="⚙ Настройки", 
             command=self.open_settings_manager
-        ).pack(fill=tk.X, pady=5)
+        ).grid(row=0, column=0, padx=(0, 5), sticky="ew")
         
         ttk.Button(
-            buttons_frame, 
-            text="✓ Ярлык на втулку", 
+            row2_frame, 
+            text="✓ Втулка", 
             command=self.open_weight_orders_window
-        ).pack(fill=tk.X, pady=5)
+        ).grid(row=0, column=1, sticky="ew")
         
+        # Строка 3: Печать тиража
         ttk.Button(
-            buttons_frame, 
+            frame, 
             text="📋 Печать тиража", 
             command=self.start_batch_print
-        ).pack(fill=tk.X, pady=5)
+        ).grid(row=2, column=0, sticky="ew", pady=7)
         
-        # Статус печати
+        # Строка 4: Статус печати
         self.print_status_label = ttk.Label(
-            control_frame,
+            frame,
             text="",
             foreground="red",
             wraplength=250,
-            font=("Arial", 14)
+            font=("Arial", 12)
         )
-        self.print_status_label.pack(fill=tk.X, pady=10)
+        self.print_status_label.grid(row=3, column=0, sticky="ew", pady=(7, 0))
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""

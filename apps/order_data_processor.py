@@ -65,18 +65,18 @@ class OrderDataProcessor:
         xml_frame = ttk.LabelFrame(main_container, text="Получение названия", padding=5)
         xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
         
-        ttk.Label(xml_frame, text="Поиск/сканирование оттиска/вида:").grid(
+        ttk.Label(xml_frame, text="Поиск вида:").grid(
             row=0, column=0, sticky="w", pady=5
         )
         
         detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=12)
-        detail_num_entry.grid(row=0, column=0, padx=(340, 0), pady=5, sticky="w")
+        detail_num_entry.grid(row=0, column=0, padx=(125, 0), pady=5, sticky="w")
         # Ручной ввод + сканирование кода
         detail_num_entry.bind("<Return>", self.handle_detail_num_enter)  
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
-        archive_frame.grid(row=0, column=1, sticky="w", pady=5)
+        archive_frame.grid(row=0, column=0, padx=(440, 0), sticky="w", pady=5)
 
         ttk.Button(
             archive_frame, 
@@ -89,52 +89,22 @@ class OrderDataProcessor:
         self.parse_status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
 
         # Выбор названия
-        ttk.Label(xml_frame, text="Выберите название:").grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        ttk.Label(xml_frame, text="Выбор вида:").grid(row=2, column=0, sticky="w", pady=5)
         self.name_combobox = ttk.Combobox(xml_frame, textvariable=self.selected_name, state="readonly", width=61)
-        self.name_combobox.grid(row=3, column=0, sticky="w", pady=(0, 10))
+        self.name_combobox.grid(row=2, column=0, padx=(125, 0), sticky="w", pady=5)
         self.name_combobox.bind("<<ComboboxSelected>>", self.on_name_selected)
 
-        # Отправка вида в лист много видов
-        multitype_frame = ttk.Frame(xml_frame)
-        multitype_frame.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 5))
-        
-        ttk.Button(multitype_frame, text="🎯 Отправить вид в Лист 'Много видов'", 
-                  command=self.export_current_type_to_excel
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Меню для очистки много видов
-        multitype_menu = ttk.Menubutton(multitype_frame, text="🧹", width=3)
-        multitype_menu.pack(side=tk.LEFT)
-        
-        multitype_menu.menu = tk.Menu(multitype_menu, tearoff=0)
-        multitype_menu["menu"] = multitype_menu.menu
-        multitype_menu.menu.add_command(
-            label="Очистить Лист 'Много видов'", 
-            command=self.clear_multitype_sheet
-        )
-        
-        preview_frame = ttk.Frame(xml_frame)
-        preview_frame.grid(row=5, column=0, sticky="w", pady=(5, 5))
-
-        # Кнопка предпросмотра листа 'Много видов'
-        ttk.Button(
-            preview_frame,
-            text="👀 Просмотр",
-            command=self.show_multitype_preview,
-            width=15
-        ).pack(side=tk.LEFT)        
-
-        # Строка статуса для много видов
-        self.multitype_status_label = tk.Label(
+        # === Строка статуса для data manager ===
+        self.data_manager_status_label = tk.Label(
             xml_frame, 
-            text="Внимание, закройте файл Excel перед экспортом!", 
-            foreground="red",
+            text="", 
+            foreground="blue",
             font=("Arial", 14),
             wraplength=500,
             justify=tk.CENTER,
-            height=3
+            height=2
         )
-        self.multitype_status_label.grid(row=6, column=0, columnspan=2, sticky="w")
+        self.data_manager_status_label.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 5))
 
         xml_frame.columnconfigure(0, weight=1)
         xml_frame.columnconfigure(1, weight=1)
@@ -171,12 +141,12 @@ class OrderDataProcessor:
             self.parent.after(120, lambda: self.name_combobox.event_generate('<Down>'))
         
     def update_status_message(self, message: str):
-        """Обновляет сообщение в multitype_status_label"""       
+        """Обновляет сообщение в data_manager_status_label"""       
         try:
-            self.multitype_status_label.config(text=message)
+            self.data_manager_status_label.config(text=message)
             if "Идёт создание" in message or "База создана" in message or "База загружена" in message:
-                self.multitype_status_label.config(foreground="blue", font=("Arial", 12, "bold"))
-                self.parent.after(9000, lambda: self.multitype_status_label.config(text="\n"))
+                self.data_manager_status_label.config(foreground="blue", font=("Arial", 12, "bold"))
+                self.parent.after(9000, lambda: self.data_manager_status_label.config(text=""))
         except Exception as e:
             print(f"UI DEBUG: ошибка обновления UI: {e}")        
         
@@ -280,22 +250,7 @@ class OrderDataProcessor:
         self.parent.after(100, lambda: self.detail_num_search.set(detail_num_suffix))
         
         # Запускаем поиск продукта по detail_num
-        self.parent.after(150, self.get_product_name)                  
-            
-    def show_multitype_preview(self):
-        """Открывает предпросмотр для листа 'Много видов'"""
-        # Определяем текущий цех
-        workshop = "1"
-        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
-            workshop = self.coordinator.get_workshop()
-        
-        # Устанавливаем контекст многовидового режима
-        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
-            workshop, enable_pallet=False, multitype_mode=True
-        )
-        
-        # Открываем окно предпросмотра
-        self.excel_preview_module.show_preview_window()
+        self.parent.after(150, self.get_product_name)                            
         
     def open_archive_search_window(self):
         """Открывает окно поиска архивных поддонов"""
@@ -303,138 +258,11 @@ class OrderDataProcessor:
             from core.archive.archive_search_window import ArchiveSearchWindow
             ArchiveSearchWindow(self.parent, self)
         except Exception as e:
-            self.multitype_status_label.config(text=f"Не удалось открыть окно поиска: {str(e)}", foreground="red")
+            self.data_manager_status_label.config(text=f"Не удалось открыть окно поиска: {str(e)}", foreground="red")
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем превью для получения настроек экспорта"""
         self.preview_module = preview_module
-        
-    def clear_multitype_sheet(self):
-        """Очищает лист 'Много видов' в Excel"""
-        try:
-            # Используем excel_file_path
-            if not self.excel_file_path:
-                self.load_excel_folder_path()
-                
-            if not self.excel_file_path:
-                self.multitype_status_label.config(
-                    text="Папка для Excel не выбрана", 
-                    foreground="red"
-                )
-                return
-
-            if not os.path.exists(self.excel_file_path):
-                self.multitype_status_label.config(
-                    text="Файл Excel не существует", 
-                    foreground="red"
-                )
-                return
-
-            # Создаем экспортер и выполняем очистку
-            exporter = WeightOrdersExporter.create_exporter(
-                excel_file_path=self.excel_file_path,
-                roll_module=self.roll_module,
-                preview_module=self.preview_module,
-                coordinator=self.coordinator
-            )
-            
-            success = exporter.clear_all_rolls(multitype_mode=True)
-            
-            if success:
-                self.multitype_status_label.config(
-                    text="Лист 'Много видов' очищен", 
-                    foreground="green"
-                )
-                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
-            else:
-                self.multitype_status_label.config(
-                    text="Ошибка при очистке листа", 
-                    foreground="red"
-                )
-            
-        except Exception as e:
-            self.multitype_status_label.config(
-                text=f"Ошибка очистки: {str(e)}", 
-                foreground="red"
-            )
-        
-    def export_current_type_to_excel(self):
-        """Экспортирует текущий вид продукции в лист много видов"""
-        try:
-            self.multitype_status_label.config(text="", foreground="black")
-
-            # Получаем название продукции - сначала из выбранного XML, если нет - из поля ролика
-            product_name = ""
-            if self.selected_name.get():
-                product_name = self.selected_name.get()
-            elif self.roll_module:
-                # Берем название из поля изделия ролика
-                product_name = self.roll_module.product_text.get("1.0", "end-1c").strip()
-            
-            if not product_name:
-                self.multitype_status_label.config(
-                    text="Сначала выберите или введите название продукции", 
-                    foreground="orange"
-                )
-                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
-                return              
-
-            # Используем excel_file_path
-            if not self.excel_file_path:
-                self.load_excel_folder_path()
-                
-            if not self.excel_file_path:
-                self.multitype_status_label.config(
-                    text="Папка для Excel не выбрана", 
-                    foreground="red"
-                )
-                return
-
-            if not os.path.exists(self.excel_file_path):
-                self.multitype_status_label.config(
-                    text="Файл Excel не существует", 
-                    foreground="red"
-                )
-                return
-
-            # Создаем экспортер и выполняем экспорт в много-видовой лист
-            exporter = WeightOrdersExporter.create_exporter(
-                excel_file_path=self.excel_file_path,
-                roll_module=self.roll_module,
-                preview_module=self.preview_module,
-                coordinator=self.coordinator
-            )
-            
-            result = exporter.export_data(multitype_mode=True)
-            
-            if result['success']:
-                self.multitype_status_label.config(
-                    text="✅ Вид отправлен в лист 'Много видов'", 
-                    foreground="green"
-                )
-                self.parent.after(5000, lambda: self.multitype_status_label.config(text=""))
-            else:
-                # Обработка ошибок из экспортера
-                error_msg = result.get('error', '')
-                self._handle_export_error(error_msg)
-                    
-        except Exception as e:
-            # Обработка исключений при экспорте
-            self._handle_export_error(str(e))
-            
-    def _handle_export_error(self, error_msg):
-        """Обрабатывает ошибки экспорта"""
-        # Проверяем разные варианты ошибок открытого файла
-        if any(word in error_msg.lower() for word in ['permission', 'доступ', 'открыт', 'open', 'denied']):
-            self.multitype_status_label.config(
-                text="Внимание, закройте файл Excel перед экспортом!", 
-                foreground="red"
-            )
-        else:
-            self.multitype_status_label.config(
-                text=f"❌ Ошибка: {error_msg}", 
-                foreground="red"
-            )
         
     def reset_status_messages(self):
         """Сбрасывает статусные сообщения к изначальному состоянию"""
@@ -445,7 +273,7 @@ class OrderDataProcessor:
             self.parse_status.config(text="Папка не выбрана", foreground="red")
         
         # Очищаем статус много видов вместо постоянного предупреждения
-        self.multitype_status_label.config(text="", foreground="black")
+        self.data_manager_status_label.config(text="", foreground="black")
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""

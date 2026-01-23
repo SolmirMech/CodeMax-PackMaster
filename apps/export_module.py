@@ -56,12 +56,15 @@ class ExportModule:
         # Секция экспорта поддона
         self.create_pallet_section(control_frame)
         
+        # ===== Экспорт в Лист Много видов =====
+        self.create_multitype_section(control_frame)        
+        
         # Статус экспорта
         self.export_status_label = ttk.Label(
             control_frame,
             text="",
             foreground="red",
-            wraplength=250,
+            wraplength=330,
             font=("Arial", 14)
         )
         self.export_status_label.pack(fill=tk.X, pady=10)      
@@ -160,6 +163,162 @@ class ExportModule:
             command=self.show_pallet_preview,
             style="Accent.TButton"
         ).grid(row=3, column=0, pady=(5, 0), sticky="w", columnspan=2)
+        
+    def create_multitype_section(self, parent):
+        """Создает секцию экспорта в Лист Много видов"""
+        multitype_frame = ttk.LabelFrame(parent, text="Упак.лист Много видов", padding=10)
+        multitype_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Конфигурация колонок
+        multitype_frame.columnconfigure(0, weight=1)
+        multitype_frame.columnconfigure(1, weight=1)
+        
+        # Кнопки управления Excel для много видов
+        ttk.Button(multitype_frame, text="🎯 В Excel", 
+                  command=self.export_to_multitype_sheet
+        ).grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
+        
+        multitype_menu = ttk.Menubutton(multitype_frame, text="🧹", width=3)
+        multitype_menu.grid(row=0, column=1, padx=(5, 0), pady=5, sticky="w")
+        
+        multitype_menu.menu = tk.Menu(multitype_menu, tearoff=0)
+        multitype_menu["menu"] = multitype_menu.menu
+        multitype_menu.menu.add_command(
+            label="Очистить Лист 'Много видов'", 
+            command=self.clear_multitype_sheet
+        )
+        
+        # Кнопка предпросмотра листа 'Много видов'
+        ttk.Button(
+            multitype_frame,
+            text="👀 Просмотр листа",
+            command=self.show_multitype_preview,
+            width=18,
+            style="Accent.TButton"
+        ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
+
+    def show_multitype_preview(self):
+        """Открывает предпросмотр для листа 'Много видов'"""
+        if not hasattr(self, 'excel_preview_module'):
+            from apps.preview.excel_preview_module import ExcelPreviewModule
+            self.excel_preview_module = ExcelPreviewModule(
+                self.parent, 
+                self.coordinator,
+                config_manager=self.config_manager
+            )
+        
+        # Определяем текущий цех
+        workshop = "1"
+        if self.coordinator and hasattr(self.coordinator, 'get_workshop'):
+            workshop = self.coordinator.get_workshop()
+        
+        # Устанавливаем контекст многовидового режима
+        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+            workshop, enable_pallet=False, multitype_mode=True
+        )
+        
+        # Обновляем заголовок окна если оно уже открыто
+        if (hasattr(self.excel_preview_module, 'preview_window') and 
+            self.excel_preview_module.preview_window is not None and 
+            self.excel_preview_module.preview_window.winfo_exists()):
+            
+            self.excel_preview_module.preview_window.title(
+                f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
+            )
+            self.excel_preview_module.update_preview()
+            self.excel_preview_module.preview_window.lift()
+            self.excel_preview_module.preview_window.focus_force()
+        else:
+            # Открываем новое окно
+            self.excel_preview_module.show_preview_window()
+
+    def export_to_multitype_sheet(self):
+        """Экспортирует текущий вид продукции в лист много видов"""
+        try:
+            # Получаем название продукции из roll_module
+            if not self.connected_roll_module:
+                self.set_status("Модуль ролика не подключен", "red")
+                return
+            
+            product_name = self.connected_roll_module.product_text.get("1.0", "end-1c").strip()
+            
+            if not product_name:
+                self.set_status("Сначала введите название продукции", "orange")
+                return
+            
+            # Используем excel_file_path
+            if not self.excel_file_path:
+                self.load_excel_folder_path()
+                
+            if not self.excel_file_path:
+                self.set_status("Папка для Excel не выбрана", "red")
+                return
+
+            if not os.path.exists(self.excel_file_path):
+                self.set_status("Файл Excel не существует", "red")
+                return
+
+            # Создаем экспортер и выполняем экспорт в много-видовой лист
+            exporter = WeightOrdersExporter.create_exporter(
+                excel_file_path=self.excel_file_path,
+                roll_module=self.connected_roll_module,
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
+            )
+            
+            result = exporter.export_data(multitype_mode=True)
+            
+            if result['success']:
+                self.set_status("✅ Вид отправлен в лист 'Много видов'", "green")
+            else:
+                # Обработка ошибок из экспортера
+                error_msg = result.get('error', '')
+                self._handle_multitype_export_error(error_msg)
+                    
+        except Exception as e:
+            # Обработка исключений при экспорте
+            self._handle_multitype_export_error(str(e))
+    
+    def _handle_multitype_export_error(self, error_msg):
+        """Обрабатывает ошибки экспорта в Лист Много видов"""
+        # Проверяем разные варианты ошибок открытого файла
+        if any(word in error_msg.lower() for word in ['permission', 'доступ', 'открыт', 'open', 'denied']):
+            self.set_status("Внимание, закройте файл Excel перед экспортом!", "red")
+        else:
+            self.set_status(f"❌ Ошибка: {error_msg}", "red")
+    
+    def clear_multitype_sheet(self):
+        """Очищает лист 'Много видов' в Excel"""
+        try:
+            # Используем excel_file_path
+            if not self.excel_file_path:
+                self.load_excel_folder_path()
+                
+            if not self.excel_file_path:
+                self.set_status("Папка для Excel не выбрана", "red")
+                return
+
+            if not os.path.exists(self.excel_file_path):
+                self.set_status("Файл Excel не существует", "red")
+                return
+
+            # Создаем экспортер и выполняем очистку
+            exporter = WeightOrdersExporter.create_exporter(
+                excel_file_path=self.excel_file_path,
+                roll_module=self.connected_roll_module,
+                preview_module=self.preview_module,
+                coordinator=self.coordinator
+            )
+            
+            success = exporter.clear_all_rolls(multitype_mode=True)
+            
+            if success:
+                self.set_status("Лист 'Много видов' очищен", "green")
+            else:
+                self.set_status("Ошибка при очистке листа", "red")
+            
+        except Exception as e:
+            self.set_status(f"Ошибка очистки: {str(e)}", "red")        
         
     def show_box_preview(self):
         """Открывает предпросмотр для коробки"""
