@@ -9,7 +9,6 @@ from typing import Dict, Any, Optional
 from .data_provider import ExportDataProvider
 from .cell_mappers import CellMappingRegistry, SheetMapping
 from .exporter_core import SmartExporter
-from core.config_manager import ConfigManager
 
 
 class LegacyExporterAdapter:
@@ -17,12 +16,12 @@ class LegacyExporterAdapter:
     Адаптер, имитирующий старый WeightOrdersExporter.
     """
     
-    def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None):
+    def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None, config_manager=None):
         self.original_excel_path = excel_file_path
         self.roll_module = roll_module
         self.preview_module = preview_module
         self.coordinator = coordinator
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self.has_weight = False
         if coordinator and hasattr(coordinator, 'subscribe'):
             # Подписываемся на уведомления координатора
@@ -41,12 +40,12 @@ class LegacyExporterAdapter:
         self.ws = None
     
     @staticmethod
-    def create_exporter(excel_file_path, roll_module, preview_module, coordinator=None):
+    def create_exporter(excel_file_path, roll_module, preview_module, coordinator=None, config_manager=None):
         """
         Фабричный метод - полная совместимость со старым конструктором.
         Просто создает экземпляр LegacyExporterAdapter.
         """
-        return LegacyExporterAdapter(excel_file_path, roll_module, preview_module, coordinator)
+        return LegacyExporterAdapter(excel_file_path, roll_module, preview_module, coordinator, config_manager)
     
     def export_data(self, enable_pallet=False, multitype_mode=False):
         """
@@ -56,7 +55,7 @@ class LegacyExporterAdapter:
         self.on_settings_changed()
         workshop = getattr(self, 'workshop', '1')
         
-        # ОПРЕДЕЛЯЕМ ТИП ЛИСТА ДЛЯ ЦЕХА 2
+        # Определяем тип листа для цеха 2
         if workshop == "2" and enable_pallet:
             # Для цеха 2 с поддонами всегда используем "pallet_list"
             sheet_type = "pallet_list"
@@ -119,7 +118,7 @@ class LegacyExporterAdapter:
             self.on_settings_changed()
             workshop = getattr(self, 'workshop', '1')
             
-            # ОПРЕДЕЛЯЕМ ТИП ЛИСТА ДЛЯ ЦЕХА 2
+            # Определяем тип листа для цеха 2
             if workshop == "2" and enable_pallet:
                 # Для цеха 2 с поддонами всегда используем "pallet_list"
                 sheet_type = "pallet_list"
@@ -173,9 +172,7 @@ class LegacyExporterAdapter:
             
         except Exception as e:
             print(f"Ошибка в новом очистителе: {e}")
-            return self._legacy_fallback_clear(enable_pallet, multitype_mode)
-    
-    # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================          
+            return self._legacy_fallback_clear(enable_pallet, multitype_mode)         
     
     def on_settings_changed(self):
         """Один метод для обновления всех настроек из координатора"""

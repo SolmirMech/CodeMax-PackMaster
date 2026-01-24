@@ -407,7 +407,7 @@ class OrderDataProcessor:
         """Открывает окно поиска архивных поддонов"""
         try:
             from core.archive.archive_search_window import ArchiveSearchWindow
-            ArchiveSearchWindow(self.parent, self)
+            ArchiveSearchWindow(self.parent, self, config_manager=self.config_manager)
         except Exception as e:
             self.data_manager_status_label.config(text=f"Не удалось открыть окно поиска: {str(e)}", foreground="red")
         

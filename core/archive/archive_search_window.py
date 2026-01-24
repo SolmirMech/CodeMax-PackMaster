@@ -3,17 +3,16 @@ import tkinter as tk
 from tkinter import ttk, StringVar
 import os
 from core.archive.archive_manager import ArchiveManager
-from core.config_manager import ConfigManager
 
 class ArchiveSearchWindow:
     """Окно поиска и восстановления архивных поддонов"""
     
-    def __init__(self, parent, order_processor):
+    def __init__(self, parent, order_processor, config_manager=None):
         self.parent = parent
         self.order_processor = order_processor
         
-        # Берем config_manager из order_processor
-        config = order_processor.config_manager
+        self.config_manager = config_manager
+        config = self.config_manager
         self.archive_manager = ArchiveManager(config)
         
         self.selected_pallet = None
@@ -385,7 +384,6 @@ class ArchiveSearchWindow:
                     )
                     
                     if response:
-                        config = ConfigManager()
                         assets_file = config.get_asset_path(filename)
                         
                         if os.path.exists(assets_file):
