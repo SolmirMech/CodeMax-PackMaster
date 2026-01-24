@@ -29,9 +29,12 @@ class RollPreview:
         
         self.create_preview_ui()
         self.load_font_settings()
-        self.check_templates()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
-            self.coordinator.subscribe(self._on_settings_changed)        
+            self.coordinator.subscribe(self._on_settings_changed)
+            
+    def delayed_initialization(self):
+        """Вызывается после установки всех связей"""
+        self.check_templates()
         
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""
@@ -279,14 +282,7 @@ class RollPreview:
             }
             
             # Обновляем предпросмотр
-            self.update_from_roll_data(preview_data)
-            
-            # Обновляем статус Excel в export_module если он есть
-            if hasattr(self, 'export_module') and self.export_module:
-                self.export_module.export_status_label.config(
-                    text="",
-                    foreground="green"
-                )
+            self.update_from_roll_data(preview_data)         
             
         except Exception as e:
             print(f"Ошибка обновления предпросмотра: {e}")
@@ -413,8 +409,15 @@ class RollPreview:
                     try:
                         packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
                         technical_specs = packaging_data.get("technical_specifications", [])
+                        
+                        # Нормализуем имя для сравнения
+                        normalized_manufacturer_name = self._normalize_string(manufacturer_name)
+                        
                         for spec in technical_specs:
-                            if spec["manufacturer"]["name"] == manufacturer_name:
+                            spec_name = spec["manufacturer"]["name"]
+                            normalized_spec_name = self._normalize_string(spec_name)
+                            
+                            if normalized_spec_name == normalized_manufacturer_name:
                                 address = spec["manufacturer"].get("address", "")
                                 break
                     except Exception as e:
@@ -422,7 +425,7 @@ class RollPreview:
                 
                 return {
                     'name': manufacturer_name,
-                    'address': address,  # Теперь с адресом!
+                    'address': address,
                     'tu_number': tu_from_xml  # ТУ из XML
                 }
             
@@ -447,52 +450,59 @@ class RollPreview:
                 'address': 'Адрес производителя',
                 'tu_number': 'ТУ: Номер технических условий'
             }
-    
+
+    def _normalize_string(self, text: str) -> str:
+        """Нормализует строку для сравнения"""
+        if not text:
+            return ""
+        
+        # Удаляем "ООО"/"OOO" и кавычки, приводим к нижнему регистру
+        normalized = text.lower()
+        normalized = normalized.replace('ooo', '').replace('ооо', '')
+        normalized = normalized.replace('"', '').replace("'", "")
+        normalized = normalized.replace(' ', '').strip()
+        
+        return normalized
+            
     def _get_regular_manufacturer_data(self, order_number: str) -> dict:
         """Получает данные изготовителя из выпадающих списков или автоматически"""
-        try:
-            # Если есть подключенный модуль ролика
-            if (self.connected_roll_module and 
-                self.connected_roll_module.manufacturer_var.get() and 
-                self.connected_roll_module.product_type_var.get()):
+        try:              
+            manufacturer = self.connected_roll_module.manufacturer_var.get()
+            product_type = self.connected_roll_module.product_type_var.get()
+            
+            # Ищем точное соответствие в packaging_tu.json
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            # Нормализуем для сравнения
+            normalized_manufacturer = self._normalize_string(manufacturer) if manufacturer else ""
+            normalized_product_type = self._normalize_string(product_type) if product_type else ""
+            
+            for spec in technical_specs:
+                spec_manufacturer = self._normalize_string(spec["manufacturer"]["name"])
+                spec_product = self._normalize_string(spec["product"]["name"])
                 
-                manufacturer = self.connected_roll_module.manufacturer_var.get()
-                product_type = self.connected_roll_module.product_type_var.get()
-                
-                # Ищем точное соответствие в packaging_tu.json
-                packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-                technical_specs = packaging_data.get("technical_specifications", [])
-                
-                for spec in technical_specs:
-                    if (spec["manufacturer"]["name"] == manufacturer and 
-                        spec["product"]["name"] == product_type):
+                if normalized_manufacturer and normalized_product_type:
+                    # Ищем точное совпадение производителя и продукта
+                    if spec_manufacturer == normalized_manufacturer and spec_product == normalized_product_type:
                         return {
                             'name': spec["manufacturer"]["name"],
                             'address': spec["manufacturer"].get("address", ""),
                             'tu_number': spec["product"]["tu_number"]
                         }
             
-            # Старая логика для автоматического выбора (ie заказы)
-            # Эта логика работает ТОЛЬКО если ручной выбор не сделан
+            # Если ручной выбор не сделан или не найдено точное совпадение - используем первого производителя
             packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             technical_specs = packaging_data.get("technical_specifications", [])
             
-            if order_number.startswith('IE'):
-                for spec in technical_specs:
-                    if spec.get("id") == 2:  # Зюдин для IE
-                        return {
-                            'name': spec["manufacturer"]["name"],
-                            'address': spec["manufacturer"]["address"],
-                            'tu_number': spec["product"]["tu_number"]
-                        }
-            else:
-                for spec in technical_specs:
-                    if spec.get("id") == 3:  # Ремас-Флексо по умолчанию
-                        return {
-                            'name': spec["manufacturer"]["name"],
-                            'address': spec["manufacturer"]["address"], 
-                            'tu_number': spec["product"]["tu_number"]
-                        }
+            if technical_specs:
+                # Берём первую запись из списка (id=1)
+                first_spec = technical_specs[0]
+                return {
+                    'name': first_spec["manufacturer"]["name"],
+                    'address': first_spec["manufacturer"].get("address", ""),
+                    'tu_number': first_spec["product"]["tu_number"]
+                }
                         
         except Exception as e:
             print(f"Ошибка загрузки данных изготовителя: {e}")

@@ -397,9 +397,8 @@ class ExportModule:
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""
-        if hasattr(self, 'export_status_label'):
-            self.export_status_label.config(text=message, foreground=color)
-            self.parent.after(5000, lambda: self.export_status_label.config(text=""))
+        self.export_status_label.config(text=message, foreground=color)
+        self.parent.after(5000, lambda: self.export_status_label.config(text=""))
         
     def set_order_data_module(self, order_data_module):
         self.order_data_module = order_data_module
@@ -515,27 +514,22 @@ class ExportModule:
 
     def export_to_excel(self):
         """Экспортирует данные в Excel"""
-        try:
-            # 1. Проверяем, что модуль ролика подключен
-            if not self.connected_roll_module:
-                self.export_status_label.config(text="Модуль ролика не подключен", foreground="red")
-                return
-                
-            # 2. Проверяем, что все необходимые данные заполнены
+        try:              
+            # Проверяем, что все необходимые данные заполнены
             if not self.connected_roll_module.rolls_count_var.get() or not self.connected_roll_module.order_number.get():
-                self.export_status_label.config(text="Введите количество роликов и номер заказа", foreground="red")
+                self.set_status("Введите количество роликов и номер заказа", "red")
                 return
 
-            # 3. Проверяем путь к Excel файлу
+            # Проверяем путь к Excel файлу
             if not self.excel_file_path:
                 self.load_excel_folder_path()
                 
             if not self.excel_file_path:
-                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                self.set_status("Папка для Excel не выбрана", "red")
                 return
 
             if not os.path.exists(self.excel_file_path):
-                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                self.set_status("Файл Excel не существует", "red")
                 return
 
             # Создаем экспортер с координатором
@@ -556,29 +550,24 @@ class ExportModule:
                     self.set_status("Лист переполнен! Не все ролики поместились", "orange")
             else:
                 error_msg = result.get('error', 'Неизвестная ошибка')
-                self.export_status_label.config(text=f"Ошибка: {error_msg}", foreground="red")
+                self.set_status(f"Ошибка: {error_msg}", "red")
                 
         except Exception as e:
-            self.export_status_label.config(text=f"Ошибка экспорта: {str(e)}", foreground="red")
+            self.set_status(f"Ошибка экспорта: {str(e)}", "red")
 
     def clear_excel_data(self):
         """Очищает данные Excel"""
         try:
-            # 1. Проверяем, что модуль ролика подключен
-            if not self.connected_roll_module:
-                self.export_status_label.config(text="Модуль ролика не подключен", foreground="red")
-                return
-
-            # 2. Проверяем путь к Excel файлу
+            # Проверяем путь к Excel файлу
             if not self.excel_file_path:
                 self.load_excel_folder_path()
                 
             if not self.excel_file_path:
-                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                self.set_status("Папка для Excel не выбрана", "red")
                 return
 
             if not os.path.exists(self.excel_file_path):
-                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                self.set_status("Файл Excel не существует", "red")
                 return
 
             # Создаем экспортер с координатором
@@ -594,10 +583,10 @@ class ExportModule:
             if success:
                 self.set_status("Данные коробки очищены", "green")
             else:
-                self.export_status_label.config(text="Ошибка очистки коробки", foreground="red")
+                self.set_status("Ошибка очистки коробки", "red")
                 
         except Exception as e:
-            self.export_status_label.config(text=f"Ошибка очистки: {str(e)}", foreground="red")
+            self.set_status(f"Ошибка очистки: {str(e)}", "red")
 
     def export_pallet_to_excel(self):
         """Экспортирует данные поддона в Excel"""
@@ -612,11 +601,11 @@ class ExportModule:
                 self.load_excel_folder_path()
                 
             if not self.excel_file_path:
-                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                self.set_status("Папка для Excel не выбрана", "red")
                 return
 
             if not os.path.exists(self.excel_file_path):
-                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                self.set_status("Файл Excel не существует", "red")
                 return
 
             # Создаем экспортер и выполняем экспорт
@@ -640,10 +629,7 @@ class ExportModule:
                 self.set_status(f"Ошибка: {result.get('error')}", "red")  # Другие ошибки
     
         except Exception as e:
-            self.export_status_label.config(
-                text=f"Ошибка экспорта: {str(e)}", 
-                foreground="red"
-            )
+            self.set_status(f"Ошибка экспорта: {str(e)}", "red")
             
     def clear_pallet_excel(self):
         """Очищает данные поддона в Excel"""
@@ -654,11 +640,11 @@ class ExportModule:
                 self.load_excel_folder_path()
                 
             if not self.excel_file_path:
-                self.export_status_label.config(text="Папка для Excel не выбрана", foreground="red")
+                self.set_status("Папка для Excel не выбрана", "red")
                 return
 
             if not os.path.exists(self.excel_file_path):
-                self.export_status_label.config(text="Файл Excel не существует", foreground="red")
+                self.set_status("Файл Excel не существует", "red")
                 return
 
             # Создаем экспортер и выполняем очистку
@@ -674,9 +660,9 @@ class ExportModule:
             if success:
                 self.set_status("Данные поддона очищены", "green")
             else:
-                self.export_status_label.config(text="Ошибка при очистке данных", foreground="red")
+                self.set_status("Ошибка при очистке данных", "red")
             
         except Exception as e:
-            self.export_status_label.config(text=f"Ошибка очистки: {str(e)}", foreground="red")
+            self.set_status(f"Ошибка очистки: {str(e)}", "red")
             
             

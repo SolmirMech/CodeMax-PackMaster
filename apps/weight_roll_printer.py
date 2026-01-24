@@ -816,26 +816,34 @@ class RollLabelPrinter:
             packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             technical_specs = packaging_data.get("technical_specifications", [])
             
+            # Сортируем по ID (id=1 должен быть первым)
+            technical_specs.sort(key=lambda x: x.get("id", 999))
+            
             # Если список не изменился - не обновляем UI
             current_count = len(technical_specs)
             if hasattr(self, 'last_tu_count') and self.last_tu_count == current_count:
                 return
             self.last_tu_count = current_count
             
-            # Собираем уникальных производителей
-            manufacturers = set()
+            # Собираем уникальных производителей (сохраняем порядок по ID)
+            manufacturers = []  # Список для сохранения порядка
             manufacturer_products = {}
+            seen_manufacturers = set()
             
             for spec in technical_specs:
                 manufacturer = spec["manufacturer"]["name"]
                 product = spec["product"]["name"]
-                manufacturers.add(manufacturer)
+                
+                # Добавляем производителя если еще не видели (сохраняем порядок по ID)
+                if manufacturer not in seen_manufacturers:
+                    manufacturers.append(manufacturer)
+                    seen_manufacturers.add(manufacturer)
                 
                 if manufacturer not in manufacturer_products:
                     manufacturer_products[manufacturer] = []
                 manufacturer_products[manufacturer].append(product)
             
-            self.manufacturer_options = sorted(manufacturers)
+            self.manufacturer_options = manufacturers  # Уже в правильном порядке
             self.manufacturer_products_map = manufacturer_products
             
             # Сохраняем текущий выбор
@@ -860,15 +868,23 @@ class RollLabelPrinter:
                     self.product_combo['values'] = []
                     self.product_type_var.set("")
             elif self.manufacturer_options:
-                # Устанавливаем Ремас-Флексо по умолчанию если есть
-                default_manufacturer = "ООО \"Ремас-Флексо\""
-                if default_manufacturer in self.manufacturer_options:
-                    self.manufacturer_var.set(default_manufacturer)
-                else:
-                    # Иначе первый в списке
-                    self.manufacturer_var.set(self.manufacturer_options[0])
+                # Устанавливаем ПЕРВОГО производителя из списка по умолчанию (самый маленький ID)
+                first_manufacturer = self.manufacturer_options[0]
+                self.manufacturer_var.set(first_manufacturer)
                 
+                # Обновляем продукты для первого производителя
                 self.update_product_options()
+                
+                # Устанавливаем первый продукт производителя по умолчанию
+                if first_manufacturer in manufacturer_products:
+                    products = manufacturer_products[first_manufacturer]
+                    if products:
+                        self.product_type_var.set(products[0])
+                    
+            else:
+                # Если список пуст
+                self.product_combo['values'] = []
+                self.product_type_var.set("")
                 
         except Exception as e:
             print(f"Ошибка загрузки производителей: {e}")
@@ -892,29 +908,19 @@ class RollLabelPrinter:
         self.preview_module._update_from_connected_roll_module()
 
     def on_order_number_changed(self, *args):
-        """Автоматически выбирает производителя для IE заказов"""
+        """Обрабатывает изменение номера заказа"""
         if self.manual_manufacturer_selection:
-            return  # Не переопределяем ручной выбор
-            
-        order_prefix = self.order_prefix.get()
-        if order_prefix == 'IE':
-            # Автоматически выбираем Зюдина
-            self.manufacturer_var.set("ИП Зюдин В.Г.")
-            self.update_product_options()
-            self.product_type_var.set("Обычная с\к этикетка")
-            
-            # Визуальное выделение автоматического выбора
-            self.manufacturer_combo.configure(style="AutoSelect.TCombobox")
-            self.product_combo.configure(style="AutoSelect.TCombobox")
-        else:
-            # Возвращаем ремас-флексо при любом другом префиксе
-            self.manufacturer_var.set("ООО \"Ремас-Флексо\"")
-            self.update_product_options()
-            self.product_type_var.set("Обычная с\к этикетка")
-            
-            # Сбрасываем стиль для не-IE заказов
-            self.manufacturer_combo.configure(style="TCombobox")
-            self.product_combo.configure(style="TCombobox")
+            return  # Не переопределяем ручной выбор           
+        
+        # Только сбрасываем стили для всех префиксов
+        self.manufacturer_combo.configure(style="TCombobox")
+        self.product_combo.configure(style="TCombobox")
+        
+        # Если производитель НЕ выбран и это НЕ ручной выбор - устанавливаем первого производителя
+        if not self.manufacturer_var.get() and not self.manual_manufacturer_selection:
+            if hasattr(self, 'manufacturer_options') and self.manufacturer_options:
+                self.manufacturer_var.set(self.manufacturer_options[0])
+                self.update_product_options()
 
     def on_manufacturer_selected(self, event=None):
         """Обрабатывает выбор производителя"""

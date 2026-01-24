@@ -206,6 +206,9 @@ class WeightOrdersApp:
         # Связи для статусов (разделяем по назначению)
         self.preview_module.export_module = self.export_module  # только для экспорта
         self.order_data_module.export_module = self.export_module  # только для экспорта
+        
+        # Отложенная инициализация preview_module
+        self.root.after(100, self.preview_module.delayed_initialization)
 
     def center_window(self):
         self.root.update_idletasks()

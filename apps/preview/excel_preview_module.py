@@ -530,7 +530,7 @@ class ExcelPreviewModule:
                     foreground="green"
                 )
                 # Возвращаем исходный статус через 2 секунды
-                self.preview_window.after(2000, self._restore_status)
+                self.preview_window.after(3000, self._restore_status)
             else:
                 self.status_label.config(
                     text="✗ Ошибка сохранения", 
