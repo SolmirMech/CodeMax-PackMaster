@@ -255,6 +255,9 @@ class RollPreview:
             # Получаем текст изделия из текстового поля
             product_text = roll_module.product_text.get("1.0", "end-1c").strip()
             
+            # Получаем данные производителя из roll_module
+            manufacturer_data = roll_module.get_manufacturer_full_data()
+            
             # Собираем данные с правильными ключами
             preview_data = {
                 "customer": roll_module.customer_var.get(),
@@ -279,6 +282,11 @@ class RollPreview:
                 "date_emission": roll_module.date_emission_var.get(),
                 "batch_num": roll_module.batch_num_var.get(),
                 "roll_num": roll_module.roll_num_var.get(),
+                # Добавляем данные производителя
+                "manufacturer_name": manufacturer_data['name'],
+                "manufacturer_address": manufacturer_data['address'],
+                "tu_number": manufacturer_data['tu_number'],
+                "product_type": manufacturer_data['product'],
             }
             
             # Обновляем предпросмотр
@@ -380,160 +388,6 @@ class RollPreview:
             fill="gray",
             justify=tk.CENTER
         )
-        
-    def _get_manufacturer_data(self, order_number: str) -> dict:
-        """Получает данные изготовителя: сначала из XML, потом из настроек"""
-        try:
-            # 1. Пробуем получить ТУ из XML (высший приоритет)
-            if (self.connected_roll_module and 
-                hasattr(self.connected_roll_module, 'xml_tu_number') and 
-                self.connected_roll_module.xml_tu_number):
-                
-                tu_from_xml = self.connected_roll_module.xml_tu_number
-                
-                # Если выбран "Без изготовителя"
-                if (self.connected_roll_module and 
-                    self.connected_roll_module.show_manufacturer_var.get()):
-                    return {
-                        'name': '',
-                        'address': '',
-                        'tu_number': tu_from_xml  # ТУ из XML
-                    }
-                
-                # Иначе получаем производителя из комбобокса
-                manufacturer_name = self.connected_roll_module.manufacturer_var.get() if self.connected_roll_module else ''
-                address = ''
-                
-                # Ищем адрес в packaging_tu.json
-                if manufacturer_name:
-                    try:
-                        packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-                        technical_specs = packaging_data.get("technical_specifications", [])
-                        
-                        # Нормализуем имя для сравнения
-                        normalized_manufacturer_name = self._normalize_string(manufacturer_name)
-                        
-                        for spec in technical_specs:
-                            spec_name = spec["manufacturer"]["name"]
-                            normalized_spec_name = self._normalize_string(spec_name)
-                            
-                            if normalized_spec_name == normalized_manufacturer_name:
-                                address = spec["manufacturer"].get("address", "")
-                                break
-                    except Exception as e:
-                        print(f"Ошибка поиска адреса для {manufacturer_name}: {e}")
-                
-                return {
-                    'name': manufacturer_name,
-                    'address': address,
-                    'tu_number': tu_from_xml  # ТУ из XML
-                }
-            
-            # 2. Если нет XML ТУ - старая логика
-            if (self.connected_roll_module and 
-                self.connected_roll_module.show_manufacturer_var.get()):
-                
-                regular_data = self._get_regular_manufacturer_data(order_number)
-                return {
-                    'name': '',
-                    'address': '',
-                    'tu_number': regular_data['tu_number']
-                }
-            
-            # Иначе обычная логика
-            return self._get_regular_manufacturer_data(order_number)
-                        
-        except Exception as e:
-            print(f"Ошибка загрузки данных изготовителя: {e}")
-            return {
-                'name': 'Производитель',
-                'address': 'Адрес производителя',
-                'tu_number': 'ТУ: Номер технических условий'
-            }
-
-    def _normalize_string(self, text: str) -> str:
-        """Нормализует строку для сравнения"""
-        if not text:
-            return ""
-        
-        # Удаляем "ООО"/"OOO" и кавычки, приводим к нижнему регистру
-        normalized = text.lower()
-        normalized = normalized.replace('ooo', '').replace('ооо', '')
-        normalized = normalized.replace('"', '').replace("'", "")
-        normalized = normalized.replace(' ', '').strip()
-        
-        return normalized
-            
-    def _get_regular_manufacturer_data(self, order_number: str) -> dict:
-        """Получает данные изготовителя из выпадающих списков или автоматически"""
-        try:              
-            manufacturer = self.connected_roll_module.manufacturer_var.get()
-            product_type = self.connected_roll_module.product_type_var.get()
-            
-            # Ищем точное соответствие в packaging_tu.json
-            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-            technical_specs = packaging_data.get("technical_specifications", [])
-            
-            # Нормализуем для сравнения
-            normalized_manufacturer = self._normalize_string(manufacturer) if manufacturer else ""
-            normalized_product_type = self._normalize_string(product_type) if product_type else ""
-            
-            for spec in technical_specs:
-                spec_manufacturer = self._normalize_string(spec["manufacturer"]["name"])
-                spec_product = self._normalize_string(spec["product"]["name"])
-                
-                if normalized_manufacturer and normalized_product_type:
-                    # Ищем точное совпадение производителя и продукта
-                    if spec_manufacturer == normalized_manufacturer and spec_product == normalized_product_type:
-                        return {
-                            'name': spec["manufacturer"]["name"],
-                            'address': spec["manufacturer"].get("address", ""),
-                            'tu_number': spec["product"]["tu_number"]
-                        }
-            
-            # Если ручной выбор не сделан или не найдено точное совпадение - используем первого производителя
-            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-            technical_specs = packaging_data.get("technical_specifications", [])
-            
-            if technical_specs:
-                # Берём первую запись из списка (id=1)
-                first_spec = technical_specs[0]
-                return {
-                    'name': first_spec["manufacturer"]["name"],
-                    'address': first_spec["manufacturer"].get("address", ""),
-                    'tu_number': first_spec["product"]["tu_number"]
-                }
-                        
-        except Exception as e:
-            print(f"Ошибка загрузки данных изготовителя: {e}")
-        
-        # Fallback
-        return {
-            'name': 'Производитель',
-            'address': 'Адрес производителя',
-            'tu_number': 'ТУ: Номер технических условий'
-        }
-
-    def _copy_packaging_tu_from_assets(self):
-        """Копирует файл packaging_tu.json из assets в data_dir"""
-        try:
-            # Получаем путь к файлу в assets
-            asset_path = self.config_manager.get_asset_path("packaging_tu.json")
-            
-            # Получаем путь назначения в data_dir
-            dest_path = self.config_manager.get_settings_path("packaging_tu.json")
-            
-            # Проверяем существует ли файл в assets
-            if os.path.exists(asset_path):
-                # Копируем файл
-                import shutil
-                shutil.copy2(asset_path, dest_path)
-                print(f"Файл packaging_tu.json скопирован из {asset_path} в {dest_path}")
-            else:
-                print(f"Файл packaging_tu.json не найден в assets по пути: {asset_path}")
-                
-        except Exception as e:
-            print(f"Ошибка копирования packaging_tu.json: {e}")
     
     def _prepare_roll_data_map(self) -> Dict[str, str]:
         """Подготавливает данные для ролика"""
@@ -544,9 +398,6 @@ class RollPreview:
         order_number = data.get('order_number', '') 
         order_suffix = data.get('order_suffix', '')
         order_full = f"{order_prefix}{order_number}{order_suffix}"
-        
-        # Получаем данные изготовителя
-        manufacturer_data = self._get_manufacturer_data(order_full)
         
         show_manufacturer = not data.get('show_manufacturer', False)
         
@@ -570,10 +421,10 @@ class RollPreview:
             "$sx": data.get('winding_scheme', ''),
             "dia": data.get('sleeve_diameter', ''),
             
-            # Данные из метода manufacturer_data
-            "$tu_number": manufacturer_data['tu_number'],
-            "$printhouse": manufacturer_data['name'] if show_manufacturer else "",
-            "$printaddress": manufacturer_data['address'] if show_manufacturer else "",
+            # Данные производителя - берем из current_data
+            "$tu_number": data.get('tu_number', ''),
+            "$printhouse": data.get('manufacturer_name', '') if show_manufacturer else "",
+            "$printaddress": data.get('manufacturer_address', '') if show_manufacturer else "",
             
             # Специфичные для 2 цеха параметры
             "$cutter": data.get('cutter', ''),

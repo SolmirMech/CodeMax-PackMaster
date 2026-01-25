@@ -379,12 +379,15 @@ class XMLDataManager:
                     self._notify_status(f"База загружена ({count} записей)")
                     return
                 
-                self._notify_status("Идёт создание базы...")
+                self._notify_status("Проверка доступности источника XML...")
                 
-                # Проверяем доступность папки
-                if not self.xml_folder.exists():
+                # Проверяем доступность папки с таймаутом
+                if not self._check_xml_source_available():
+                    self._notify_status("⚠️ Источник XML недоступен")
                     logging.error(f"Папка XML недоступна: {self.xml_folder}")
                     return
+                
+                self._notify_status("Сканирование источника XML...")
                 
                 # Считаем файлы для прогресса
                 xml_files = list(self.xml_folder.glob("*.xml"))
@@ -393,7 +396,10 @@ class XMLDataManager:
                 
                 if total_files == 0:
                     logging.warning("В папке XML не найдено файлов")
+                    self._notify_status("⚠️ В источнике нет XML файлов")
                     return
+                
+                self._notify_status(f"Обработка {total_files} файлов...")
                 
                 # Очищаем БД перед полным сканированием
                 with self._lock:
@@ -407,8 +413,9 @@ class XMLDataManager:
                 
                 processed = 0
                 errors = 0
+                batch_size = 50  # Отправляем статус каждые N файлов
                 
-                for file_path in xml_files:
+                for i, file_path in enumerate(xml_files):
                     try:
                         # Парсим файл
                         parsed_data = self._parse_xml_file(file_path)
@@ -425,21 +432,62 @@ class XMLDataManager:
                             if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
                                 processed += 1
                             conn.commit()
-                            conn.close()                    
+                            conn.close()
                         
+                        # Отправляем промежуточный статус
+                        if (i + 1) % batch_size == 0 or (i + 1) == total_files:
+                            self._notify_status(f"Загружено {i + 1}/{total_files} файлов...")
+                    
                     except Exception as e:
                         errors += 1
                         logging.error(f"Ошибка обработки {file_path.name}: {e}")
                 
-                self._notify_status(f"База создана для {processed} файлов XML")
+                if errors > 0:
+                    self._notify_status(f"✅ База создана ({processed} заказов, {errors} ошибок)")
+                else:
+                    self._notify_status(f"✅ База создана ({processed} заказов)")
+                
                 logging.info(f"Первичное сканирование завершено. Успешно: {processed}, Ошибок: {errors}")
                 
             except Exception as e:
                 logging.error(f"Ошибка при первичном сканировании: {e}")
+                self._notify_status(f"❌ Ошибка сканирования: {e}")
         
         # Запускаем в фоновом потоке
         thread = threading.Thread(target=scan_in_background, daemon=True)
         thread.start()
+    
+    def _check_xml_source_available(self) -> bool:
+        """
+        Проверяет доступность источника XML с таймаутом.
+        
+        Returns:
+            True если источник доступен, False если недоступен
+        """
+        import threading
+        
+        def check_folder():
+            try:
+                # Простая проверка существования папки
+                return self.xml_folder.exists()
+            except:
+                return False
+        
+        # Создаём поток с таймаутом
+        result = [None]
+        
+        def run_check():
+            result[0] = check_folder()
+        
+        thread = threading.Thread(target=run_check, daemon=True)
+        thread.start()
+        thread.join(timeout=3)  # Таймаут 3 секунды
+        
+        if thread.is_alive():
+            logging.warning(f"Таймаут проверки источника XML: {self.xml_folder}")
+            return False
+        
+        return result[0] if result[0] is not None else False
     
     def search_combined(self, order_query: str, sheet_query: str = None) -> List[Dict[str, Any]]:
         """
@@ -561,13 +609,15 @@ class XMLDataManager:
         """
         ФОНОВАЯ ПРОВЕРКА ПАПКИ
         Вызывается после поиска, не блокирует UI
-        Проверяет новые/изменённые/удалённые XML
+        Проверяет новые/изменённые XML, НЕ удаляет отсутствующие
         """
         try:
             logging.info("Запущена фоновая проверка папки XML")
             
-            if not self.xml_folder.exists():
+            # Быстрая проверка доступности
+            if not self._check_xml_source_available():
                 logging.warning(f"Папка XML недоступна: {self.xml_folder}")
+                self._notify_status("⚠️ Источник недоступен")
                 return
             
             with self._lock:
@@ -594,7 +644,6 @@ class XMLDataManager:
                 # Определяем действия
                 added = 0
                 updated = 0
-                removed = 0
                 
                 # 1. Проверяем новые и изменённые файлы
                 for file_name, (fs_hash, fs_mtime, file_path) in fs_files.items():
@@ -614,18 +663,20 @@ class XMLDataManager:
                                 updated += 1
                                 logging.info(f"Обновлён изменённый файл: {file_name}")
                 
-                # 2. Удаляем отсутствующие файлы
-                for file_name in set(db_files.keys()) - set(fs_files.keys()):
-                    cursor.execute("DELETE FROM orders WHERE file_name = ?", (file_name,))
-                    cursor.execute("DELETE FROM products WHERE order_file = ?", (file_name,))
-                    cursor.execute("DELETE FROM sheets WHERE order_file = ?", (file_name,))
-                    removed += 1
-                    logging.info(f"Удалён отсутствующий файл: {file_name}")
-                
                 conn.commit()
                 
-                if added > 0 or updated > 0 or removed > 0:
-                    logging.info(f"Фоновая проверка завершена. Добавлено: {added}, Обновлено: {updated}, Удалено: {removed}")
+                # Уведомляем о результатах
+                if added > 0 or updated > 0:
+                    status_msg = ""
+                    if added > 0:
+                        status_msg += f"➕ {added} новых"
+                    if updated > 0:
+                        if status_msg:
+                            status_msg += ", "
+                        status_msg += f"✏️ {updated} изменённых"
+                    
+                    self._notify_status(f"Обновлено: {status_msg}")
+                    logging.info(f"Фоновая проверка: {status_msg}")
                 else:
                     logging.debug("Фоновая проверка: изменений не обнаружено")
                 
@@ -639,7 +690,7 @@ class XMLDataManager:
                 try:
                     self._background_lock.release()
                 except:
-                    pass
+                    pass             
     
     def get_stats(self) -> Dict[str, Any]:
         """

@@ -237,24 +237,30 @@ class ExportDataProvider:
             if hasattr(self.roll_module, 'packer_var'):
                 data['packer'] = self.roll_module.packer_var.get()
             
-            # TU номер из XML (новый источник)
-            tu_number = None
-            if hasattr(self.roll_module, 'xml_tu_number'):
-                tu_number = self.roll_module.xml_tu_number
-                if callable(tu_number):
-                    tu_number = tu_number()
-            
-            if tu_number:
-                # Есть TU номер из XML - вычисляем product_type
-                data['tu_number'] = tu_number
-                data['product_type'] = self._get_product_type_by_tu(tu_number)
+            # ВАЖНО: Используем готовые данные из модуля производителя
+            if hasattr(self.roll_module, 'get_manufacturer_full_data'):
+                manufacturer_data = self.roll_module.get_manufacturer_full_data()
+                
+                if manufacturer_data.get('tu_number') and manufacturer_data['tu_number'].strip() not in ["—", "-", ""]:
+                    # Есть TU номер из модуля производителя
+                    data['tu_number'] = manufacturer_data['tu_number']
+                    data['product_type'] = manufacturer_data.get('product', '')
+                elif hasattr(self.roll_module, 'product_type_var') and self.roll_module.product_type_var.get():
+                    # Нет TU из XML, но есть выбор в комбобоксе
+                    data['product_type'] = self.roll_module.product_type_var.get()
+                    data['tu_number'] = self._get_tu_number()
+                else:
+                    # Ничего нет
+                    data['product_type'] = ""
+                    data['tu_number'] = "ТУ технические условия"
             else:
-                # Нет TU из XML - работаем по старой логике
+                # Fallback на старую логику
                 if hasattr(self.roll_module, 'product_type_var'):
                     data['product_type'] = self.roll_module.product_type_var.get()
-                
-                # TU номер вычисляется по product_type
-                data['tu_number'] = self._get_tu_number()
+                    data['tu_number'] = self._get_tu_number()
+                else:
+                    data['product_type'] = ""
+                    data['tu_number'] = "ТУ технические условия"
                 
         except Exception as e:
             print(f"Ошибка сбора общих данных: {e}")
@@ -262,6 +268,54 @@ class ExportDataProvider:
             pass
             
         return data
+        
+    def _get_tu_number(self) -> str:
+        """Получает TU номер на основе производителя и типа продукта"""
+        try:
+            if not self.roll_module:
+                return "ТУ технические условия"  # Fallback
+                
+            manufacturer = self.roll_module.manufacturer_var.get() if hasattr(self.roll_module, 'manufacturer_var') else ""
+            
+            # Используем уже вычисленный product_type из data, если есть
+            product_type = self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
+            
+            if not manufacturer or not product_type:
+                return "ТУ технические условия"
+            
+            # Ищем в конфигурации
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            for spec in technical_specs:
+                if (spec["manufacturer"]["name"] == manufacturer and 
+                    spec["product"]["name"] == product_type):
+                    return spec["product"]["tu_number"]
+                    
+        except Exception as e:
+            print(f"Ошибка получения ТУ номера: {e}")
+        
+        return "ТУ технические условия"  # Fallback
+        
+    def _get_product_type_by_tu(self, tu_number: str) -> str:
+        """Получает тип продукта по TU номеру из конфигурации"""
+        try:
+            if not tu_number or not self.roll_module:
+                return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
+            
+            # Ищем в конфигурации
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            for spec in technical_specs:
+                if spec["product"]["tu_number"] == tu_number:
+                    return spec["product"]["name"]
+                    
+        except Exception as e:
+            print(f"Ошибка получения типа продукта по ТУ номеру: {e}")
+        
+        # Fallback - возвращаем текущее значение из UI
+        return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
     
     def _get_weight_data(self) -> Dict[str, Any]:
         """Собирает все данные, связанные с весом"""
@@ -773,55 +827,7 @@ class ExportDataProvider:
         except Exception as e:
             print(f"Ошибка сбора данных производителя: {e}")
             
-        return data 
-    
-    def _get_tu_number(self) -> str:
-        """Получает TU номер на основе производителя и типа продукта"""
-        try:
-            if not self.roll_module:
-                return "ТУ технические условия"  # Fallback
-                
-            manufacturer = self.roll_module.manufacturer_var.get() if hasattr(self.roll_module, 'manufacturer_var') else ""
-            
-            # Используем уже вычисленный product_type из data, если есть
-            product_type = self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
-            
-            if not manufacturer or not product_type:
-                return "ТУ технические условия"
-            
-            # Ищем в конфигурации
-            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-            technical_specs = packaging_data.get("technical_specifications", [])
-            
-            for spec in technical_specs:
-                if (spec["manufacturer"]["name"] == manufacturer and 
-                    spec["product"]["name"] == product_type):
-                    return spec["product"]["tu_number"]
-                    
-        except Exception as e:
-            print(f"Ошибка получения ТУ номера: {e}")
-        
-        return "ТУ технические условия"  # Fallback
-        
-    def _get_product_type_by_tu(self, tu_number: str) -> str:
-        """Получает тип продукта по TU номеру из конфигурации"""
-        try:
-            if not tu_number or not self.roll_module:
-                return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
-            
-            # Ищем в конфигурации
-            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
-            technical_specs = packaging_data.get("technical_specifications", [])
-            
-            for spec in technical_specs:
-                if spec["product"]["tu_number"] == tu_number:
-                    return spec["product"]["name"]
-                    
-        except Exception as e:
-            print(f"Ошибка получения типа продукта по ТУ номеру: {e}")
-        
-        # Fallback - возвращаем текущее значение из UI
-        return self.roll_module.product_type_var.get() if hasattr(self.roll_module, 'product_type_var') else ""
+        return data
     
     def _convert_to_number(self, value: Optional[str], force_int: bool = False) -> Optional[Union[int, float]]:
         """

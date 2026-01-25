@@ -251,6 +251,15 @@ class RollLabelPrinter:
         entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
         self.entry_suffix = entry_suffix     
         
+        
+        date_update_label = tk.Label(
+            data_frame,
+            text="🔄",
+            font=("Arial", 18),
+            cursor="hand2"
+        )
+        date_update_label.grid(row=3, column=1, sticky="w", padx=(200, 0), pady=5)
+        date_update_label.bind("<Button-1>", lambda e: self.update_date_field())
         # Дата
         self.date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
         self.date_entry.grid(row=3, column=1, padx=(240, 0), pady=5, sticky="w")        
@@ -348,6 +357,100 @@ class RollLabelPrinter:
         self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.toggle_weight_visibility()
         self.update_elements_visibility()
+        
+    def update_date_field(self):
+        """Обновляет поле даты на текущую дату"""
+        try:
+            # Способ 1: PowerShell (наиболее надёжный)
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", "Get-Date -Format 'dd.MM.yyyy'"],
+                    capture_output=True,
+                    text=True,
+                    shell=True,
+                    timeout=2,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                if result.returncode == 0:
+                    current_date = result.stdout.strip()
+                    if current_date and len(current_date) == 10:
+                        print(f"Дата через PowerShell: {current_date}")
+                        self.date_var.set(current_date)
+                        return
+            except Exception as e:
+                print(f"PowerShell не сработал: {e}")
+            
+            # Способ 2: WMIC (универсальный для Windows)
+            try:
+                result = subprocess.run(
+                    ['cmd', '/c', 'wmic os get localdatetime /value'],
+                    capture_output=True,
+                    text=True,
+                    shell=True,
+                    timeout=2,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                
+                output = result.stdout
+                if 'LocalDateTime' in output:
+                    for line in output.split('\n'):
+                        if line.startswith('LocalDateTime='):
+                            dt_str = line.split('=')[1].strip()
+                            year = dt_str[0:4]
+                            month = dt_str[4:6]
+                            day = dt_str[6:8]
+                            current_date = f"{day}.{month}.{year}"
+                            
+                            print(f"Дата через WMIC: {current_date}")
+                            self.date_var.set(current_date)
+                            return
+            except Exception as e:
+                print(f"WMIC не сработал: {e}")
+            
+            # Способ 3: CMD %date% (последний шанс)
+            try:
+                result = subprocess.run(
+                    ["cmd", "/c", "echo %date%"],
+                    capture_output=True,
+                    text=True,
+                    shell=True,
+                    timeout=2,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                if result.returncode == 0:
+                    date_str = result.stdout.strip()
+                    # Убираем лишние символы
+                    date_str = date_str.split()[0] if ' ' in date_str else date_str
+                    
+                    # Пытаемся распарсить разные форматы
+                    for sep in ['.', '/', '-']:
+                        if sep in date_str:
+                            parts = date_str.split(sep)
+                            if len(parts) == 3:
+                                day, month, year = parts[0], parts[1], parts[2]
+                                # Если год короткий (YY) → расширяем
+                                if len(year) == 2:
+                                    year = f"20{year}"
+                                current_date = f"{day.zfill(2)}.{month.zfill(2)}.{year}"
+                                
+                                print(f"Дата через CMD: {current_date}")
+                                self.date_var.set(current_date)
+                                return
+            except Exception as e:
+                print(f"CMD не сработал: {e}")
+            
+            # Способ 4: datetime.now() (аварийный вариант)
+            try:
+                current_date = datetime.now().strftime("%d.%m.%Y")
+                print(f"Дата через datetime.now(): {current_date}")
+                self.date_var.set(current_date)
+            except Exception as e:
+                print(f"Все способы не сработали: {e}")
+                self.date_var.set("Ошибка даты")
+                
+        except Exception as e:
+            print(f"Общая ошибка в update_date_field: {e}")
         
     def _scan_gtin_in_product_text(self, event):
         """Сканирует GTIN при вводе в поле product_text"""
@@ -593,19 +696,33 @@ class RollLabelPrinter:
             self.customer_var.set(customer)
             self.check_manufacturer_visibility(customer)
             
-        # Изготовитель:
+        # Изготовитель и ТУ
         executor = parsed_data.get('executor', '')
-        if executor:
-            # Просто ставим значение
-            self.manufacturer_var.set(executor)
-            
-        # Передаем ТУ в preview_module
         tu_number = parsed_data.get('tu_number', '')
-        # Проверяем на некорректные значения
+        
+        # Просто сохраняем данные из XML
+        if executor:
+            # Нормализуем executor для поиска в списке производителей
+            normalized_executor = self._normalize_string(executor)
+            
+            # Ищем совпадение в списке производителей
+            found_manufacturer = None
+            for manufacturer in self.manufacturer_options:
+                if self._normalize_string(manufacturer) == normalized_executor:
+                    found_manufacturer = manufacturer
+                    break
+            
+            # Устанавливаем найденного производителя или оригинальный executor
+            if found_manufacturer:
+                self.manufacturer_var.set(found_manufacturer)
+            else:
+                self.manufacturer_var.set(executor)
+            
+            # Обновляем список продуктов после установки производителя
+            self.update_product_options()
+            
         if tu_number and tu_number.strip() not in ["—", "-", ""]:
             self.xml_tu_number = tu_number.strip()
-        else:
-            self.xml_tu_number = ""  # Очищаем некорректное
         
         # Префикс и суффикс заказа
         order_prefix = parsed_data.get('order_prefix', '')
@@ -652,6 +769,72 @@ class RollLabelPrinter:
         comments = parsed_data.get('comments', {})
         operations = parsed_data.get('operations', {})
         self.order_data_module._display_comments(comments, operations)
+        
+    def get_manufacturer_full_data(self):
+        """Возвращает готовые данные производителя для preview"""
+        result = {
+            'name': '',
+            'address': '',
+            'tu_number': self.xml_tu_number or '',  # Берем ТУ из XML если есть
+            'product': ''
+        }      
+        
+        manufacturer = self.manufacturer_var.get()
+        product = self.product_type_var.get()
+        
+        if not manufacturer:
+            return result
+        
+        try:
+            # Нормализуем имя производителя для сравнения
+            normalized_manufacturer = self._normalize_string(manufacturer)
+            
+            # ВАЖНО: собираем ТОЛЬКО продукты для текущего производителя
+            current_manufacturer_products = []
+            
+            # Сначала собираем все продукты текущего производителя
+            for spec in self.sorted_technical_specs:
+                spec_manufacturer = spec["manufacturer"]["name"]
+                normalized_spec_manufacturer = self._normalize_string(spec_manufacturer)
+                
+                if normalized_spec_manufacturer == normalized_manufacturer:
+                    current_manufacturer_products.append(spec)
+            
+            # Если у производителя есть продукты
+            if current_manufacturer_products:
+                # Берем первую запись для имени и адреса
+                first_spec = current_manufacturer_products[0]
+                result['name'] = first_spec["manufacturer"]["name"]  # Оригинальное имя из настроек
+                result['address'] = first_spec["manufacturer"].get("address", "")
+                
+                # Ищем выбранный продукт среди продуктов ЭТОГО производителя
+                if product:
+                    for spec in current_manufacturer_products:
+                        if spec["product"]["name"] == product:
+                            # Нашли выбранный продукт
+                            result['tu_number'] = spec["product"]["tu_number"]
+                            result['product'] = spec["product"]["name"]
+                            return result
+                
+                # Если продукт не выбран или не найден - берем первый продукт производителя
+                result['tu_number'] = first_spec["product"]["tu_number"]
+                result['product'] = first_spec["product"]["name"]
+                        
+        except Exception as e:
+            print(f"Ошибка получения данных производителя: {e}")
+        
+        return result
+        
+    def _normalize_string(self, text: str) -> str:
+        """Нормализует строку для сравнения (убирает ООО, кавычки, пробелы)"""
+        if not text:
+            return ""
+        # Удаляем "ООО"/"OOO" и кавычки, приводим к нижнему регистру
+        normalized = text.lower()
+        normalized = normalized.replace('ooo', '').replace('ооо', '')
+        normalized = normalized.replace('"', '').replace("'", "")
+        normalized = normalized.replace(' ', '').strip()
+        return normalized        
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""
@@ -813,10 +996,29 @@ class RollLabelPrinter:
     def load_manufacturer_options(self, event=None):
         """Загружает варианты производителей и продуктов из packaging_tu.json"""
         try:
+            # Проверяем существует ли файл в data_dir
+            settings_path = self.config_manager.get_settings_path("packaging_tu.json")
+            if not os.path.exists(settings_path):
+                print(f"Файл packaging_tu.json не найден в {settings_path}")
+                # Пробуем скопировать из assets
+                self._copy_packaging_tu_from_assets()
+            
+            # Загружаем данные
             packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            
+            # Если данные пустые или не содержат нужной структуры
+            if not packaging_data or "technical_specifications" not in packaging_data:
+                print("⚠️ Файл packaging_tu.json поврежден или пуст")
+                # Просто очищаем списки и выходим
+                self.manufacturer_combo['values'] = []
+                self.product_combo['values'] = []
+                self.manufacturer_var.set("")
+                self.product_type_var.set("")
+                return
+            
             technical_specs = packaging_data.get("technical_specifications", [])
             
-            # Сортируем по ID (id=1 должен быть первым)
+            # СОРТИРОВКА ПО ID (id=1 должен быть первым)
             technical_specs.sort(key=lambda x: x.get("id", 999))
             
             # Если список не изменился - не обновляем UI
@@ -843,8 +1045,11 @@ class RollLabelPrinter:
                     manufacturer_products[manufacturer] = []
                 manufacturer_products[manufacturer].append(product)
             
-            self.manufacturer_options = manufacturers  # Уже в правильном порядке
+            self.manufacturer_options = manufacturers  # Уже в правильном порядке (по ID)
             self.manufacturer_products_map = manufacturer_products
+            
+            # Сохраняем технические спецификации с сортировкой
+            self.sorted_technical_specs = technical_specs
             
             # Сохраняем текущий выбор
             current_manufacturer = self.manufacturer_var.get()
@@ -888,6 +1093,33 @@ class RollLabelPrinter:
                 
         except Exception as e:
             print(f"Ошибка загрузки производителей: {e}")
+            # Очищаем списки в случае ошибки
+            if hasattr(self, 'manufacturer_combo'):
+                self.manufacturer_combo['values'] = []
+                self.product_combo['values'] = []
+                self.manufacturer_var.set("")
+                self.product_type_var.set("")
+                
+    def _copy_packaging_tu_from_assets(self):
+        """Копирует файл packaging_tu.json из assets в data_dir"""
+        try:
+            # Получаем путь к файлу в assets
+            asset_path = self.config_manager.get_asset_path("packaging_tu.json")
+            
+            # Получаем путь назначения в data_dir
+            dest_path = self.config_manager.get_settings_path("packaging_tu.json")
+            
+            # Проверяем существует ли файл в assets
+            if os.path.exists(asset_path):
+                # Копируем файл
+                import shutil
+                shutil.copy2(asset_path, dest_path)
+                print(f"Файл packaging_tu.json скопирован из {asset_path} в {dest_path}")
+            else:
+                print(f"Файл packaging_tu.json не найден в assets по пути: {asset_path}")
+                
+        except Exception as e:
+            print(f"Ошибка копирования packaging_tu.json: {e}")      
 
     def update_product_options(self):
         """Обновляет список продуктов для выбранного производителя"""
