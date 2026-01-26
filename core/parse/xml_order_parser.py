@@ -6,7 +6,6 @@
 import xml.etree.ElementTree as ET
 import re
 from typing import Dict, List, Optional, Any
-from core.parse.name_shortener import NameShortener
 
 
 class XMLOrderParser:
@@ -27,8 +26,8 @@ class XMLOrderParser:
     COMMENT_PROPERTY_CODE = '65000'    
     
     def __init__(self, custom_replacements=None):
-        self.shortener = NameShortener(custom_replacements)
-    
+        pass
+        
     def parse(self, xml_content: str) -> Dict[str, Any]:
         """
         Главный метод парсинга XML (только новый формат).
@@ -302,11 +301,11 @@ class XMLOrderParser:
             detail_number = self._get_text(product_elem, 'НомерДетали')
             product_name = self._get_text(product_elem, 'НаименДетали')
             gtin = self._get_text(product_elem, 'GTIN')
-            shortened_name = self.shortener.shorten_name(product_name)
             
-            # Если GTIN в отдельном теге и его нет в сокращенном имени
-            if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in shortened_name:
-                shortened_name = f"{shortened_name} джит{gtin[-4:]}"
+            # Формируем имя продукта (оригинальное название + джит если есть)
+            display_name = product_name
+            if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in display_name:
+                display_name = f"{display_name} джит{gtin[-4:]}"
             
             # Индивидуальная дата эмиссии из продукта
             individual_date = self._get_text(product_elem, 'ДатаЭмиссии')
@@ -324,22 +323,16 @@ class XMLOrderParser:
             if not stream:
                 stream = "1"  # Значение по умолчанию
             
-            # Формируем полное название с джит
-            full_name = product_name
-            if gtin and len(gtin) >= 4:
-                short_gtin = gtin[-4:]
-                full_name = f"{product_name} джит{short_gtin}"        
-            
             return {
                 'detail_number': detail_number,  # Для поиска
                 'product_name': product_name,
-                'full_name': shortened_name,  # Для отображения в UI
+                'full_name': display_name,  # Оригинальное имя + джит
                 'gtin': gtin,
                 'date_emission': date_emission,  # С приоритетом
                 'quantity': quantity,  # ТиражДетали
                 'sheet_number': sheet_number,  # Только цифры из тиража (57043, 57044 и т.д.)
                 'stream': stream,  # количество ручьёв для этого вида
-				'order_metrage': order_metrage
+                'order_metrage': order_metrage
             }
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")

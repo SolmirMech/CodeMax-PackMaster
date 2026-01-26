@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 from apps.preview.excel_preview_module import ExcelPreviewModule
 from core.ui.comment_manager import CommentManager
+from core.parse.name_shortener import NameShortener
 
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
@@ -48,6 +49,7 @@ class OrderDataProcessor:
             config_manager=self.config_manager,
             customer_var=None  # Установим позже в set_roll_module
         )
+        self.name_shortener = NameShortener()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             
@@ -521,6 +523,10 @@ class OrderDataProcessor:
                 self.filtered_parsed_data = found_products
                 self.parsed_names_list = [item['name'] for item in found_products]
                 
+                # Всегда заполняем комбобокс
+                names_list = [item['name'] for item in found_products]
+                self.name_combobox['values'] = names_list
+
                 if len(found_products) == 1:
                     # Если найден один продукт - сразу отправляем
                     selected_data = found_products[0]
@@ -530,13 +536,12 @@ class OrderDataProcessor:
                     self.parent.after(5000, lambda: self.parse_status.config(text=""))
                 else:
                     # Если несколько - показываем выбор
-                    names_list = [item['name'] for item in found_products]
-                    self.name_combobox['values'] = names_list
                     self.parse_status.config(
                         text=f"Найдено {len(found_products)} вариантов по {found_by}. Всего: {len(names_list)} видов", 
                         foreground="orange"
                     )
-                    self.parent.after(5000, lambda: self.parse_status.config(text=""))                    
+                    self.parent.after(5000, lambda: self.parse_status.config(text=""))
+    
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
@@ -586,13 +591,30 @@ class OrderDataProcessor:
             # Иначе получаем данные из DataManager
             results = self.data_manager.search_combined(order_number)
         
+        # Проверяем галочку из roll_module
+        shorten_enabled = False
+        if hasattr(self, 'roll_module') and hasattr(self.roll_module, 'shorten_text_var'):
+            shorten_enabled = self.roll_module.shorten_text_var.get()
+        
         product_data = []
         
         for order in results:
             # Преобразуем в старый формат
             for product in order.get('products', []):
+                product_name = product.get('product_name', '')
+                
+                # Сокращаем если включено
+                display_name = product_name
+                if shorten_enabled and hasattr(self, 'name_shortener'):
+                    display_name = self.name_shortener.shorten_name(product_name)
+                
+                # Добавляем джит если есть
+                gtin = product.get('gtin', '')
+                if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in display_name:
+                    display_name = f"{display_name} джит{gtin[-4:]}"
+                
                 product_dict = {
-                    'name': product.get('full_name', product.get('product_name', '')),
+                    'name': display_name,  # ← Сокращенное или оригинальное имя
                     'detail_num': product.get('detail_number', ''),
                     'sheet_number': product.get('sheet_number', ''),
                     'customer': order.get('customer', ''),
@@ -600,7 +622,7 @@ class OrderDataProcessor:
                     'sleeve_diameter': order.get('operations', {}).get('sleeve_diameter', ''),
                     'date_emission': product.get('date_emission', ''),
                     'manufacturer': "",
-                    'gtin': product.get('gtin', ''),
+                    'gtin': gtin,
                     'tirazh': product.get('quantity', ''),
                     'stream': product.get('stream', '1')                   
                 }

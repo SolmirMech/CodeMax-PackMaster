@@ -212,16 +212,30 @@ class RollLabelPrinter:
         self.customer_var.trace_add("write", self.on_customer_changed)
 
         # Изделие
-        ttk.Label(data_frame, text="Изделие:").grid(
-            row=2, column=0, sticky="nw", pady=5
-        )       
+        # Фрейм для левой колонки (Изделие и галочка)
+        left_frame = ttk.Frame(data_frame)
+        left_frame.grid(row=2, column=0, sticky="nw", pady=5)
+        
+        # Изделие (вверху фрейма)
+        ttk.Label(left_frame, text="Изделие:").pack(anchor="w")
+        
+        # Галочка "Сократить текст" (под надписью)
+        self.shorten_text_var = BooleanVar(value=False)
+        self.shorten_checkbutton = ttk.Checkbutton(
+            left_frame,
+            text="Сократить текст",
+            variable=self.shorten_text_var,
+            command=self._on_shorten_text_changed
+        )
+        self.shorten_checkbutton.pack(anchor="w", pady=(5, 0))
+    
         # Многострочное текстовое поле
         self.product_text = tk.Text(data_frame, width=35, height=4, font=("Arial", 12))
         self.product_text.grid(row=2, column=1, padx=5, pady=5, sticky="w")        
         # Контекстное меню для текстового поля
         self.add_context_menu_to_text(self.product_text)
         self.product_text.bind("<Control-KeyPress>", self.control_key_handler_text)
-        self.product_text.bind("<Return>", self.search_in_product_text)
+        self.product_text.bind("<Return>", self.search_in_product_text)       
         
         # Основные поля ввода
         
@@ -358,6 +372,12 @@ class RollLabelPrinter:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         
+    def _on_shorten_text_changed(self):
+        """Обрабатывает изменение галочки сокращения текста"""
+        if hasattr(self, 'order_data_module') and self.order_data_module:
+            # Перезагружаем продукты с учетом новой настройки
+            self.order_data_module.get_product_name()
+        
     def update_date_field(self):
         """Обновляет поле даты на текущую дату"""
         try:
@@ -375,7 +395,8 @@ class RollLabelPrinter:
                 if result.returncode == 0:
                     current_date = result.stdout.strip()
                     if current_date and len(current_date) == 10:
-                        print(f"Дата через PowerShell: {current_date}")
+                        # Отправляем сообщение в preview_module
+                        self._show_date_message(f"Дата через PowerShell: {current_date}")
                         self.date_var.set(current_date)
                         return
             except Exception as e:
@@ -402,7 +423,8 @@ class RollLabelPrinter:
                             day = dt_str[6:8]
                             current_date = f"{day}.{month}.{year}"
                             
-                            print(f"Дата через WMIC: {current_date}")
+                            # Отправляем сообщение в preview_module
+                            self._show_date_message(f"Дата через WMIC: {current_date}")
                             self.date_var.set(current_date)
                             return
             except Exception as e:
@@ -434,7 +456,8 @@ class RollLabelPrinter:
                                     year = f"20{year}"
                                 current_date = f"{day.zfill(2)}.{month.zfill(2)}.{year}"
                                 
-                                print(f"Дата через CMD: {current_date}")
+                                # Отправляем сообщение в preview_module
+                                self._show_date_message(f"Дата через CMD: {current_date}")
                                 self.date_var.set(current_date)
                                 return
             except Exception as e:
@@ -443,14 +466,36 @@ class RollLabelPrinter:
             # Способ 4: datetime.now() (аварийный вариант)
             try:
                 current_date = datetime.now().strftime("%d.%m.%Y")
-                print(f"Дата через datetime.now(): {current_date}")
+                # Отправляем сообщение в preview_module
+                self._show_date_message(f"Дата через datetime.now(): {current_date}")
                 self.date_var.set(current_date)
             except Exception as e:
                 print(f"Все способы не сработали: {e}")
                 self.date_var.set("Ошибка даты")
+                self._show_date_message("Ошибка получения даты", is_error=True)
                 
         except Exception as e:
             print(f"Общая ошибка в update_date_field: {e}")
+            self._show_date_message("Ошибка обновления даты", is_error=True)
+
+    def _show_date_message(self, message, is_error=False):
+        """Показывает сообщение о дате в preview_module и скрывает через 5 секунд"""
+        if hasattr(self, 'preview_module') and self.preview_module:
+            foreground = "red" if is_error else "blue"
+            self.preview_module.tirazh_label.config(
+                text=message,
+                foreground=foreground
+            )
+            # Очищаем сообщение через 5 секунд
+            self.parent.after(5000, lambda: self._clear_date_message())
+
+    def _clear_date_message(self):
+        """Очищает сообщение о дате в preview_module"""
+        if hasattr(self, 'preview_module') and self.preview_module:
+            self.preview_module.tirazh_label.config(
+                text="",
+                foreground="green"
+            )
         
     def _scan_gtin_in_product_text(self, event):
         """Сканирует GTIN при вводе в поле product_text"""
