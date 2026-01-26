@@ -49,7 +49,10 @@ class OrderDataProcessor:
             config_manager=self.config_manager,
             customer_var=None  # Установим позже в set_roll_module
         )
-        self.name_shortener = NameShortener()
+        self.name_shortener = NameShortener(
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             
