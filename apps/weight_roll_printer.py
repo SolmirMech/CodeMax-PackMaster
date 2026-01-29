@@ -669,6 +669,7 @@ class RollLabelPrinter:
         self.order_combobox['values'] = order_options
         self.order_combobox.set(order_options[0])
         self.order_combobox.grid()  # Показываем комбобокс
+        self.order_combobox_visible = True
         self.parent.after(100, lambda: self.order_combobox.focus_set())
         self.parent.after(120, lambda: self.order_combobox.event_generate('<Down>'))
         
@@ -689,6 +690,7 @@ class RollLabelPrinter:
             self.order_combobox.grid_remove()
             self.order_entry.grid()
             self.entry_suffix.grid()
+            self.order_combobox_visible = False  # ← Скрыли комбобокс
             
             # Автозаполняем поля из выбранного заказа
             self._fill_technical_fields_only(selected_order_data)
@@ -761,7 +763,9 @@ class RollLabelPrinter:
             if found_manufacturer:
                 self.manufacturer_var.set(found_manufacturer)
             else:
-                self.manufacturer_var.set(executor)
+                # Если производитель не найден в списке - устанавливаем первого из packaging_tu
+                if hasattr(self, 'manufacturer_options') and self.manufacturer_options:
+                    self.manufacturer_var.set(self.manufacturer_options[0])  # id: 1
             
             # Обновляем список продуктов после установки производителя
             self.update_product_options()

@@ -813,21 +813,46 @@ class ExportDataProvider:
             if hasattr(self.roll_module, 'manufacturer_var'):
                 data['manufacturer_name'] = self.roll_module.manufacturer_var.get()
             
-            # Формируем текст для отображения
+            # Формируем текст для отображения с адресом из конфигурации
             if data['show_manufacturer'] and data['manufacturer_name']:
-                address = 'Россия, 426039, Удмуртская Республика, г. Ижевск, ул. Воткинское шоссе, д. 186, офис 1'
+                # Ищем производителя в конфигурации для получения адреса
+                manufacturer_address = self._get_manufacturer_address(data['manufacturer_name'])
                 
-                if "Ремас" in data['manufacturer_name']:
-                    data['display_text'] = f'ООО "Ремас-Флексо", {address}'
-                elif "Зюдин" in data['manufacturer_name']:
-                    data['display_text'] = f'ИП Зюдин В.Г., {address}'
+                if manufacturer_address:
+                    data['display_text'] = f'{data["manufacturer_name"]}, {manufacturer_address}'
                 else:
+                    # Если адрес не найден, показываем только имя
                     data['display_text'] = data['manufacturer_name']
-                    
+                        
         except Exception as e:
             print(f"Ошибка сбора данных производителя: {e}")
             
         return data
+
+    def _get_manufacturer_address(self, manufacturer_name: str) -> Optional[str]:
+        """Получает адрес производителя из конфигурации packaging_tu.json"""
+        try:
+            if not manufacturer_name:
+                return None
+            
+            # Ищем в конфигурации
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            technical_specs = packaging_data.get("technical_specifications", [])
+            
+            # Ищем точное совпадение по имени производителя
+            for spec in technical_specs:
+                if spec["manufacturer"]["name"] == manufacturer_name:
+                    return spec["manufacturer"]["address"]
+            
+            # Если не нашли точного совпадения, пробуем частичное (на всякий случай)
+            for spec in technical_specs:
+                if manufacturer_name in spec["manufacturer"]["name"] or spec["manufacturer"]["name"] in manufacturer_name:
+                    return spec["manufacturer"]["address"]
+                    
+        except Exception as e:
+            print(f"Ошибка получения адреса производителя: {e}")
+        
+        return None
     
     def _convert_to_number(self, value: Optional[str], force_int: bool = False) -> Optional[Union[int, float]]:
         """

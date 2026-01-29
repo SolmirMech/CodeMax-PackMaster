@@ -327,11 +327,23 @@ class OrderDataProcessor:
         # 4. Это обычный ручной ввод
         search_value = input_value
         
-        # 5. Сначала запускаем on_order_enter_pressed из roll_module
-        self.roll_module.on_order_enter_pressed(event)
+        # 5. Проверяем, был ли уже выбран заказ
+        current_order = self.roll_module.order_number.get().strip()
+        has_cached_data = hasattr(self, 'cached_order_data') and self.cached_order_data
         
-        # 6. Восстанавливаем значение поиска после автозаполнения
-        # НЕ используем lambda с self напрямую
+        if not current_order:
+            # Если номер заказа пустой - ничего не делаем
+            self.parse_status.config(text="Сначала введите номер заказа", foreground="red")
+            return "break"
+        
+        if not has_cached_data or not hasattr(self, 'cached_order_number') or self.cached_order_number != current_order:
+            # Заказ еще не загружен - запускаем поиск
+            if event:
+                self.roll_module.on_order_enter_pressed(event)
+            else:
+                self.roll_module.on_order_enter_pressed()
+        
+        # 6. Восстанавливаем значение поиска
         def restore_search():
             self.detail_num_search.set(search_value)
         
