@@ -58,6 +58,27 @@ class OrderDataProcessor:
             
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
+        # Пересчитываем вместимость коробки при изменении настроек
+        if hasattr(self, 'preview_module') and self.preview_module:
+            # Получаем текущий текст тиража
+            current_text = self.preview_module.tirazh_label.cget("text")
+            
+            # Убираем старую информацию о вместимости если есть
+            if "| Влезет в коробку:" in current_text:
+                current_text = current_text.split("|")[0].strip()
+            
+            # Рассчитываем новую вместимость
+            capacity = self._calculate_box_capacity()
+            
+            # Добавляем информацию о вместимости если есть
+            if capacity:
+                current_text = f"{current_text} | Влезет в коробку: {capacity}"
+            
+            # Обновляем отображение
+            self.preview_module.tirazh_label.config(
+                text=current_text,
+                foreground="green"
+            )
         
     def load_initial_settings(self):
         """Загружает начальные настройки"""
@@ -696,10 +717,17 @@ class OrderDataProcessor:
                 # Отправляем тираж в preview_module
                 tirazh_value = product_data.get('tirazh')
                 formatted_tirazh = f"{int(tirazh_value):,}".replace(",", " ")
+                
+                # Расчёт вместимости коробки
+                capacity_info = ""
+                capacity = self._calculate_box_capacity()
+                if capacity:
+                    capacity_info = f" | Влезет в коробку: {capacity}"
+                
                 self.preview_module.tirazh_label.config(
-                    text=f"Тираж: {formatted_tirazh} шт",
+                    text=f"Тираж: {formatted_tirazh} шт{capacity_info}",
                     foreground="green"
-                )              
+                )
                 
                 # Сбрасываем статусные сообщения
                 self.reset_status_messages()
@@ -717,6 +745,49 @@ class OrderDataProcessor:
                     print(f"Отправлено только название: {name_to_send}")
                 except:
                     print("Критическая ошибка при отправке данных")
+                    
+    def _calculate_box_capacity(self):
+        """Рассчитывает, сколько роликов влезет в выбранную коробку"""
+        if not hasattr(self, 'roll_module') or not self.roll_module:
+            return None
+        
+        try:
+            # Получаем настройки с высотами коробок
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            box_heights = settings.get("box_heights", {})
+            
+            if not box_heights:
+                return None
+            
+            # Получаем ширину ручья из roll_module
+            stream_width_str = self.roll_module.stream_width_var.get().strip()
+            if not stream_width_str:
+                return None
+            
+            stream_width_mm = float(stream_width_str)
+            
+            # Получаем выбранную коробку (из roll_module или текущую)
+            if hasattr(self.roll_module, 'box_size_var'):
+                box_size = self.roll_module.box_size_var.get()
+            else:
+                return None
+            
+            if not box_size or box_size not in box_heights:
+                return None
+            
+            box_height_mm = float(box_heights[box_size])
+            
+            if stream_width_mm <= 0 or box_height_mm <= 0:
+                return None
+            
+            # Рассчитываем сколько роликов поместится по высоте
+            rolls_per_height = int(box_height_mm // stream_width_mm)
+            
+            return rolls_per_height if rolls_per_height > 0 else None
+            
+        except (ValueError, TypeError) as e:
+            print(f"Ошибка расчета вместимости: {e}")
+            return None
         
     def load_excel_folder_path(self):
         """Загружает путь к папке с Excel файлом из настроек"""

@@ -409,6 +409,7 @@ class BoxEditorDialog:
         self.config_manager = ConfigManager()
         self.window = None
         self.box_size_entries = []
+        self.box_height_entries = []  # Новый список для высот
         self.box_weight_entries = []
 
     def show(self):
@@ -418,7 +419,7 @@ class BoxEditorDialog:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("Редактирование списка поддонов" if self.pallets_mode else "Редактирование списка коробок")
-        self.window.geometry("430x600")
+        self.window.geometry("600x600" if not self.pallets_mode else "430x600")  # Шире для коробок
         self.window.grab_set()
 
         # Центрирование окна
@@ -450,24 +451,43 @@ class BoxEditorDialog:
         scrollbar.pack(side="right", fill="y")
 
         # Загружаем текущий список коробок
-        current_boxes = self.get_current_boxes()
+        if self.pallets_mode:
+            current_boxes = self.get_current_boxes()
+        else:
+            current_boxes, current_heights = self.get_current_boxes()
 
         # Создаем заголовки
         header_frame = ttk.Frame(scrollable_frame)
         header_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(header_frame, text="Название", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
-        ttk.Label(header_frame, text="Вес (в граммах)", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(85, 15))
+        if not self.pallets_mode:
+            # Для коробок: Название, Высота, Вес
+            ttk.Label(header_frame, text="Название", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
+            ttk.Label(header_frame, text="Высота (мм)", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
+            ttk.Label(header_frame, text="Вес (грамм)", font=("Arial", 12, "bold")).pack(side=tk.LEFT)
+        else:
+            # Для поддонов: Название, Вес
+            ttk.Label(header_frame, text="Название", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(0, 30))
+            ttk.Label(header_frame, text="Вес (грамм)", font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=(85, 15))
 
         # Создаем поля ввода
         self.box_size_entries = []
+        self.box_height_entries = []
         self.box_weight_entries = []
 
-        for size, weight in current_boxes.items():
-            self._create_box_row(scrollable_frame, size, weight)
+        for size, box_data in current_boxes.items():
+            if self.pallets_mode:
+                # Для поддонов: только вес
+                weight = current_boxes.get(size, "")
+                self._create_box_row(scrollable_frame, size, "", weight)
+            else:
+                # Для коробок: высота и вес
+                weight = current_boxes.get(size, "")
+                height = current_heights.get(size, "")
+                self._create_box_row(scrollable_frame, size, height, weight)
 
         # Добавляем пустую строку
-        self._create_box_row(scrollable_frame, "", "")
+        self._create_box_row(scrollable_frame, "", "", "")
 
         # Кнопки управления
         button_frame = ttk.Frame(frame)
@@ -475,23 +495,30 @@ class BoxEditorDialog:
 
         ttk.Button(button_frame, text="💾 Сохранить", command=self.save_boxes).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="➕ Добавить строку", 
-                  command=lambda: self._create_box_row(scrollable_frame, "", "")).pack(side=tk.LEFT, padx=(5, 30))
+                  command=lambda: self._create_box_row(scrollable_frame, "", "", "")).pack(side=tk.LEFT, padx=(5, 30))
 
         self.window.bind("<Return>", lambda e: self.save_boxes())
 
-    def _create_box_row(self, parent, size, weight):
+    def _create_box_row(self, parent, size, height, weight):
         """Создает строку с полями ввода для коробки"""
         row_frame = ttk.Frame(parent)
         row_frame.pack(fill=tk.X, pady=2)
 
         # Поле для размеров
-        size_entry = ttk.Entry(row_frame, width=30)
+        size_entry = ttk.Entry(row_frame, width=25 if not self.pallets_mode else 30)
         size_entry.insert(0, size)
         size_entry.pack(side=tk.LEFT, padx=(0, 10))
         self.box_size_entries.append(size_entry)
 
+        # Поле для высоты (только для коробок)
+        if not self.pallets_mode:
+            height_entry = ttk.Entry(row_frame, width=15)
+            height_entry.insert(0, str(height))
+            height_entry.pack(side=tk.LEFT, padx=(0, 10))
+            self.box_height_entries.append(height_entry)
+
         # Поле для веса
-        weight_entry = ttk.Entry(row_frame, width=20)
+        weight_entry = ttk.Entry(row_frame, width=15 if not self.pallets_mode else 20)
         weight_entry.insert(0, str(weight))
         weight_entry.pack(side=tk.LEFT, padx=(0, 10))
         self.box_weight_entries.append(weight_entry)
@@ -505,6 +532,11 @@ class BoxEditorDialog:
         if len(self.box_size_entries) > 1:
             row_frame.destroy()
             self.box_size_entries.remove(size_entry)
+            if not self.pallets_mode and hasattr(self, 'box_height_entries'):
+                # Находим и удаляем соответствующий height_entry
+                index = self.box_size_entries.index(size_entry) if size_entry in self.box_size_entries else -1
+                if index >= 0 and index < len(self.box_height_entries):
+                    self.box_height_entries.pop(index)
             self.box_weight_entries.remove(weight_entry)
 
     def get_current_boxes(self):
@@ -514,22 +546,36 @@ class BoxEditorDialog:
             if self.pallets_mode:
                 return settings.get("weight_pallet", {})  # для поддонов
             else:
-                return settings.get("weight_box", {})
+                boxes_data = settings.get("weight_box", {})
+                # Загружаем высоты из отдельного ключа, если есть
+                box_heights = settings.get("box_heights", {})
+                return boxes_data, box_heights  # Возвращаем два словаря
         except:
-            return {}
+            return {}, {} if not self.pallets_mode else {}
 
     def save_boxes(self):
         """Сохраняет список коробок ИЛИ поддонов в shared_utils.json"""
         try:
             new_boxes = {}
-            for size_entry, weight_entry in zip(self.box_size_entries, self.box_weight_entries):
+            new_heights = {}  # Новый словарь для высот
+            
+            for i, (size_entry, weight_entry) in enumerate(zip(self.box_size_entries, self.box_weight_entries)):
                 size = size_entry.get().strip()
                 weight_str = weight_entry.get().strip()
                 
                 if size and weight_str:
                     try:
                         weight = int(weight_str)
-                        new_boxes[size] = weight
+                        if self.pallets_mode:
+                            # Для поддонов: просто вес
+                            new_boxes[size] = weight
+                        else:
+                            # Для коробок: вес и отдельно высота
+                            new_boxes[size] = weight
+                            if i < len(self.box_height_entries):
+                                height_str = self.box_height_entries[i].get().strip()
+                                if height_str:
+                                    new_heights[size] = int(height_str)
                     except ValueError:
                         continue
 
@@ -541,12 +587,16 @@ class BoxEditorDialog:
                 key_for_update = "weight_pallet"
             else:
                 settings["weight_box"] = new_boxes
+                if new_heights:
+                    settings["box_heights"] = new_heights
                 key_for_update = "weight_box"
             
             if self.config_manager.save_json_settings("shared_utils.json", settings):
                 # Уведомляем координатора об изменении списка
                 if hasattr(self.preview_export_module, 'coordinator'):
                     self.preview_export_module.coordinator.notify_list_changed(key_for_update)
+                    if not self.pallets_mode:
+                        self.preview_export_module.coordinator.notify_list_changed('box_heights')
                 
                 # Статус
                 item_name = "поддонов" if self.pallets_mode else "коробок"
@@ -1019,7 +1069,7 @@ class TechnicalSpecificationsDialog:
             
         self.window = tk.Toplevel(self.parent)
         self.window.title("Редактирование списка ТУ")
-        self.window.geometry("1200x650")  # Увеличил ширину
+        self.window.geometry("1010x650")
         self.window.grab_set()
         
         # Центрирование окна
