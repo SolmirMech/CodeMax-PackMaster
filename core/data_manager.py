@@ -104,7 +104,7 @@ class XMLDataManager:
                     )
                 """)
                 
-                # Таблица products (для поиска по деталям)
+                # Таблица products (для поиска по деталям) - ОБНОВЛЕНА
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS products (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +115,8 @@ class XMLDataManager:
                         gtin TEXT,
                         date_emission TEXT,
                         quantity TEXT,
-                        sheet_number TEXT,
+                        sheet_number TEXT,        -- ← Цифры оттиска
+                        sheet_full_name TEXT,     -- ← НОВОЕ: полное название оттиска
                         stream TEXT,
                         FOREIGN KEY (order_file) REFERENCES orders(file_name)
                     )
@@ -135,17 +136,16 @@ class XMLDataManager:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_number ON orders(order_number)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_detail_number ON products(detail_number)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_sheet_number ON sheets(sheet_number)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_sheet_full_name ON products(sheet_full_name)")  # ← НОВЫЙ индекс
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_order ON products(order_file)")
                 
-                # Проверяем наличие необходимых колонок
-                cursor.execute("PRAGMA table_info(orders)")
+                # Проверяем наличие колонки sheet_full_name и добавляем если нет
+                cursor.execute("PRAGMA table_info(products)")
                 columns = [col[1] for col in cursor.fetchall()]
                 
-                # Добавляем недостающие колонки для совместимости
-                if 'order_prefix' not in columns:
-                    cursor.execute("ALTER TABLE orders ADD COLUMN order_prefix TEXT")
-                if 'order_suffix' not in columns:
-                    cursor.execute("ALTER TABLE orders ADD COLUMN order_suffix TEXT")
+                if 'sheet_full_name' not in columns:
+                    cursor.execute("ALTER TABLE products ADD COLUMN sheet_full_name TEXT")
+                    logging.info("Добавлена колонка sheet_full_name в таблицу products")
                 
                 conn.commit()
                 logging.info("База данных инициализирована")
@@ -319,36 +319,40 @@ class XMLDataManager:
                     product.get('gtin', ''),
                     product.get('date_emission', ''),
                     product.get('quantity', ''),
-                    product.get('sheet_number', ''),
+                    product.get('sheet_number', ''),       # ← Цифры оттиска (совместимость)
+                    product.get('sheet_full_name', ''),    # ← НОВОЕ: полное название оттиска
                     product.get('stream', '')
                 )
                 cursor.execute("""
                     INSERT INTO products 
                     (order_file, detail_number, product_name, short_name, gtin, 
-                     date_emission, quantity, sheet_number, stream)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     date_emission, quantity, sheet_number, sheet_full_name, stream)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, product_data)
             
-            # Сохраняем оттиски (извлекаем из названий продуктов)
-            sheet_numbers = set()
+            # Сохраняем оттиски в таблицу sheets
+            sheet_data = {}  # sheet_number -> sheet_full_name
+            
             for product in products:
                 sheet_num = product.get('sheet_number', '')
-                if sheet_num and sheet_num.isdigit():
-                    sheet_numbers.add(sheet_num)
+                sheet_full_name = product.get('sheet_full_name', '')
+                
+                if sheet_num:  # Если есть номер оттиска (цифры)
+                    # Сохраняем самое полное название
+                    if sheet_full_name and sheet_full_name not in sheet_data.get(sheet_num, []):
+                        if sheet_num not in sheet_data:
+                            sheet_data[sheet_num] = []
+                        sheet_data[sheet_num].append(sheet_full_name)
             
-            for sheet_num in sheet_numbers:
-                # Находим полное название оттиска из XML
-                sheet_name = ""
-                for product in products:
-                    if product.get('sheet_number') == sheet_num:
-                        # Можно добавить поиск по оригинальному XML
-                        sheet_name = f"Тиражи I-{sheet_num}"
-                        break
+            # Сохраняем в таблицу sheets
+            for sheet_num, full_names in sheet_data.items():
+                # Берем первое полное название
+                sheet_full_name = full_names[0] if full_names else f"Тиражи I-{sheet_num}"
                 
                 cursor.execute("""
-                    INSERT INTO sheets (order_file, sheet_number, sheet_name)
+                    INSERT OR REPLACE INTO sheets (order_file, sheet_number, sheet_name)
                     VALUES (?, ?, ?)
-                """, (file_name, sheet_num, sheet_name))
+                """, (file_name, sheet_num, sheet_full_name))
             
             return True
             
@@ -526,10 +530,15 @@ class XMLDataManager:
                         FROM orders o
                         JOIN products p ON o.file_name = p.order_file
                         WHERE o.order_number LIKE ? 
-                          AND (p.sheet_number LIKE ? OR p.detail_number LIKE ?)
+                          AND (p.sheet_number LIKE ? 
+                               OR p.sheet_full_name LIKE ? 
+                               OR p.detail_number LIKE ?)
                         ORDER BY o.order_number
                     """
-                    params = (f'%{order_digits}%', f'%{sheet_digits}%', f'%{sheet_query}%')
+                    params = (f'%{order_digits}%', 
+                             f'%{sheet_digits}%', 
+                             f'%{sheet_query}%', 
+                             f'%{sheet_query}%')
                 else:
                     # Поиск только по номеру заказа
                     query = """
@@ -555,9 +564,20 @@ class XMLDataManager:
                             filtered_products = []
                             
                             for product in parsed_data['products']:
-                                # Проверяем совпадение по номеру оттиска или детали
-                                if (sheet_digits and sheet_digits in product.get('sheet_number', '')) or \
-                                   (sheet_query and sheet_query in product.get('detail_number', '')):
+                                # Проверяем совпадение по номеру оттиска (цифры)
+                                # ИЛИ по полному названию оттиска
+                                # ИЛИ по номеру детали
+                                sheet_num = product.get('sheet_number', '')
+                                sheet_full_name = product.get('sheet_full_name', '')
+                                detail_num = product.get('detail_number', '')
+                                
+                                matches = (
+                                    (sheet_digits and sheet_digits in sheet_num) or
+                                    (sheet_query and sheet_query in sheet_full_name) or
+                                    (sheet_query and sheet_query in detail_num)
+                                )
+                                
+                                if matches:
                                     filtered_products.append(product)
                             
                             # Если после фильтрации есть продукты - добавляем заказ

@@ -68,9 +68,9 @@ class XMLOrderParser:
             # Общая дата эмиссии
             parent_sheet_date = self._get_text(root, './/parent_sheet/ДатаЭмиссии')
             
-            # 1. Сначала собираем sheet_number для каждого parent_sheet
-            sheet_mapping = {}
-            sheet_name_mapping = {}  # id -> полное название оттиска
+            # 1. Собираем mapping для оттисков
+            sheet_mapping = {}           # id -> sheet_number (только цифры)
+            sheet_full_name_mapping = {} # id -> полное название оттиска
             
             for parent_sheet in root.findall('.//parent_sheet'):
                 id_elem = parent_sheet.find('id_order_sheet')
@@ -78,15 +78,23 @@ class XMLOrderParser:
                 
                 if id_elem is not None and id_elem.text and sheet_name_elem is not None and sheet_name_elem.text:
                     sheet_id = id_elem.text.strip()
-                    sheet_name = sheet_name_elem.text.strip()
-                    sheet_name_mapping[sheet_id] = sheet_name
+                    sheet_full_name = sheet_name_elem.text.strip()
+                    sheet_full_name_mapping[sheet_id] = sheet_full_name
                     
-                    # Извлекаем цифры из НаименОттиска
-                    match = re.search(r'(\d+)', sheet_name)
+                    # Извлекаем цифры из названия оттиска
+                    # Пытаемся найти номер оттиска (обычно в конце или после дефиса)
+                    match = re.search(r'[-\s](\d{4,6})(?:\D|$)', sheet_full_name)
                     if match:
-                        sheet_mapping[sheet_id] = match.group(1)
+                        sheet_mapping[sheet_id] = match.group(1)  # Только цифры
+                    else:
+                        # Альтернативный поиск любых 4-6 цифр
+                        match_all = re.search(r'(\d{4,6})', sheet_full_name)
+                        if match_all:
+                            sheet_mapping[sheet_id] = match_all.group(1)
+                        else:
+                            sheet_mapping[sheet_id] = ""  # Пусто, если не нашли
             
-            # 2. Собираем метраж (Выработка) для каждого оттиска из операций резки
+            # 2. Собираем метраж для каждого оттиска
             sheet_metrage_mapping = {}  # id_order_sheet -> order_metrage
             
             # Ищем все операции резки
@@ -95,14 +103,19 @@ class XMLOrderParser:
                 if op_id not in ['31', '230']:  # Только операции резки
                     continue
                 
-                # Название элемента операции (должно совпадать с НаименОттиска)
+                # Название элемента операции
                 op_element_name = operation.get('НаименованиеЭлементаОперации', '')
                 if not op_element_name:
                     continue
                 
                 # Ищем, к какому sheet_id относится эта операция
-                for sheet_id, sheet_name in sheet_name_mapping.items():
-                    if sheet_name in op_element_name:
+                # Сравниваем с полным названием оттиска
+                for sheet_id, sheet_full_name in sheet_full_name_mapping.items():
+                    # Проверяем, содержит ли название операции название оттиска
+                    # или наоборот, название оттиска содержит часть операции
+                    if (sheet_full_name and op_element_name and 
+                        (sheet_full_name[:30] in op_element_name or 
+                         op_element_name[:30] in sheet_full_name)):
                         output = operation.get('Выработка')
                         if output:
                             try:
@@ -111,25 +124,28 @@ class XMLOrderParser:
                                 pass
                         break
             
-            # 3. Теперь парсим продукты с добавлением order_metrage
+            # 3. Парсим продукты
             products = []
             for product_elem in root.findall('.//product'):
                 # Получаем id_order_sheet этого продукта
                 sheet_id_elem = product_elem.find('id_order_sheet')
                 sheet_number = ""
+                sheet_full_name = ""
                 order_metrage = ""
                 
                 if sheet_id_elem is not None and sheet_id_elem.text:
                     sheet_id = sheet_id_elem.text.strip()
-                    sheet_number = sheet_mapping.get(sheet_id, "")
+                    sheet_number = sheet_mapping.get(sheet_id, "")  # Только цифры
+                    sheet_full_name = sheet_full_name_mapping.get(sheet_id, "")  # Полное название
                     order_metrage = sheet_metrage_mapping.get(sheet_id, "")
                 
                 product = self._parse_product(
                     product_elem=product_elem,
                     parent_sheet_date=parent_sheet_date,
                     root=root,
-                    sheet_number=sheet_number,
-                    order_metrage=order_metrage  # ← новый параметр
+                    sheet_number=sheet_number,        # ← Только цифры (для совместимости)
+                    sheet_full_name=sheet_full_name,   # ← Новое поле: полное название
+                    order_metrage=order_metrage
                 )
                 if product:
                     products.append(product)
@@ -293,8 +309,9 @@ class XMLOrderParser:
         
         return operations, comments
     
-    def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "", 
-                       root: ET.Element = None, sheet_number: str = "", 
+    def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "",
+                       root: ET.Element = None, sheet_number: str = "",
+                       sheet_full_name: str = "",
                        order_metrage: Any = None) -> Optional[Dict[str, Any]]:
         """Парсит элемент <product>."""
         try:
@@ -302,10 +319,11 @@ class XMLOrderParser:
             product_name = self._get_text(product_elem, 'НаименДетали')
             gtin = self._get_text(product_elem, 'GTIN')
             
-            # Формируем имя продукта (оригинальное название + джит если есть)
-            display_name = product_name
-            if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in display_name:
-                display_name = f"{display_name} джит{gtin[-4:]}"
+            # Если GTIN в отдельном теге и его нет в сокращенном имени
+            if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in product_name:
+                full_name = f"{product_name} джит{gtin[-4:]}"
+            else:
+                full_name = product_name
             
             # Индивидуальная дата эмиссии из продукта
             individual_date = self._get_text(product_elem, 'ДатаЭмиссии')
@@ -318,22 +336,33 @@ class XMLOrderParser:
             if not product_name:  # Если нет названия - продукт невалиден
                 return None
             
-            # Берем stream из тега КолвоРучьев внутри product, а не из операции
+            # Берем stream из тега КолвоРучьев внутри product
             stream = self._get_text(product_elem, 'КолвоРучьев')
             if not stream:
                 stream = "1"  # Значение по умолчанию
             
-            return {
-                'detail_number': detail_number,  # Для поиска
+            # Формируем полное название с джит
+            full_name = product_name
+            if gtin and len(gtin) >= 4:
+                short_gtin = gtin[-4:]
+                full_name = f"{product_name} джит{short_gtin}"
+            
+            # Создаём словарь продукта
+            product_dict = {
+                'detail_number': detail_number,
                 'product_name': product_name,
-                'full_name': display_name,  # Оригинальное имя + джит
+                'full_name': full_name,
                 'gtin': gtin,
-                'date_emission': date_emission,  # С приоритетом
-                'quantity': quantity,  # ТиражДетали
-                'sheet_number': sheet_number,  # Только цифры из тиража (57043, 57044 и т.д.)
-                'stream': stream,  # количество ручьёв для этого вида
+                'date_emission': date_emission,
+                'quantity': quantity,
+                'sheet_number': sheet_number,        # ← Только цифры (для совместимости)
+                'sheet_full_name': sheet_full_name,  # ← Полное название оттиска
+                'stream': stream,
                 'order_metrage': order_metrage
-            }
+            }          
+            
+            return product_dict
+            
         except Exception as e:
             print(f"Ошибка парсинга продукта: {e}")
             return None

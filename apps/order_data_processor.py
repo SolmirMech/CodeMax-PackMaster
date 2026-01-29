@@ -98,7 +98,13 @@ class OrderDataProcessor:
         ).pack(side=tk.LEFT, padx=10)
 
         # Строка статуса парсинга
-        self.parse_status = ttk.Label(xml_frame, text="", foreground="black", font=("Arial", 14))
+        self.parse_status = ttk.Label(
+            xml_frame, 
+            text="", 
+            foreground="black", 
+            font=("Arial", 14), 
+            wraplength=500
+        )
         self.parse_status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
 
         # Выбор названия
@@ -531,7 +537,7 @@ class OrderDataProcessor:
                         if search_digits in detail_num:
                             found_by = f"вид {detail_num}"
                         elif search_digits_numeric in sheet_number:
-                            found_by = f"тираж I-{sheet_number}"
+                            found_by = f"тираж {product.get('sheet_full_name', '')}"
             
             if found_products:
                 # Сохраняем отфильтрованные данные
@@ -576,14 +582,12 @@ class OrderDataProcessor:
                 selected_data = self.parsed_data[0]
                 self.selected_name.set(selected_data['name'])
                 self.send_to_roll_module(selected_data)
-                self.parse_status.config(text="Данные отправлены", foreground="green")
-                self.parent.after(5000, lambda: self.parse_status.config(text=""))
             else:
                 # Если несколько - показываем выбор
                 names_list = [item['name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
                 self.parse_status.config(
-                    text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
+                    text=f"Выберите из списка. Всего: {len(names_list)} видов", 
                     foreground="orange"
                 )
                 self.parent.after(5000, lambda: self.parse_status.config(text=""))
@@ -632,6 +636,7 @@ class OrderDataProcessor:
                     'name': display_name,  # ← Сокращенное или оригинальное имя
                     'detail_num': product.get('detail_number', ''),
                     'sheet_number': product.get('sheet_number', ''),
+                    'sheet_full_name': product.get('sheet_full_name', ''),
                     'customer': order.get('customer', ''),
                     'winding_scheme': order.get('operations', {}).get('winding_scheme', ''),
                     'sleeve_diameter': order.get('operations', {}).get('sleeve_diameter', ''),
@@ -663,8 +668,6 @@ class OrderDataProcessor:
             if selected_data:
                 self.filtered_parsed_data = [selected_data]
                 self.send_to_roll_module(selected_data)
-                self.parse_status.config(text="Все данные отправлены", foreground="green")
-                self.parent.after(5000, lambda: self.parse_status.config(text=""))
             else:
                 self.parse_status.config(text="Ошибка: данные не найдены", foreground="red")
 
