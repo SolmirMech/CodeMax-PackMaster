@@ -474,6 +474,9 @@ class SettingsDialog:
             settings["weight_data_base"] = folder
             self.config_manager.save_json_settings("shared_utils.json", settings)
             self.update_folder_status()
+            # Уведомляем подписчиков об изменении XML папки
+            if hasattr(self, 'coordinator') and self.coordinator:
+                self.coordinator._notify_subscribers()            
 
     def save_excel_folder_path(self):
         """Сохраняет путь к папке с Excel файлом в настройки"""

@@ -79,6 +79,21 @@ class OrderDataProcessor:
                 text=current_text,
                 foreground="green"
             )
+            
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            new_folder_path = settings.get("weight_data_base", "")
+            if new_folder_path != self.folder_path.get():
+                self.folder_path.set(new_folder_path)
+                # Сбрасываем статус папки
+                if hasattr(self, 'parse_status'):
+                    if new_folder_path:
+                        folder_name = os.path.basename(new_folder_path)
+                        self.parse_status.config(text=f"Папка: {folder_name}", foreground="blue")
+                    else:
+                        self.parse_status.config(text="Папка не выбрана", foreground="red")
+        except Exception as e:
+            print(f"Ошибка обновления пути XML папки: {e}")            
         
     def load_initial_settings(self):
         """Загружает начальные настройки"""
