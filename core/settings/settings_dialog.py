@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, filedialog
 import win32print
 import win32ui
 import os
@@ -43,14 +43,12 @@ class SettingsDialog:
 
         content_frame = ttk.Frame(self.main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # ЛЕВАЯ КОЛОНКА
-        left_frame = ttk.Frame(content_frame)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=5)
+        content_frame.grid_columnconfigure(0, weight=1)
+        content_frame.grid_columnconfigure(1, weight=1)
 
         # 1.Настройки печати
-        print_frame = ttk.LabelFrame(left_frame, text="Настройки печати", padding=5)
-        print_frame.pack(fill=tk.X, pady=(0, 5))
+        print_frame = ttk.LabelFrame(content_frame, text="Настройки печати", padding=5)
+        print_frame.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
 
         # Выбор принтера
         printers = win32print.EnumPrinters(2)
@@ -160,8 +158,9 @@ class SettingsDialog:
         self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
         # 2. РАЗДЕЛ: Изготовитель
-        manufacturer_frame = ttk.LabelFrame(left_frame, text="Изготовитель", padding=5)
-        manufacturer_frame.pack(fill=tk.X, pady=(0, 5))
+        manufacturer_frame = ttk.LabelFrame(content_frame, text="Изготовитель", padding=5)
+        manufacturer_frame.grid(row=1, column=0, rowspan=2, sticky="w", padx=(5, 0), pady=(0, 5))
+        
         self.manufacturer_var = tk.StringVar(value=self.preview_export_module.manufacturer)
         manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
         manufacturer_entry.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")      
@@ -176,9 +175,17 @@ class SettingsDialog:
         suffix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_suffix_var, width=6)
         suffix_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         
+        # Кнопка открытия втулки
+        ttk.Button(
+            manufacturer_frame,
+            text="✓ Печать на втулку",
+            command=self.open_weight_orders_window,
+            width=19
+        ).grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="w")        
+        
         # 3. РАЗДЕЛ: Настройки архивации
-        archive_frame = ttk.LabelFrame(left_frame, text="Архивация листов при печати", padding=5)
-        archive_frame.pack(fill=tk.X, pady=(0, 5))
+        archive_frame = ttk.LabelFrame(content_frame, text="Архивация листов при печати", padding=5)
+        archive_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
         
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -200,25 +207,13 @@ class SettingsDialog:
         ).pack(side=tk.LEFT, padx=(5, 10))
         
         # 4. РАЗДЕЛ: Дополнительные элементы
-        elements_frame = ttk.LabelFrame(left_frame, text="Дата и другие редкие настройки", padding=5)
-        elements_frame.pack(fill=tk.X, pady=(0, 5))
+        elements_frame = ttk.LabelFrame(content_frame, text="Дата и другие редкие настройки", padding=5)
+        elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
         
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
         elements_status = settings.get("elements_status", "Скрыть")
-        self.elements_status_var = tk.StringVar(value=elements_status)
-        
-        # 5. РАЗДЕЛ: Управление втулкой
-        bushing_frame = ttk.LabelFrame(left_frame, text="Втулка", padding=5)
-        bushing_frame.pack(fill=tk.X, pady=(0, 5))
-
-        # Кнопка открытия втулки
-        ttk.Button(
-            bushing_frame,
-            text="✓ Открыть модуль втулки",
-            command=self.open_weight_orders_window,
-            width=25
-        ).pack(padx=10, pady=10)
+        self.elements_status_var = tk.StringVar(value=elements_status)      
         
         ttk.Radiobutton(
             elements_frame, 
@@ -232,7 +227,19 @@ class SettingsDialog:
             text="Показать", 
             variable=self.elements_status_var, 
             value="Показать"
-        ).pack(side=tk.LEFT, padx=(5, 10))        
+        ).pack(side=tk.LEFT, padx=(5, 10))
+        
+        # --- Строка статуса для сообщений ---
+        self.message_status_var = tk.StringVar(value="")
+        self.message_status_label = ttk.Label(
+            content_frame,
+            textvariable=self.message_status_var,
+            foreground="blue",
+            font=("Arial", 14),
+            wraplength=700,
+            anchor="w"
+        )
+        self.message_status_label.grid(row=3, column=0, columnspan=3, sticky="we", padx=5, pady=(5, 0))
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
@@ -253,6 +260,26 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+        
+    def clear_message_after_delay(self, delay_ms=5000):
+        """Очищает сообщение через указанное время"""
+        if hasattr(self, 'message_status_var') and self.message_status_var:
+            self.message_status_var.set("")
+
+    def show_message(self, message, color="blue"):
+        """Показывает сообщение в строке статуса и очищает через 5 секунд"""
+        if hasattr(self, 'message_status_var') and self.message_status_var:
+            self.message_status_var.set(message)
+            # Настраиваем цвет
+            if color == "blue":
+                self.message_status_label.configure(foreground="blue")
+            elif color == "red":
+                self.message_status_label.configure(foreground="red")
+            elif color == "green":
+                self.message_status_label.configure(foreground="green")
+            
+            # Очищаем через 5 секунд
+            self.main_frame.after(5000, self.clear_message_after_delay)
         
     def open_weight_orders_window(self):
         """Открывает окно для работы с втулками"""
@@ -448,51 +475,6 @@ class SettingsDialog:
             self.config_manager.save_json_settings("shared_utils.json", settings)
             self.update_folder_status()
 
-    def select_excel_folder(self):
-        """Выбирает папку для Excel файла"""
-        folder_path = filedialog.askdirectory(title="Выберите папку для файла Excel")
-        if not folder_path:
-            return
-        
-        try:
-            # Копируем ОБА файла - для 1 и 2 цеха
-            files_to_copy = [
-                ("weight_orders.xlsx", "weight_orders.xlsx"),
-                ("weight_orders_2.xlsx", "weight_orders_2.xlsx")
-            ]
-            
-            copied_files = []
-            
-            for assets_filename, target_filename in files_to_copy:
-                assets_file = self.config_manager.get_asset_path(assets_filename)
-                
-                if not os.path.exists(assets_file):
-                    messagebox.showwarning("Внимание", 
-                        f"Файл {assets_filename} не найден в assets, пропускаем")
-                    continue
-                
-                target_file = os.path.join(folder_path, target_filename)
-                shutil.copy2(assets_file, target_file)
-                copied_files.append(target_filename)
-            
-            if not copied_files:
-                messagebox.showerror("Ошибка", "Не удалось скопировать ни один файл Excel")
-                return
-            
-            # Сохраняем путь к папке
-            self.excel_folder_path = folder_path
-            self.save_excel_folder_path()
-            
-            folder_name = os.path.basename(folder_path)
-            if not folder_name:
-                folder_name = folder_path.rstrip('/\\')
-            
-            files_list = ", ".join(copied_files)
-            self.status_var.set(f"✅ Файлы {files_list} скопированы в: {folder_name}")
-            
-        except Exception as e:
-            self.status_var.set(f"❌ Ошибка копирования: {str(e)}")
-
     def save_excel_folder_path(self):
         """Сохраняет путь к папке с Excel файлом в настройки"""
         try:
@@ -530,30 +512,66 @@ class SettingsDialog:
             default_printer = get_default_printer()
 
             if not default_printer:
-                messagebox.showerror(
-                    "Ошибка", "Не удалось определить принтер по умолчанию"
-                )
+                self.show_message("❌ Ошибка: Не удалось определить принтер по умолчанию", "red")
                 return False
 
             # Используем метод из ConfigManager для обновления принтера
             success = self.config_manager.update_printer_settings(default_printer)
 
             if success:
-                messagebox.showinfo(
-                    "Успех", f"Принтер обновлен на '{default_printer}' во всех секциях"
-                )
+                self.show_message(f"✅ Принтер обновлен на '{default_printer}' во всех секциях", "green")
                 # Обновляем комбобокс в диалоге
                 self.printer_var.set(default_printer)
             else:
-                messagebox.showerror(
-                    "Ошибка", f"Не удалось обновить принтер на '{default_printer}'"
-                )
+                self.show_message(f"❌ Ошибка: Не удалось обновить принтер на '{default_printer}'", "red")
 
             return success
 
         except Exception as e:
-            messagebox.showerror(
-                "Ошибка", f"Ошибка при обновлении принтеров:\n{str(e)}"
-            )
+            self.show_message(f"❌ Ошибка при обновлении принтеров: {str(e)}", "red")
             return False
+
+    def select_excel_folder(self):
+        """Выбирает папку для Excel файла"""
+        folder_path = filedialog.askdirectory(title="Выберите папку для файла Excel")
+        if not folder_path:
+            return
+        
+        try:
+            # Копируем ОБА файла - для 1 и 2 цеха
+            files_to_copy = [
+                ("weight_orders.xlsx", "weight_orders.xlsx"),
+                ("weight_orders_2.xlsx", "weight_orders_2.xlsx")
+            ]
+            
+            copied_files = []
+            
+            for assets_filename, target_filename in files_to_copy:
+                assets_file = self.config_manager.get_asset_path(assets_filename)
+                
+                if not os.path.exists(assets_file):
+                    self.show_message(f"⚠️ Внимание: Файл {assets_filename} не найден в assets, пропускаем", "blue")
+                    continue
+                
+                target_file = os.path.join(folder_path, target_filename)
+                shutil.copy2(assets_file, target_file)
+                copied_files.append(target_filename)
+            
+            if not copied_files:
+                self.show_message("❌ Ошибка: Не удалось скопировать ни один файл Excel", "red")
+                return
+            
+            # Сохраняем путь к папке
+            self.excel_folder_path = folder_path
+            self.save_excel_folder_path()
+            
+            folder_name = os.path.basename(folder_path)
+            if not folder_name:
+                folder_name = folder_path.rstrip('/\\')
+            
+            files_list = ", ".join(copied_files)
+            self.show_message(f"✅ Файлы {files_list} скопированы в: {folder_name}", "green")
+            
+        except Exception as e:
+            self.show_message(f"❌ Ошибка копирования: {str(e)}", "red")
         
