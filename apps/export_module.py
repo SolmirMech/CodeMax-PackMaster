@@ -25,6 +25,7 @@ class ExportModule:
         self.pallet_size_var = tk.StringVar(value="")
         self.pallet_weight_var = tk.StringVar(value="0.0")        
         self.boxes_count_var = tk.StringVar(value="1")
+        self.pallet_num_var = tk.StringVar(value="1")
         
         # Переменные для пути Excel
         self.excel_file_path = None
@@ -33,6 +34,8 @@ class ExportModule:
         self.connected_roll_module = None
         self.order_data_module = None
         
+        self.box_frame = None
+        self.pallet_frame = None
         self.create_export_ui()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)        
@@ -48,7 +51,7 @@ class ExportModule:
         
         # Основной фрейм управления
         control_frame = ttk.Frame(frame)
-        control_frame.pack(fill=tk.BOTH, expand=True)
+        control_frame.pack(fill=tk.BOTH, expand=True)      
         
         # Секция экспорта коробки
         self.create_excel_section(control_frame)
@@ -57,7 +60,7 @@ class ExportModule:
         self.create_pallet_section(control_frame)
         
         # ===== Экспорт в Лист Много видов =====
-        self.create_multitype_section(control_frame)        
+        self.create_multitype_section(control_frame)
         
         # Статус экспорта
         self.export_status_label = ttk.Label(
@@ -67,35 +70,38 @@ class ExportModule:
             wraplength=330,
             font=("Arial", 14)
         )
-        self.export_status_label.pack(fill=tk.X, pady=10)      
+        self.export_status_label.pack(fill=tk.X, pady=10)
+        
+        # Инициализируем названия разделов
+        self._update_section_titles()
     
     def create_excel_section(self, parent):
         """Создает секцию экспорта коробки"""
-        box_frame = ttk.LabelFrame(parent, text="Упак.лист на коробку", padding=10)
-        box_frame.pack(fill=tk.X, pady=(0, 10))
+        self.box_frame = ttk.LabelFrame(parent, text="", padding=10)
+        self.box_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Конфигурация колонок
-        box_frame.columnconfigure(0, weight=1)
-        box_frame.columnconfigure(1, weight=1)
+        self.box_frame.columnconfigure(0, weight=1)
+        self.box_frame.columnconfigure(1, weight=1)
         
         # Комбобокс выбора коробки
-        ttk.Label(box_frame, text="Вес коробки:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
+        ttk.Label(self.box_frame, text="Вес коробки:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
         self.box_sizes_combo = ttk.Combobox(
-            box_frame,
+            self.box_frame,
             textvariable=self.box_size_var,
             state="readonly",
             width=20
         )
-        self.box_sizes_combo.grid(row=0, column=1, padx=(0, 5), pady=5, sticky="w")
+        self.box_sizes_combo.grid(row=0, column=1, padx=(5, 0), pady=5, sticky="w")
         self.box_sizes_combo.bind("<<ComboboxSelected>>", self.on_box_selected)     
         
         # Кнопки управления Excel
-        ttk.Button(box_frame, text="🎯 В Excel", 
+        ttk.Button(self.box_frame, text="🎯 В Excel", 
                   command=self.export_to_excel
-        ).grid(row=1, column=0, padx=(0, 5), pady=10, sticky="w")
+        ).grid(row=1, column=0, padx=(0, 5), pady=5, sticky="w")
         
-        excel_menu = ttk.Menubutton(box_frame, text="🧹", width=3)
-        excel_menu.grid(row=1, column=1, padx=(5, 0), pady=10, sticky="w")
+        excel_menu = ttk.Menubutton(self.box_frame, text="🧹", width=3)
+        excel_menu.grid(row=1, column=1, padx=(5, 0), pady=5, sticky="w")
         
         excel_menu.menu = tk.Menu(excel_menu, tearoff=0)
         excel_menu["menu"] = excel_menu.menu
@@ -106,28 +112,28 @@ class ExportModule:
         
         # Кнопка предпросмотра коробки
         btn_preview = ttk.Button(
-            box_frame,
+            self.box_frame,
             text="👀 Просмотр листа",
             width=18,
             command=self.show_box_preview,
             style="Accent.TButton"
         )
 
-        btn_preview.grid(row=2, column=0, pady=10, sticky="w", columnspan=2)
+        btn_preview.grid(row=2, column=0, pady=5, sticky="w", columnspan=2)
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
-        pallet_frame = ttk.LabelFrame(parent, text="Упак.лист на поддон", padding=10)
-        pallet_frame.pack(fill=tk.X, pady=(0, 10))
+        self.pallet_frame = ttk.LabelFrame(parent, text="", padding=10)
+        self.pallet_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Конфигурация колонок
-        pallet_frame.columnconfigure(0, weight=1)
-        pallet_frame.columnconfigure(1, weight=1)
+        self.pallet_frame.columnconfigure(0, weight=1)
+        self.pallet_frame.columnconfigure(1, weight=1)
         
         # Выбор поддона и вес
-        ttk.Label(pallet_frame, text="Вес поддона:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
+        ttk.Label(self.pallet_frame, text="Вес поддона:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")        
         self.pallet_sizes_combo = ttk.Combobox(
-            pallet_frame,
+            self.pallet_frame,
             textvariable=self.pallet_size_var,
             state="readonly",
             width=20
@@ -136,17 +142,24 @@ class ExportModule:
         self.pallet_sizes_combo.bind("<<ComboboxSelected>>", self.on_pallet_selected)
 
         # Количество коробок
-        ttk.Label(pallet_frame, text="Кол-во коробок:").grid(row=1, column=0, padx=(0, 5), pady=5, sticky="w")
-        boxes_count_entry = ttk.Entry(pallet_frame, textvariable=self.boxes_count_var, width=8)
+        ttk.Label(self.pallet_frame, text="Кол-во коробок:").grid(row=1, column=0, padx=(0, 5), pady=5, sticky="w")
+        boxes_count_entry = ttk.Entry(self.pallet_frame, textvariable=self.boxes_count_var, width=8)
         boxes_count_entry.grid(row=1, column=1, padx=(5, 0), pady=5, sticky="w")
+        
+        # Номер поддона
+        self.pallet_label = ttk.Label(self.pallet_frame, text="№ поддона:")
+        self.pallet_label.grid(row=2, column=0, padx=(0, 5), pady=5, sticky="w")
+        pallet_num_entry = ttk.Entry(self.pallet_frame, textvariable=self.pallet_num_var, width=8)
+        pallet_num_entry.grid(row=2, column=1, padx=(5, 0), pady=5, sticky="w")
+        self.pallet_num_entry = pallet_num_entry
 
         # Кнопки управления Excel для поддона
-        ttk.Button(pallet_frame, text="🎯 В Excel", 
+        ttk.Button(self.pallet_frame, text="🎯 В Excel", 
                   command=self.export_pallet_to_excel
-        ).grid(row=2, column=0, padx=(0, 5), pady=10, sticky="w")
+        ).grid(row=3, column=0, padx=(0, 5), pady=5, sticky="w")
         
-        pallet_menu = ttk.Menubutton(pallet_frame, text="🧹", width=3)
-        pallet_menu.grid(row=2, column=1, padx=(5, 0), pady=10, sticky="w")
+        pallet_menu = ttk.Menubutton(self.pallet_frame, text="🧹", width=3)
+        pallet_menu.grid(row=3, column=1, padx=(5, 0), pady=5, sticky="w")
         
         pallet_menu.menu = tk.Menu(pallet_menu, tearoff=0)
         pallet_menu["menu"] = pallet_menu.menu
@@ -157,12 +170,12 @@ class ExportModule:
         
         # Кнопка предпросмотра поддона
         ttk.Button(
-            pallet_frame,
+            self.pallet_frame,
             text="👀 Просмотр листа",
             width=18,
             command=self.show_pallet_preview,
             style="Accent.TButton"
-        ).grid(row=3, column=0, pady=(5, 0), sticky="w", columnspan=2)
+        ).grid(row=4, column=0, pady=(5, 0), sticky="w", columnspan=2)
         
     def create_multitype_section(self, parent):
         """Создает секцию экспорта в Лист Много видов"""
@@ -179,7 +192,7 @@ class ExportModule:
         ).grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
         
         multitype_menu = ttk.Menubutton(multitype_frame, text="🧹", width=3)
-        multitype_menu.grid(row=0, column=1, padx=(5, 0), pady=5, sticky="w")
+        multitype_menu.grid(row=0, column=0, padx=(180, 0), pady=5, sticky="w")
         
         multitype_menu.menu = tk.Menu(multitype_menu, tearoff=0)
         multitype_menu["menu"] = multitype_menu.menu
@@ -196,6 +209,23 @@ class ExportModule:
             width=18,
             style="Accent.TButton"
         ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
+        
+    def _update_section_titles(self):
+        """Обновляет названия разделов в зависимости от цеха"""
+        workshop = self.coordinator.get_workshop()
+        
+        if workshop == "1":
+            box_title = "Упак.лист на коробку"
+            pallet_title = "Упак.лист на поддон"
+        else:  # цех 2
+            box_title = "Упак.лист на поддон"
+            pallet_title = "Упак.лист Список поддонов"
+        
+        # Обновляем текст напрямую
+        if hasattr(self, 'box_frame'):
+            self.box_frame.config(text=box_title)
+        if hasattr(self, 'pallet_frame'):
+            self.pallet_frame.config(text=pallet_title)
 
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""
@@ -394,6 +424,22 @@ class ExportModule:
         """Обработчик изменений настроек от координатора"""
         self.load_box_sizes()
         self.load_pallet_sizes()
+        self._update_number_visibility()
+        self._update_section_titles()
+        
+    def _update_number_visibility(self):
+        """Показывает/скрывает номер поддона в зависимости от цеха"""
+        workshop = self.coordinator.get_workshop()
+        
+        # Управление видимостью
+        if hasattr(self, 'pallet_label') and hasattr(self, 'pallet_num_entry'):
+            if workshop == "1":
+                self.pallet_label.grid_remove()
+                self.pallet_num_entry.grid_remove()
+            else:  # цех 2
+                self.pallet_label.grid()
+                self.pallet_num_entry.grid()
+                      
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""

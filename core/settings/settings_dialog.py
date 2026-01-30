@@ -208,6 +208,18 @@ class SettingsDialog:
         elements_status = settings.get("elements_status", "Скрыть")
         self.elements_status_var = tk.StringVar(value=elements_status)
         
+        # 5. РАЗДЕЛ: Управление втулкой
+        bushing_frame = ttk.LabelFrame(left_frame, text="Втулка", padding=5)
+        bushing_frame.pack(fill=tk.X, pady=(0, 5))
+
+        # Кнопка открытия втулки
+        ttk.Button(
+            bushing_frame,
+            text="✓ Открыть модуль втулки",
+            command=self.open_weight_orders_window,
+            width=25
+        ).pack(padx=10, pady=10)
+        
         ttk.Radiobutton(
             elements_frame, 
             text="Скрыть", 
@@ -241,6 +253,48 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+        
+    def open_weight_orders_window(self):
+        """Открывает окно для работы с втулками"""
+        # Проверяем, есть ли уже открытое окно
+        if hasattr(self, 'weight_orders_window') and self.weight_orders_window and self.weight_orders_window.winfo_exists():
+            self.weight_orders_window.lift()
+            return
+
+        # Создаем новое окно
+        self.weight_orders_window = tk.Toplevel(self.parent_frame)
+        self.weight_orders_window.title("Втулка")
+        self.weight_orders_window.geometry("440x600")
+        
+        # Перехватываем фокус
+        self.weight_orders_window.grab_set()
+        
+        # Привязка Esc для закрытия
+        self.weight_orders_window.bind("<Escape>", lambda e: self.on_weight_orders_close())
+        
+        # Центрируем окно
+        self.weight_orders_window.update_idletasks()
+        width = self.weight_orders_window.winfo_width()
+        height = self.weight_orders_window.winfo_height()
+        x = (self.weight_orders_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.weight_orders_window.winfo_screenheight() // 2) - (height // 2)
+        self.weight_orders_window.geometry(f"+{x}+{y}")
+        
+        # Создаем модуль втулки, передавая config_manager
+        from apps.weight_orders_printer import WeightOrdersPrinter
+        self.weight_orders_module = WeightOrdersPrinter(
+            self.weight_orders_window,
+            config_manager=self.config_manager
+        )
+        
+        # Устанавливаем обработчик закрытия окна
+        self.weight_orders_window.protocol("WM_DELETE_WINDOW", self.on_weight_orders_close)
+        
+    def on_weight_orders_close(self):
+        """Обработчик закрытия окна втулки"""
+        if self.weight_orders_window:
+            self.weight_orders_window.destroy()
+            self.weight_orders_window = None
         
     def _get_label_size_text(self):
         """Возвращает текст с размером этикетки в формате '92x70'"""

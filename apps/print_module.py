@@ -4,9 +4,7 @@ from tkinter import ttk, StringVar
 import win32print
 import win32ui
 from PIL import Image, ImageTk
-from core.settings.settings_dialog import SettingsDialog
 from core.settings.font_settings_dialog import FontSettingsDialog
-from apps.weight_orders_printer import WeightOrdersPrinter
 from core.shared_utils import (
     mm_to_pixels,
     get_default_printer,
@@ -62,9 +60,9 @@ class PrintModule:
         # Используем grid для компактного размещения
         frame.grid_columnconfigure(0, weight=1)
         
-        # Строка 1: Копий и Печать
+        # Копий и Печать
         row1_frame = ttk.Frame(frame)
-        row1_frame.grid(row=0, column=0, sticky="ew", pady=7)
+        row1_frame.grid(row=0, column=0, sticky="ew", pady=5)
         row1_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(row1_frame, text="Копий:").grid(row=0, column=0, padx=(0, 5), sticky="w")
@@ -74,7 +72,7 @@ class PrintModule:
             textvariable=self.copies_var,
             justify='center'
         )
-        copies_entry.grid(row=0, column=1, padx=(0, 10), sticky="w")
+        copies_entry.grid(row=0, column=1, padx=(0, 30), sticky="w")
         copies_entry.bind('<FocusIn>', lambda e: copies_entry.select_range(0, tk.END))
         copies_entry.bind('<Return>', lambda e: self.print_rolls_with_box())
         
@@ -82,35 +80,29 @@ class PrintModule:
             row1_frame, 
             text="🖨 Печать", 
             command=self.print_label
-        ).grid(row=0, column=2, sticky="ew")
+        ).grid(row=0, column=2, sticky="w")
         row1_frame.grid_columnconfigure(2, weight=1)
         
-        # Строка 2: Настройки и Втулка
+        # Настройки
         row2_frame = ttk.Frame(frame)
         row2_frame.grid(row=1, column=0, sticky="ew", pady=7)
         row2_frame.grid_columnconfigure(0, weight=1, uniform="row2")
-        row2_frame.grid_columnconfigure(1, weight=1, uniform="row2")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="row2")      
+        
+        # Печать тиража
+        ttk.Button(
+            row2_frame, 
+            text="📋 Печать тиража", 
+            command=self.start_batch_print
+        ).grid(row=0, column=0, sticky="w", pady=5)
         
         ttk.Button(
             row2_frame, 
             text="⚙ Настройки", 
             command=self.open_settings_manager
-        ).grid(row=0, column=0, padx=(0, 5), sticky="ew")
+        ).grid(row=0, column=1, padx=5, sticky="w", pady=5)        
         
-        ttk.Button(
-            row2_frame, 
-            text="✓ Втулка", 
-            command=self.open_weight_orders_window
-        ).grid(row=0, column=1, sticky="ew")
-        
-        # Строка 3: Печать тиража
-        ttk.Button(
-            frame, 
-            text="📋 Печать тиража", 
-            command=self.start_batch_print
-        ).grid(row=2, column=0, sticky="ew", pady=7)
-        
-        # Строка 4: Статус печати
+        # Статус печати
         self.print_status_label = ttk.Label(
             frame,
             text="",
@@ -118,7 +110,7 @@ class PrintModule:
             wraplength=250,
             font=("Arial", 12)
         )
-        self.print_status_label.grid(row=3, column=0, sticky="ew", pady=(7, 0))
+        self.print_status_label.grid(row=2, column=0, sticky="w", pady=(7, 0))
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""
@@ -259,43 +251,7 @@ class PrintModule:
         except Exception as e:
             self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
             self.current_batch_index += 1
-            self.parent.after(100, self.print_next_in_batch)
-        
-    def open_weight_orders_window(self):
-        """Открывает окно для работы с втулками"""
-        if self.weight_orders_window and self.weight_orders_window.winfo_exists():
-            self.weight_orders_window.lift()
-            return
-
-        # Создаем новое окно
-        self.weight_orders_window = tk.Toplevel(self.parent)
-        self.weight_orders_window.title("Втулка")
-        self.weight_orders_window.geometry("440x600")
-        self.weight_orders_window.grab_set()
-        
-        # Центрируем окно
-        self.weight_orders_window.update_idletasks()
-        width = self.weight_orders_window.winfo_width()
-        height = self.weight_orders_window.winfo_height()
-        x = (self.weight_orders_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.weight_orders_window.winfo_screenheight() // 2) - (height // 2)
-        self.weight_orders_window.geometry(f"+{x}+{y}")
-        self.weight_orders_window.bind("<Escape>", lambda e: self.on_weight_orders_close())
-        
-        # Создаем модуль втулки в этом окне
-        self.weight_orders_module = WeightOrdersPrinter(
-            self.weight_orders_window,
-            config_manager=self.config_manager
-        )
-        
-        # Устанавливаем обработчик закрытия окна
-        self.weight_orders_window.protocol("WM_DELETE_WINDOW", self.on_weight_orders_close)
-        
-    def on_weight_orders_close(self):
-        """Обработчик закрытия окна втулки"""
-        if self.weight_orders_window:
-            self.weight_orders_window.destroy()
-            self.weight_orders_window = None
+            self.parent.after(100, self.print_next_in_batch)       
             
     def load_settings(self, settings_key):
         """Загружает настройки печати из JSON-файла для конкретного ключа"""

@@ -31,7 +31,7 @@ class ListsSettingsDialog:
         content_frame.pack(fill=tk.BOTH, expand=True)
 
         # Список коробок
-        boxes_frame = ttk.LabelFrame(content_frame, text="🎯 Расстрельные списки", padding=10)
+        boxes_frame = ttk.LabelFrame(content_frame, text="🎯 Списки для редактирования", padding=10)
         boxes_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=10)    
         
         open_boxes_btn = ttk.Button(

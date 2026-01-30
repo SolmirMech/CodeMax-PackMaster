@@ -110,7 +110,7 @@ class OrderDataProcessor:
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
-        archive_frame.grid(row=0, column=0, padx=(440, 0), sticky="w", pady=5)
+        archive_frame.grid(row=0, column=0, padx=(420, 0), sticky="w", pady=5)
 
         ttk.Button(
             archive_frame, 

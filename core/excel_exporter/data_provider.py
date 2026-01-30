@@ -378,6 +378,9 @@ class ExportDataProvider:
             boxes_count_str = self.roll_module.preview_module.export_module.boxes_count_var.get()
             data['boxes_count'] = self._convert_to_number(boxes_count_str, force_int=True)
             
+            pallet_num_str = self.roll_module.preview_module.export_module.pallet_num_var.get()
+            data['pallet_num'] = self._convert_to_number(pallet_num_str, force_int=True)            
+            
             # Количество роликов
             if hasattr(self.roll_module, 'rolls_count_var'):
                 count_str = self.roll_module.rolls_count_var.get()
@@ -425,6 +428,7 @@ class ExportDataProvider:
             
             # Данные роликов
             'rolls_count': all_data['quantities'].get('rolls_count'),
+            'pallet_num': all_data['quantities'].get('pallet_num'),
             'net_weight_per_roll': all_data['weights'].get('net_weight_per_roll'),  # Только нетто!
             'quantity_per_roll': all_data['quantities'].get('quantity_per_roll'),
             'roll_length': all_data['dimensions'].get('roll_length'),  # Длина ролика

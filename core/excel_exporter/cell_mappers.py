@@ -878,6 +878,8 @@ class CellMappingRegistry:
             ]         
         )  
 
+    # ==================== МАППИНГИ ДЛЯ ЦЕХА 2 ====================
+
     @staticmethod
     def get_workshop2_box_mapping() -> SheetMapping:
         """
@@ -977,6 +979,19 @@ class CellMappingRegistry:
                     ),
                     required=False
                 ),
+                
+                # Номер поддона - D5
+                CellMapping(
+                    cell_reference="D5",
+                    data_key="pallet_num",
+                    data_type=DataType.NUMBER,
+                    format=CellFormat(
+                        horizontal_alignment=HorizontalAlignment.CENTER,
+                        vertical_alignment=VerticalAlignment.CENTER,
+                        number_format="0"
+                    ),
+                    required=False
+                ),                
                 
                 # Вес коробки - H3
                 CellMapping(
