@@ -59,6 +59,9 @@ class RollLabelPrinter:
         self.xml_tu_number = ""
         self.cached_order_data = None
         self.cached_order_number = ""
+        # Флаг для оптимизации
+        self._skip_weight_calculation = False
+        self._weight_timer = None
                     
         self.create_ui()
         self.load_box_sizes()
@@ -67,51 +70,122 @@ class RollLabelPrinter:
             self._update_cutter_visibility()
             self.load_sleeve_weights()
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
-        variables_to_track = [
-            self.rolls_count_var,
-            self.box_weight_var, 
-            self.gross_weight_kg_var,
-            self.net_weight_kg_var
-        ]
+        # Оставляем только одну подписку на каждую переменную
+        self.gross_weight_kg_var.trace_add("write", self._on_weight_changed)
+        self.sleeve_weight_var.trace_add("write", self._on_weight_changed)
+        self.rolls_count_var.trace_add("write", self._on_weight_changed)
+        self.box_weight_var.trace_add("write", self._on_weight_changed)
         
-        for var in variables_to_track:
-            var.trace_add("write", self.calculate_box_weights)
+        # Отдельно для quantity
         self.quantity_var.trace_add("write", self.calculate_total_quantity)
         
-    def calculate_box_weights(self, *args):
-        """Автоматически рассчитывает вес коробки брутто и нетто"""
+    def _on_weight_changed(self, *args):
+        """Единый обработчик изменений веса"""
+        # ПРОВЕРКА 1: Пропускаем если это программная очистка
+        if hasattr(self, '_skip_weight_calculation') and self._skip_weight_calculation:
+            return
+        
+        # ПРОВЕРКА 2: Пропускаем если вес отключен
+        if not self.show_weight_var.get():
+            return
+        
+        # ПРОВЕРКА 3: Дебаунсинг - безопасно отменяем предыдущий таймер
+        if hasattr(self, '_weight_timer') and self._weight_timer is not None:
+            try:
+                self.parent.after_cancel(self._weight_timer)
+            except (ValueError, TypeError):
+                # Игнорируем ошибки отмены (таймер уже сработал или недействителен)
+                pass
+        
+        # Устанавливаем новый таймер на 70ms
+        self._weight_timer = self.parent.after(70, self._calculate_all_weights)
+
+    def _calculate_all_weights(self):
+        """Вычисляет все веса"""
+        # Двойная проверка флагов (на всякий случай)
+        if hasattr(self, '_skip_weight_calculation') and self._skip_weight_calculation:
+            return
+        if not self.show_weight_var.get():
+            return
+        
         try:
-            rolls_count = int(self.rolls_count_var.get() or 0)
-            box_weight_kg = self.parse_float(self.box_weight_var.get() or 0)
-            
-            if rolls_count == 0:
+            # 1. БЫСТРЫЙ парсинг значений
+            gross_str = self.gross_weight_kg_var.get().strip()
+            if not gross_str:
+                # Если поле пустое - очищаем все и выходим
+                self.net_weight_kg_var.set("")
                 self.total_gross_var.set("")
                 self.total_net_var.set("")
                 return
             
-            # Бери значения прямо из полей ввода:
-            roll_gross_kg = self.parse_float(self.gross_weight_kg_var.get() or 0)
-            roll_net_kg = self.parse_float(self.net_weight_kg_var.get() or 0)
-            
-            if roll_gross_kg == 0:
+            # Пробуем быстро распарсить
+            try:
+                gross_kg = float(gross_str.replace(',', '.'))
+            except ValueError:
+                # Если не число - очищаем все
+                self.net_weight_kg_var.set("")
                 self.total_gross_var.set("")
                 self.total_net_var.set("")
                 return
             
-            # Рассчитываем общий вес роликов
-            total_rolls_gross = rolls_count * roll_gross_kg
-            total_rolls_net = rolls_count * roll_net_kg
+            # 2. Парсим остальные значения только если gross_kg > 0
+            if gross_kg <= 0:
+                self.net_weight_kg_var.set("")
+                self.total_gross_var.set("")
+                self.total_net_var.set("")
+                return
             
-            # Добавляем вес коробки к брутто (НЕ к нетто!)
-            total_gross = total_rolls_gross + box_weight_kg
-            total_net = total_rolls_net  # Вес коробки НЕ добавляется к нетто
+            # Парсим вес втулки
+            sleeve_str = self.sleeve_weight_var.get().strip()
+            sleeve_g = float(sleeve_str.replace(',', '.')) if sleeve_str else 0
             
-            # Обновляем поля
-            self.total_gross_var.set(f"{total_gross:.2f}")
-            self.total_net_var.set(f"{total_net:.2f}")
+            # Рассчитываем нетто
+            sleeve_kg = sleeve_g / 1000
+            net_kg = max(gross_kg - sleeve_kg, 0)
             
-        except (ValueError, TypeError) as e:
-            print(f"Ошибка расчета весов: {e}")
+            # Устанавливаем нетто
+            if net_kg > 0:
+                self.net_weight_kg_var.set(f"{net_kg:.2f}")
+            else:
+                self.net_weight_kg_var.set("")
+            
+            # 3. Рассчитываем вес коробки (если нужно)
+            rolls_str = self.rolls_count_var.get().strip()
+            if rolls_str:
+                try:
+                    rolls_count = int(rolls_str)
+                    if rolls_count > 0:
+                        # Парсим вес коробки
+                        box_str = self.box_weight_var.get().strip()
+                        box_weight_kg = float(box_str.replace(',', '.')) if box_str else 0
+                        
+                        # Рассчитываем
+                        total_rolls_gross = rolls_count * gross_kg
+                        total_rolls_net = rolls_count * net_kg
+                        
+                        total_gross = total_rolls_gross + box_weight_kg
+                        total_net = total_rolls_net
+                        
+                        self.total_gross_var.set(f"{total_gross:.2f}")
+                        self.total_net_var.set(f"{total_net:.2f}")
+                    else:
+                        self.total_gross_var.set("")
+                        self.total_net_var.set("")
+                except ValueError:
+                    self.total_gross_var.set("")
+                    self.total_net_var.set("")
+            else:
+                self.total_gross_var.set("")
+                self.total_net_var.set("")         
+                
+        except Exception:
+            # При любой ошибке очищаем расчетные поля
+            self.net_weight_kg_var.set("")
+            self.total_gross_var.set("")
+            self.total_net_var.set("")
+            
+        if hasattr(self, 'coordinator') and self.coordinator:
+            self.coordinator.check_weight_status(self)
             
     def _on_producer_visibility_changed(self, *args):
         """Обрабатывает изменение видимости производителя"""
@@ -362,8 +436,6 @@ class RollLabelPrinter:
         self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=8)
         self.streams_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")        
         
-        self.gross_weight_kg_var.trace_add("write", self.calculate_net_weight)
-        self.sleeve_weight_var.trace_add("write", self.calculate_net_weight)
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
         self.label_length_mm.trace_add("write", self.calculate_quantity_from_length)
@@ -946,22 +1018,48 @@ class RollLabelPrinter:
             self.roll_length_entry.grid()
             
     def toggle_weight_visibility(self):
-        """Показывает/скрывает строку с весом в зависимости от состояния галочки"""
+        """Показывает/скрывает строку с весом"""
         show_weight = self.show_weight_var.get()
         
-        if show_weight:
-            self.gross_weight_kg_var.set("")
-            self.weight_label.grid()
-            self.gross_entry.grid()
-            self.sleeve_label.grid()
-            self.sleeve_entry.grid()
-        else:
-            self.gross_weight_kg_var.set("")
-            self.weight_label.grid_remove()
-            self.gross_entry.grid_remove()
-            self.sleeve_label.grid_remove()
-            self.sleeve_entry.grid_remove()
-            self.coordinator.check_weight_status(self)
+        # Устанавливаем флаг для предотвращения расчетов при программной очистке
+        self._skip_weight_calculation = True
+        
+        try:
+            if show_weight:
+                # 1. Сначала показываем элементы (быстрая операция)
+                self.weight_label.grid()
+                self.gross_entry.grid()
+                self.sleeve_label.grid()
+                self.sleeve_entry.grid()
+                
+                # 2. Очищаем переменные (trace временно отключены флагом)
+                self.gross_weight_kg_var.set("")
+                self.net_weight_kg_var.set("")
+                self.total_gross_var.set("")
+                self.total_net_var.set("")
+                
+                # 3. Фокус через небольшой таймаут
+                self.parent.after(50, lambda: self.gross_entry.focus_set())
+                
+            else:
+                # 1. Очищаем переменные (trace временно отключены флагом)
+                self.gross_weight_kg_var.set("")
+                self.net_weight_kg_var.set("")
+                self.total_gross_var.set("")
+                self.total_net_var.set("")
+                
+                # 2. Скрываем элементы
+                self.weight_label.grid_remove()
+                self.gross_entry.grid_remove()
+                self.sleeve_label.grid_remove()
+                self.sleeve_entry.grid_remove()
+                
+                # 3. Пересчитываем только количество (отдельный trace, работает)
+                self.calculate_total_quantity()
+                
+        finally:
+            # Всегда снимаем флаг
+            self._skip_weight_calculation = False
             
     def update_elements_visibility(self):
         """Обновляет видимость дополнительных элементов на основе настроек"""
@@ -1245,10 +1343,29 @@ class RollLabelPrinter:
         self.preview_module = preview_module
         
     def parse_float(self, value):
-        """Преобразует строку в float, заменяя запятую на точку"""
+        """Сверхоптимизированная версия parse_float"""
+        if not value:
+            return 0.0
+        
+        # Быстрая проверка на стандартные случаи
+        if isinstance(value, (int, float)):
+            return float(value)
+        
         if isinstance(value, str):
-            return float(value.replace(',', '.'))
-        return float(value)        
+            value = value.strip()
+            if not value:
+                return 0.0
+            
+            # Быстрая замена запятой
+            if ',' in value:
+                value = value.replace(',', '.', 1)  # Заменяем только первую
+            
+            try:
+                return float(value)
+            except ValueError:
+                return 0.0
+        
+        return 0.0
         
     def load_box_sizes(self):
         """Загружает список коробок из shared_utils.json"""
@@ -1302,38 +1419,7 @@ class RollLabelPrinter:
 
     def set_order_data_module(self, order_data_module):
         """Устанавливает прямую связь с модулем обработки данных заказов"""
-        self.order_data_module = order_data_module
-        
-    def calculate_net_weight(self, *args):
-        """Автоматически рассчитывает вес нетто"""
-        try:
-            gross_kg = self.parse_float(self.gross_weight_kg_var.get() or 0)
-            
-            # Если вес брутто 0 - очищаем нетто
-            if gross_kg == 0:
-                self.net_weight_kg_var.set("")
-                self.total_gross_var.set("")
-                self.total_net_var.set("")
-                return
-                
-            sleeve_g = self.parse_float(self.sleeve_weight_var.get() or 0)
-            sleeve_kg = sleeve_g / 1000
-            net_kg = gross_kg - sleeve_kg
-            
-            # Если результат отрицательный или нулевой - очищаем
-            if net_kg <= 0:
-                self.net_weight_kg_var.set("")
-                self.total_gross_var.set("")
-                self.total_net_var.set("")
-            else:
-                self.net_weight_kg_var.set(f"{net_kg:.2f}")
-                
-        except (ValueError, TypeError):
-            self.net_weight_kg_var.set("")
-            
-        # ВСЕГДА уведомляем координатор при изменении веса
-        if hasattr(self, 'coordinator') and self.coordinator:
-            self.coordinator.check_weight_status(self)
+        self.order_data_module = order_data_module      
         
     # Раздел для настройки поля ввода
     def control_key_handler(self, event):
