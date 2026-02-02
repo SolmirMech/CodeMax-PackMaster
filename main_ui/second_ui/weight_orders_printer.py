@@ -3,14 +3,20 @@ from tkinter import ttk, StringVar, BooleanVar
 from datetime import datetime
 import win32print
 import win32ui
-from core.shared_utils import (
-    mm_to_pixels,
-    get_default_printer,
-    create_printer_dc,
-)
+
+def mm_to_pixels(mm):
+    return int(mm * 8)  # 8 точек на мм
+
+def get_default_printer():
+    return win32print.GetDefaultPrinter()
+
+def create_printer_dc(printer_name):
+    hdc = win32ui.CreateDC()
+    hdc.CreatePrinterDC(printer_name)
+    return hdc
 
 class WeightOrdersPrinter:
-    """Принтер этикеток для втулок (левая часть интерфейса)."""
+    """Принтер этикеток для втулок."""
     
     def __init__(self, parent, config_manager=None):
         self.parent = parent

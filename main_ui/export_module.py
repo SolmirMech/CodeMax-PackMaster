@@ -1,4 +1,3 @@
-# apps/export_module.py
 import tkinter as tk
 from tkinter import ttk, StringVar
 import os
@@ -230,7 +229,7 @@ class ExportModule:
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""
         if not hasattr(self, 'excel_preview_module'):
-            from apps.preview.excel_preview_module import ExcelPreviewModule
+            from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
                 self.coordinator,
@@ -353,7 +352,7 @@ class ExportModule:
     def show_box_preview(self):
         """Открывает предпросмотр для коробки"""
         if not hasattr(self, 'excel_preview_module'):
-            from apps.preview.excel_preview_module import ExcelPreviewModule
+            from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
                 self.coordinator,
@@ -388,7 +387,7 @@ class ExportModule:
     def show_pallet_preview(self):
         """Открывает предпросмотр для поддона"""
         if not hasattr(self, 'excel_preview_module'):
-            from apps.preview.excel_preview_module import ExcelPreviewModule
+            from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
                 self.coordinator,

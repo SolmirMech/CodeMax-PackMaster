@@ -6,8 +6,8 @@ import sys
 import shutil
 import xml.etree.ElementTree as ET
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
-from apps.preview.excel_preview_module import ExcelPreviewModule
-from core.ui.comment_manager import CommentManager
+from main_ui.preview.excel_preview_module import ExcelPreviewModule
+from main_ui.second_ui.comment_manager import CommentManager
 from core.parse.name_shortener import NameShortener
 
 class OrderDataProcessor:
@@ -125,7 +125,7 @@ class OrderDataProcessor:
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
-        archive_frame.grid(row=0, column=0, padx=(420, 0), sticky="w", pady=5)
+        archive_frame.grid(row=0, column=0, padx=(400, 0), sticky="w", pady=5)
 
         ttk.Button(
             archive_frame, 

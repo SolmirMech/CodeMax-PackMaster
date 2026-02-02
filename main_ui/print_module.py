@@ -1,15 +1,12 @@
-# apps/print_module.py
 import tkinter as tk
 from tkinter import ttk, StringVar
 import win32print
 import win32ui
 from PIL import Image, ImageTk
 from core.settings.font_settings_dialog import FontSettingsDialog
-from core.shared_utils import (
-    mm_to_pixels,
-    get_default_printer,
-    create_printer_dc,
-)
+
+def get_default_printer():
+    return win32print.GetDefaultPrinter()
 
 class PrintModule:
     """Модуль управления печатью этикеток"""

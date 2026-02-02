@@ -1,4 +1,3 @@
-# apps/preview/excel_preview_module.py
 import tkinter as tk
 from tkinter import ttk
 import os

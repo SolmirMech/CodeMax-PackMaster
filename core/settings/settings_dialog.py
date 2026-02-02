@@ -3,13 +3,12 @@ from tkinter import ttk, filedialog
 import win32print
 import win32ui
 import os
+import sys
 import shutil
 from core.config_manager import ConfigManager
-from core.shared_utils import (
-    mm_to_pixels,
-    get_default_printer,
-    create_printer_dc,
-)
+
+def get_default_printer():
+    return win32print.GetDefaultPrinter()
 
 
 class SettingsDialog:
@@ -159,7 +158,7 @@ class SettingsDialog:
 
         # 2. РАЗДЕЛ: Изготовитель
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Изготовитель", padding=5)
-        manufacturer_frame.grid(row=1, column=0, rowspan=2, sticky="w", padx=(5, 0), pady=(0, 5))
+        manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
         
         self.manufacturer_var = tk.StringVar(value=self.preview_export_module.manufacturer)
         manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
@@ -181,7 +180,23 @@ class SettingsDialog:
             text="✓ Печать на втулку",
             command=self.open_weight_orders_window,
             width=19
-        ).grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="w")        
+        ).grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        # Кнопка доступа к папке данных
+        ttk.Button(
+            manufacturer_frame,
+            text="📁 Папка настроек",
+            command=self.open_data_folder,
+            width=17
+        ).grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        # Кнопка доступа к папке ассетсов
+        ttk.Button(
+            manufacturer_frame,
+            text="📁 Папка шаблонов",
+            command=self.open_assets_folder,
+            width=17
+        ).grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="w")       
         
         # 3. РАЗДЕЛ: Настройки архивации
         archive_frame = ttk.LabelFrame(content_frame, text="Архивация листов при печати", padding=5)
@@ -239,7 +254,7 @@ class SettingsDialog:
             wraplength=700,
             anchor="w"
         )
-        self.message_status_label.grid(row=3, column=0, columnspan=3, sticky="we", padx=5, pady=(5, 0))
+        self.message_status_label.grid(row=5, column=0, columnspan=3, sticky="we", padx=5, pady=(5, 0))
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
@@ -260,6 +275,38 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+        
+    def open_data_folder(self):
+        """Открывает папку данных в проводнике"""
+        try:
+            data_dir = self.config_manager.data_dir
+            if os.path.exists(data_dir):
+                os.startfile(data_dir)
+            else:
+                self.show_message(f"Папка данных не найдена: {data_dir}", "red")
+        except Exception as e:
+            self.show_message(f"Ошибка открытия папки данных: {str(e)}", "red")
+
+    def open_assets_folder(self):
+        """Открывает папку ассетсов в проводнике"""
+        try:
+            # Получаем путь к папке assets
+            if hasattr(sys, '_MEIPASS'):
+                # Режим бинарника
+                base_path = os.path.dirname(sys.executable)
+                assets_dir = os.path.join(base_path, "_internal", "assets")
+            else:
+                # Режим разработки
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(os.path.dirname(current_dir))
+                assets_dir = os.path.join(project_root, "assets")
+            
+            if os.path.exists(assets_dir):
+                os.startfile(assets_dir)
+            else:
+                self.show_message(f"Папка шаблонов не найдена: {assets_dir}", "red")
+        except Exception as e:
+            self.show_message(f"Ошибка открытия папки шаблонов: {str(e)}", "red")        
         
     def clear_message_after_delay(self, delay_ms=5000):
         """Очищает сообщение через указанное время"""
@@ -308,7 +355,7 @@ class SettingsDialog:
         self.weight_orders_window.geometry(f"+{x}+{y}")
         
         # Создаем модуль втулки, передавая config_manager
-        from apps.weight_orders_printer import WeightOrdersPrinter
+        from main_ui.second_ui.weight_orders_printer import WeightOrdersPrinter
         self.weight_orders_module = WeightOrdersPrinter(
             self.weight_orders_window,
             config_manager=self.config_manager

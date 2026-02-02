@@ -223,11 +223,11 @@ if __name__ == "__main__":
     if not check_demo_mode():
         sys.exit(1)
         
-    from apps.order_data_processor import OrderDataProcessor
-    from apps.weight_roll_printer import RollLabelPrinter
-    from apps.preview.roll_preview import RollPreview
-    from apps.print_module import PrintModule
-    from apps.export_module import ExportModule
+    from main_ui.order_data_processor import OrderDataProcessor
+    from main_ui.weight_roll_printer import RollLabelPrinter
+    from main_ui.preview.roll_preview import RollPreview
+    from main_ui.print_module import PrintModule
+    from main_ui.export_module import ExportModule
 
     root = tk.Tk()
     app = WeightOrdersApp(root)
