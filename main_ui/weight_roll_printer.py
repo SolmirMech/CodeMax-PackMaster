@@ -62,6 +62,9 @@ class RollLabelPrinter:
         # Флаг для оптимизации
         self._skip_weight_calculation = False
         self._weight_timer = None
+        self._quantity_timer = None
+        self._length_timer = None
+        self._normalize_cache = {}
                     
         self.create_ui()
         self.load_box_sizes()
@@ -109,13 +112,22 @@ class RollLabelPrinter:
             return
         
         try:
-            # 1. БЫСТРЫЙ парсинг значений
-            gross_str = self.gross_weight_kg_var.get().strip()
+            # Локальные ссылки на часто используемые переменные
+            gross_var = self.gross_weight_kg_var
+            sleeve_var = self.sleeve_weight_var
+            rolls_var = self.rolls_count_var
+            box_var = self.box_weight_var
+            net_var = self.net_weight_kg_var
+            total_gross_var = self.total_gross_var
+            total_net_var = self.total_net_var
+            
+            # 1. Быстрый парсинг значений
+            gross_str = gross_var.get().strip()
             if not gross_str:
                 # Если поле пустое - очищаем все и выходим
-                self.net_weight_kg_var.set("")
-                self.total_gross_var.set("")
-                self.total_net_var.set("")
+                net_var.set("")
+                total_gross_var.set("")
+                total_net_var.set("")
                 return
             
             # Пробуем быстро распарсить
@@ -123,20 +135,20 @@ class RollLabelPrinter:
                 gross_kg = float(gross_str.replace(',', '.'))
             except ValueError:
                 # Если не число - очищаем все
-                self.net_weight_kg_var.set("")
-                self.total_gross_var.set("")
-                self.total_net_var.set("")
+                net_var.set("")
+                total_gross_var.set("")
+                total_net_var.set("")
                 return
             
             # 2. Парсим остальные значения только если gross_kg > 0
             if gross_kg <= 0:
-                self.net_weight_kg_var.set("")
-                self.total_gross_var.set("")
-                self.total_net_var.set("")
+                net_var.set("")
+                total_gross_var.set("")
+                total_net_var.set("")
                 return
             
             # Парсим вес втулки
-            sleeve_str = self.sleeve_weight_var.get().strip()
+            sleeve_str = sleeve_var.get().strip()
             sleeve_g = float(sleeve_str.replace(',', '.')) if sleeve_str else 0
             
             # Рассчитываем нетто
@@ -145,18 +157,18 @@ class RollLabelPrinter:
             
             # Устанавливаем нетто
             if net_kg > 0:
-                self.net_weight_kg_var.set(f"{net_kg:.2f}")
+                net_var.set(f"{net_kg:.2f}")
             else:
-                self.net_weight_kg_var.set("")
+                net_var.set("")
             
             # 3. Рассчитываем вес коробки (если нужно)
-            rolls_str = self.rolls_count_var.get().strip()
+            rolls_str = rolls_var.get().strip()
             if rolls_str:
                 try:
                     rolls_count = int(rolls_str)
                     if rolls_count > 0:
                         # Парсим вес коробки
-                        box_str = self.box_weight_var.get().strip()
+                        box_str = box_var.get().strip()
                         box_weight_kg = float(box_str.replace(',', '.')) if box_str else 0
                         
                         # Рассчитываем
@@ -166,23 +178,23 @@ class RollLabelPrinter:
                         total_gross = total_rolls_gross + box_weight_kg
                         total_net = total_rolls_net
                         
-                        self.total_gross_var.set(f"{total_gross:.2f}")
-                        self.total_net_var.set(f"{total_net:.2f}")
+                        total_gross_var.set(f"{total_gross:.2f}")
+                        total_net_var.set(f"{total_net:.2f}")
                     else:
-                        self.total_gross_var.set("")
-                        self.total_net_var.set("")
+                        total_gross_var.set("")
+                        total_net_var.set("")
                 except ValueError:
-                    self.total_gross_var.set("")
-                    self.total_net_var.set("")
+                    total_gross_var.set("")
+                    total_net_var.set("")
             else:
-                self.total_gross_var.set("")
-                self.total_net_var.set("")         
+                total_gross_var.set("")
+                total_net_var.set("")         
                 
         except Exception:
             # При любой ошибке очищаем расчетные поля
-            self.net_weight_kg_var.set("")
-            self.total_gross_var.set("")
-            self.total_net_var.set("")
+            net_var.set("")
+            total_gross_var.set("")
+            total_net_var.set("")
             
         if hasattr(self, 'coordinator') and self.coordinator:
             self.coordinator.check_weight_status(self)
@@ -898,7 +910,7 @@ class RollLabelPrinter:
             'address': '',
             'tu_number': self.xml_tu_number or '',  # Берем ТУ из XML если есть
             'product': ''
-        }      
+        }
         
         manufacturer = self.manufacturer_var.get()
         product = self.product_type_var.get()
@@ -907,16 +919,20 @@ class RollLabelPrinter:
             return result
         
         try:
+            # Локальные ссылки
+            normalize_func = self._normalize_string
+            sorted_technical_specs = self.sorted_technical_specs
+            
             # Нормализуем имя производителя для сравнения
-            normalized_manufacturer = self._normalize_string(manufacturer)
+            normalized_manufacturer = normalize_func(manufacturer)
             
             # ВАЖНО: собираем ТОЛЬКО продукты для текущего производителя
             current_manufacturer_products = []
             
             # Сначала собираем все продукты текущего производителя
-            for spec in self.sorted_technical_specs:
+            for spec in sorted_technical_specs:
                 spec_manufacturer = spec["manufacturer"]["name"]
-                normalized_spec_manufacturer = self._normalize_string(spec_manufacturer)
+                normalized_spec_manufacturer = normalize_func(spec_manufacturer)
                 
                 if normalized_spec_manufacturer == normalized_manufacturer:
                     current_manufacturer_products.append(spec)
@@ -947,18 +963,36 @@ class RollLabelPrinter:
         return result
         
     def _normalize_string(self, text: str) -> str:
-        """Нормализует строку для сравнения (убирает ООО, кавычки, пробелы)"""
+        """Нормализация с кэшированием"""
         if not text:
             return ""
-        # Удаляем "ООО"/"OOO" и кавычки, приводим к нижнему регистру
+        
+        if text in self._normalize_cache:
+            return self._normalize_cache[text]
+        
+        # оригинальная логика
         normalized = text.lower()
         normalized = normalized.replace('ooo', '').replace('ооо', '')
         normalized = normalized.replace('"', '').replace("'", "")
         normalized = normalized.replace(' ', '').strip()
-        return normalized        
+        
+        self._normalize_cache[text] = normalized
+        return normalized
         
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""
+        # Дебаунсинг для оптимизации
+        if hasattr(self, '_length_timer') and self._length_timer is not None:
+            try:
+                self.parent.after_cancel(self._length_timer)
+            except (ValueError, TypeError):
+                pass
+        
+        # Устанавливаем новый таймер
+        self._length_timer = self.parent.after(70, self._calculate_quantity_from_length_actual)
+
+    def _calculate_quantity_from_length_actual(self):
+        """Фактический расчет количества из длины"""
         try:
             roll_length_m = self.parse_float(self.roll_length.get() or 0)
             label_length_mm = self.parse_float(self.label_length_mm.get() or 0)
@@ -1143,36 +1177,43 @@ class RollLabelPrinter:
     def load_manufacturer_options(self, event=None):
         """Загружает варианты производителей и продуктов из packaging_tu.json"""
         try:
+            # Локальные ссылки
+            config_manager = self.config_manager
+            manufacturer_combo = self.manufacturer_combo
+            product_combo = self.product_combo
+            manufacturer_var = self.manufacturer_var
+            product_type_var = self.product_type_var
+            
             # Проверяем существует ли файл в data_dir
-            settings_path = self.config_manager.get_settings_path("packaging_tu.json")
+            settings_path = config_manager.get_settings_path("packaging_tu.json")
             if not os.path.exists(settings_path):
                 print(f"Файл packaging_tu.json не найден в {settings_path}")
                 # Пробуем скопировать из assets
                 self._copy_packaging_tu_from_assets()
             
             # Загружаем данные
-            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
+            packaging_data = config_manager.load_json_settings("packaging_tu.json")
             
             # Если данные пустые или не содержат нужной структуры
             if not packaging_data or "technical_specifications" not in packaging_data:
                 print("⚠️ Файл packaging_tu.json поврежден или пуст")
                 # Просто очищаем списки и выходим
-                self.manufacturer_combo['values'] = []
-                self.product_combo['values'] = []
-                self.manufacturer_var.set("")
-                self.product_type_var.set("")
+                manufacturer_combo['values'] = []
+                product_combo['values'] = []
+                manufacturer_var.set("")
+                product_type_var.set("")
                 return
             
             technical_specs = packaging_data.get("technical_specifications", [])
+            specs_len = len(technical_specs)
             
             # СОРТИРОВКА ПО ID (id=1 должен быть первым)
             technical_specs.sort(key=lambda x: x.get("id", 999))
             
             # Если список не изменился - не обновляем UI
-            current_count = len(technical_specs)
-            if hasattr(self, 'last_tu_count') and self.last_tu_count == current_count:
+            if hasattr(self, 'last_tu_count') and self.last_tu_count == specs_len:
                 return
-            self.last_tu_count = current_count
+            self.last_tu_count = specs_len
             
             # Собираем уникальных производителей (сохраняем порядок по ID)
             manufacturers = []  # Список для сохранения порядка
@@ -1199,30 +1240,30 @@ class RollLabelPrinter:
             self.sorted_technical_specs = technical_specs
             
             # Сохраняем текущий выбор
-            current_manufacturer = self.manufacturer_var.get()
-            current_product = self.product_type_var.get()
+            current_manufacturer = manufacturer_var.get()
+            current_product = product_type_var.get()
             
             # Устанавливаем комбобоксы
-            self.manufacturer_combo['values'] = self.manufacturer_options
+            manufacturer_combo['values'] = self.manufacturer_options
             
             # Восстанавливаем выбор если он есть в новом списке
             if current_manufacturer in self.manufacturer_options:
-                self.manufacturer_var.set(current_manufacturer)
+                manufacturer_var.set(current_manufacturer)
                 # Обновляем продукты для этого производителя
                 if current_manufacturer in manufacturer_products:
                     products = manufacturer_products[current_manufacturer]
-                    self.product_combo['values'] = products
+                    product_combo['values'] = products
                     if current_product in products:
-                        self.product_type_var.set(current_product)
+                        product_type_var.set(current_product)
                     elif products:
-                        self.product_type_var.set(products[0])
+                        product_type_var.set(products[0])
                 else:
-                    self.product_combo['values'] = []
-                    self.product_type_var.set("")
+                    product_combo['values'] = []
+                    product_type_var.set("")
             elif self.manufacturer_options:
                 # Устанавливаем ПЕРВОГО производителя из списка по умолчанию (самый маленький ID)
                 first_manufacturer = self.manufacturer_options[0]
-                self.manufacturer_var.set(first_manufacturer)
+                manufacturer_var.set(first_manufacturer)
                 
                 # Обновляем продукты для первого производителя
                 self.update_product_options()
@@ -1231,21 +1272,21 @@ class RollLabelPrinter:
                 if first_manufacturer in manufacturer_products:
                     products = manufacturer_products[first_manufacturer]
                     if products:
-                        self.product_type_var.set(products[0])
-                    
+                        product_type_var.set(products[0])
+                
             else:
                 # Если список пуст
-                self.product_combo['values'] = []
-                self.product_type_var.set("")
+                product_combo['values'] = []
+                product_type_var.set("")
                 
         except Exception as e:
             print(f"Ошибка загрузки производителей: {e}")
             # Очищаем списки в случае ошибки
             if hasattr(self, 'manufacturer_combo'):
-                self.manufacturer_combo['values'] = []
-                self.product_combo['values'] = []
-                self.manufacturer_var.set("")
-                self.product_type_var.set("")
+                manufacturer_combo['values'] = []
+                product_combo['values'] = []
+                manufacturer_var.set("")
+                product_type_var.set("")
                 
     def _copy_packaging_tu_from_assets(self):
         """Копирует файл packaging_tu.json из assets в data_dir"""
@@ -1399,6 +1440,18 @@ class RollLabelPrinter:
         
     def calculate_total_quantity(self, *args):
         """Рассчитывает общее количество: ролики × этикетки в ролике"""
+        # Дебаунсинг для оптимизации
+        if hasattr(self, '_quantity_timer') and self._quantity_timer is not None:
+            try:
+                self.parent.after_cancel(self._quantity_timer)
+            except (ValueError, TypeError):
+                pass
+        
+        # Устанавливаем новый таймер
+        self._quantity_timer = self.parent.after(70, self._calculate_total_quantity_actual)
+
+    def _calculate_total_quantity_actual(self):
+        """Фактический расчет общего количества"""
         try:
             rolls_count = int(self.rolls_count_var.get() or 0)
             quantity_per_roll = int(self.quantity_var.get() or 0)
@@ -1411,7 +1464,7 @@ class RollLabelPrinter:
             self.total_quantity_var.set(str(total))
             
         except (ValueError, TypeError):
-            self.total_quantity_var.set("")    
+            self.total_quantity_var.set("")
         
     def set_show_manufacturer(self, show):
         """Устанавливает видимость производителя извне"""
