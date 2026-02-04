@@ -65,6 +65,7 @@ class RollLabelPrinter:
         self._quantity_timer = None
         self._length_timer = None
         self._normalize_cache = {}
+        self.manufacturer_full_data_map = {}  # Новая структура загрузки производителей
                     
         self.create_ui()
         self.load_box_sizes()
@@ -695,6 +696,7 @@ class RollLabelPrinter:
             print(f"Ошибка выбора веса втулки: {e}")
     
     def on_order_enter_pressed(self, event=None):
+        """Запускает поиск заказа в БД при нажатии Энтер"""
         self.xml_tu_number = ""
         self.quantity_var.set("")
         self.customer_var.set("")
@@ -793,7 +795,7 @@ class RollLabelPrinter:
             self.order_data_module.parse_status.config(text="Заказ выбран", foreground="green")
         
     def auto_fill_from_xml(self):
-        """Автоматически заполняет ТОЛЬКО технические поля из XML."""
+        """Автоматически заполняет ТОЛЬКО технические поля"""
         order_number = self.order_number.get().strip()
         if not order_number:
             return
@@ -912,53 +914,36 @@ class RollLabelPrinter:
             'product': ''
         }
         
-        manufacturer = self.manufacturer_var.get()
+        manufacturer = self.manufacturer_var.get()  # Оригинальное имя из UI
         product = self.product_type_var.get()
         
         if not manufacturer:
             return result
         
-        try:
-            # Локальные ссылки
-            normalize_func = self._normalize_string
-            sorted_technical_specs = self.sorted_technical_specs
+        # Нормализуем для поиска в нашей структуре
+        normalized_manufacturer = self._normalize_string(manufacturer)
+        
+        # Ищем в структуре по НОРМАЛИЗОВАННОМУ имени
+        if normalized_manufacturer in self.manufacturer_full_data_map:
+            manufacturer_data = self.manufacturer_full_data_map[normalized_manufacturer]
             
-            # Нормализуем имя производителя для сравнения
-            normalized_manufacturer = normalize_func(manufacturer)
+            # Берём ОРИГИНАЛЬНОЕ имя для отображения
+            result['name'] = manufacturer_data['original_name']
+            result['address'] = manufacturer_data.get('address', '')
             
-            # ВАЖНО: собираем ТОЛЬКО продукты для текущего производителя
-            current_manufacturer_products = []
+            # Ищем выбранный продукт
+            if product and manufacturer_data['products']:
+                for prod_data in manufacturer_data['products']:
+                    if prod_data['name'] == product:
+                        result['tu_number'] = prod_data['tu_number']
+                        result['product'] = prod_data['name']
+                        return result
             
-            # Сначала собираем все продукты текущего производителя
-            for spec in sorted_technical_specs:
-                spec_manufacturer = spec["manufacturer"]["name"]
-                normalized_spec_manufacturer = normalize_func(spec_manufacturer)
-                
-                if normalized_spec_manufacturer == normalized_manufacturer:
-                    current_manufacturer_products.append(spec)
-            
-            # Если у производителя есть продукты
-            if current_manufacturer_products:
-                # Берем первую запись для имени и адреса
-                first_spec = current_manufacturer_products[0]
-                result['name'] = first_spec["manufacturer"]["name"]  # Оригинальное имя из настроек
-                result['address'] = first_spec["manufacturer"].get("address", "")
-                
-                # Ищем выбранный продукт среди продуктов ЭТОГО производителя
-                if product:
-                    for spec in current_manufacturer_products:
-                        if spec["product"]["name"] == product:
-                            # Нашли выбранный продукт
-                            result['tu_number'] = spec["product"]["tu_number"]
-                            result['product'] = spec["product"]["name"]
-                            return result
-                
-                # Если продукт не выбран или не найден - берем первый продукт производителя
-                result['tu_number'] = first_spec["product"]["tu_number"]
-                result['product'] = first_spec["product"]["name"]
-                        
-        except Exception as e:
-            print(f"Ошибка получения данных производителя: {e}")
+            # Если продукт не выбран или не найден - берём первый
+            if manufacturer_data['products']:
+                first_product = manufacturer_data['products'][0]
+                result['tu_number'] = first_product['tu_number']
+                result['product'] = first_product['name']
         
         return result
         
@@ -1207,51 +1192,68 @@ class RollLabelPrinter:
             technical_specs = packaging_data.get("technical_specifications", [])
             specs_len = len(technical_specs)
             
-            # СОРТИРОВКА ПО ID (id=1 должен быть первым)
-            technical_specs.sort(key=lambda x: x.get("id", 999))
-            
             # Если список не изменился - не обновляем UI
             if hasattr(self, 'last_tu_count') and self.last_tu_count == specs_len:
                 return
             self.last_tu_count = specs_len
             
-            # Собираем уникальных производителей (сохраняем порядок по ID)
-            manufacturers = []  # Список для сохранения порядка
-            manufacturer_products = {}
-            seen_manufacturers = set()
+            # Сортировка ПО ID (id=1 должен быть первым)
+            technical_specs.sort(key=lambda x: x.get("id", 999))
+            
+            # Создаём полную структуру данных за один проход
+            manufacturers = []  # Список оригинальных имён производителей для UI
+            manufacturer_products_map = {}  # Оригинальное имя → список продуктов
+            manufacturer_full_data_map = {}  # Нормализованное имя → полные данные
+            seen_manufacturers_normalized = set()  # Для отслеживания уникальности
             
             for spec in technical_specs:
-                manufacturer = spec["manufacturer"]["name"]
-                product = spec["product"]["name"]
+                manufacturer_info = spec["manufacturer"]
+                product_info = spec["product"]
+                manufacturer_name = manufacturer_info["name"]  # Оригинальное имя
+                product_name = product_info["name"]
                 
-                # Добавляем производителя если еще не видели (сохраняем порядок по ID)
-                if manufacturer not in seen_manufacturers:
-                    manufacturers.append(manufacturer)
-                    seen_manufacturers.add(manufacturer)
+                # Нормализуем для сравнения
+                normalized_name = self._normalize_string(manufacturer_name)
                 
-                if manufacturer not in manufacturer_products:
-                    manufacturer_products[manufacturer] = []
-                manufacturer_products[manufacturer].append(product)
+                # Добавляем оригинальное имя в список для UI (если производитель новый)
+                if normalized_name not in seen_manufacturers_normalized:
+                    manufacturers.append(manufacturer_name)  # ОРИГИНАЛЬНОЕ имя для UI
+                    seen_manufacturers_normalized.add(normalized_name)
+                    
+                    # Создаём полную запись производителя по НОРМАЛИЗОВАННОМУ имени
+                    manufacturer_full_data_map[normalized_name] = {
+                        'original_name': manufacturer_name,  # Для UI
+                        'address': manufacturer_info.get("address", ""),
+                        'products': []  # список словарей продуктов
+                    }
+                
+                # Добавляем продукт в словарь по ОРИГИНАЛЬНОМУ имени (для UI)
+                if manufacturer_name not in manufacturer_products_map:
+                    manufacturer_products_map[manufacturer_name] = []
+                manufacturer_products_map[manufacturer_name].append(product_name)
+                
+                # Добавляем полные данные продукта в структуру по НОРМАЛИЗОВАННОМУ имени
+                manufacturer_full_data_map[normalized_name]['products'].append({
+                    'name': product_name,
+                    'tu_number': product_info["tu_number"]
+                })
             
-            self.manufacturer_options = manufacturers  # Уже в правильном порядке (по ID)
-            self.manufacturer_products_map = manufacturer_products
+            # Сохраняем оптимизированные структуры
+            self.manufacturer_options = manufacturers  # Оригинальные имена для UI
+            self.manufacturer_products_map = manufacturer_products_map  # Оригинальные имена → продукты
+            self.manufacturer_full_data_map = manufacturer_full_data_map  # Нормализованные имена → полные данные
+            self.sorted_technical_specs = technical_specs  # Для обратной совместимости
             
-            # Сохраняем технические спецификации с сортировкой
-            self.sorted_technical_specs = technical_specs
-            
-            # Сохраняем текущий выбор
+            # Остальная логика UI без изменений...
             current_manufacturer = manufacturer_var.get()
             current_product = product_type_var.get()
             
-            # Устанавливаем комбобоксы
             manufacturer_combo['values'] = self.manufacturer_options
             
-            # Восстанавливаем выбор если он есть в новом списке
             if current_manufacturer in self.manufacturer_options:
                 manufacturer_var.set(current_manufacturer)
-                # Обновляем продукты для этого производителя
-                if current_manufacturer in manufacturer_products:
-                    products = manufacturer_products[current_manufacturer]
+                if current_manufacturer in manufacturer_products_map:
+                    products = manufacturer_products_map[current_manufacturer]
                     product_combo['values'] = products
                     if current_product in products:
                         product_type_var.set(current_product)
@@ -1261,27 +1263,19 @@ class RollLabelPrinter:
                     product_combo['values'] = []
                     product_type_var.set("")
             elif self.manufacturer_options:
-                # Устанавливаем ПЕРВОГО производителя из списка по умолчанию (самый маленький ID)
                 first_manufacturer = self.manufacturer_options[0]
                 manufacturer_var.set(first_manufacturer)
-                
-                # Обновляем продукты для первого производителя
                 self.update_product_options()
-                
-                # Устанавливаем первый продукт производителя по умолчанию
-                if first_manufacturer in manufacturer_products:
-                    products = manufacturer_products[first_manufacturer]
+                if first_manufacturer in manufacturer_products_map:
+                    products = manufacturer_products_map[first_manufacturer]
                     if products:
                         product_type_var.set(products[0])
-                
             else:
-                # Если список пуст
                 product_combo['values'] = []
                 product_type_var.set("")
                 
         except Exception as e:
             print(f"Ошибка загрузки производителей: {e}")
-            # Очищаем списки в случае ошибки
             if hasattr(self, 'manufacturer_combo'):
                 manufacturer_combo['values'] = []
                 product_combo['values'] = []
