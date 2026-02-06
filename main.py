@@ -57,18 +57,18 @@ def check_demo_mode():
 class WeightOrdersApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Упаковка")
+        self.root.title("Мастер упаковки CodeMax-PackMaster")
         self.root.geometry("1500x900")
         
         self.coordinator = SettingsCoordinator()
         
-        # Установка стилей как в оригинале
+        # Установка стилей
         self.setup_styles()
         
-        # Инициализация ConfigManager
+        # Инициализация ConfigManager (менеджер настроек)
         from core.config_manager import ConfigManager
         self.config_manager = ConfigManager()
-        
+        # Инициализация XMLDataManager (менеджер создания БД)
         from core.data_manager import XMLDataManager
         self.data_manager = XMLDataManager(self.config_manager)        
         
@@ -101,7 +101,7 @@ class WeightOrdersApp:
         self.style.configure("ValidationOrange.TLabel", font=("Arial", 14), foreground="orange")
 
     def create_ui(self):
-        """Создает интерфейс только с вкладкой Ролик/коробка"""
+        """Создает интерфейс с вкладками"""
         # Создаем вкладки
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -112,8 +112,8 @@ class WeightOrdersApp:
         # Создаем объединенный интерфейс для ролика и предпросмотра
         self.create_roll_preview_interface(roll_preview_frame)
 
-        # Добавляем только одну вкладку
-        notebook.add(roll_preview_frame, text="Ролик/коробка")
+        # Добавляем вкладку
+        notebook.add(roll_preview_frame, text="Основное окно упаковки")
 
     def create_roll_preview_interface(self, parent):
         """Создает объединенный интерфейс для ролика и предпросмотра"""
@@ -121,8 +121,8 @@ class WeightOrdersApp:
         container.pack(fill=tk.BOTH, expand=True)
         
         # Настраиваем пропорции колонок
-        container.columnconfigure(0, weight=1)  # Левая часть - 1/3
-        container.columnconfigure(1, weight=1)  # Правая часть - 2/3
+        container.columnconfigure(0, weight=1)  # Левая часть
+        container.columnconfigure(1, weight=1)  # Правая часть
         container.rowconfigure(0, weight=1)     # Одна строка
 
         # Левая часть
@@ -154,12 +154,12 @@ class WeightOrdersApp:
             self.config_manager
 )
 
-        # Правая часть - RollPreview (слева)
+        # Правая часть - RollPreview (слева от печати и экспорта)
         preview_frame = ttk.Frame(right_frame)
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         self.preview_module = RollPreview(preview_frame, self.coordinator, self.config_manager)
         
-        # Правая часть - PrintModule и ExportModule (справа)
+        # Правая часть - PrintModule и ExportModule (справа от предпросмотра)
         print_export_frame = ttk.Frame(right_frame)
         print_export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
 
