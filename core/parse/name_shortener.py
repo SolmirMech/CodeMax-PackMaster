@@ -119,25 +119,6 @@ class NameShortener:
         for old, new in replacements.items():
             text = text.replace(old, new)
 
-        # **КЛЮЧЕВОЕ: Обработка GTIN кодов В ТЕКСТЕ (для Ф0524)**
-        for i in range(len(text)):
-            if text[i].isdigit():
-                temp_code = text[i : i + 14]
-                if len(temp_code) == 14 and temp_code.isdigit():
-                    last4 = temp_code[-4:]
-                    text = text[:i] + "джит" + last4 + text[i + 14 :]
-                    break
-
-        # Обработка GTIN в скобках
-        code_start = text.find("(")
-        code_end = text.find(")")
-        if code_start > 0 and code_end > code_start:
-            full_code = text[code_start + 1 : code_end]
-            if len(full_code) >= 12 and len(full_code) <= 14 and full_code.isdigit():
-                last4 = full_code[-4:]
-                text = text[:code_start] + "(джит" + last4 + ")" + text[code_end + 1 :]
-
-        text = re.sub(r"\(джит(\d{4})\)", r"джит\1", text)
         text = re.sub(r"\(\s*\)", "", text)
         # Очистка кавычек
         text = re.sub(r'"\s*"', ' ', text)

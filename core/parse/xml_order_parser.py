@@ -308,6 +308,41 @@ class XMLOrderParser:
             print(f"Ошибка парсинга операций и комментариев: {e}")
         
         return operations, comments
+        
+    @staticmethod
+    def extract_gtin_from_text(text: str) -> str:
+        """
+        Извлекает GTIN из текста по тем же правилам, что и shorten_name().
+        Возвращает полный GTIN (12-14 цифр) или пустую строку.
+        
+        Правила (из shorten_name()):
+        1. 14 цифр подряд где угодно в тексте
+        2. 12-14 цифр в скобках
+        """
+        if not text or not isinstance(text, str):
+            return ""
+        
+        text = text.strip()
+        
+        # Способ 1: Ищем 14 цифр подряд (без скобок) - как в shorten_name()
+        # Это соответствует: for i in range(len(text)): if text[i].isdigit(): temp_code = text[i:i+14]
+        match_14_digits = re.search(r'(\d{14})', text)
+        if match_14_digits:
+            return match_14_digits.group(1)
+        
+        # Способ 2: Ищем 12-14 цифр в скобках - как в shorten_name() и find_order()
+        # Это соответствует: code_start = text.find("("); full_code = text[code_start+1:code_end]
+        match_in_brackets = re.search(r'\((\d{12,14})\)', text)
+        if match_in_brackets:
+            return match_in_brackets.group(1)
+        
+        # Способ 3: Ищем 12-14 цифр с границами слова (дополнительная защита)
+        # Для случаев типа "Товар 04620039591615 текст"
+        match_with_boundaries = re.search(r'\b(\d{12,14})\b', text)
+        if match_with_boundaries:
+            return match_with_boundaries.group(1)
+        
+        return ""        
     
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "",
                        root: ET.Element = None, sheet_number: str = "",
@@ -317,13 +352,12 @@ class XMLOrderParser:
         try:
             detail_number = self._get_text(product_elem, 'НомерДетали')
             product_name = self._get_text(product_elem, 'НаименДетали')
+            if not product_name:  # Если нет названия - продукт невалиден
+                return None            
             gtin = self._get_text(product_elem, 'GTIN')
             
-            # Если GTIN в отдельном теге и его нет в сокращенном имени
-            if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in product_name:
-                full_name = f"{product_name} джит{gtin[-4:]}"
-            else:
-                full_name = product_name
+            if not gtin and product_name:
+                gtin = self.extract_gtin_from_text(product_name)
             
             # Индивидуальная дата эмиссии из продукта
             individual_date = self._get_text(product_elem, 'ДатаЭмиссии')
@@ -331,10 +365,7 @@ class XMLOrderParser:
             # Приоритет: 1) индивидуальная, 2) родительская, 3) пустая
             date_emission = individual_date if individual_date else parent_sheet_date
             
-            quantity = self._get_text(product_elem, 'ТиражДетали')
-            
-            if not product_name:  # Если нет названия - продукт невалиден
-                return None
+            quantity = self._get_text(product_elem, 'ТиражДетали')           
             
             # Берем stream из тега КолвоРучьев внутри product
             stream = self._get_text(product_elem, 'КолвоРучьев')
@@ -343,9 +374,6 @@ class XMLOrderParser:
             
             # Формируем полное название с джит
             full_name = product_name
-            if gtin and len(gtin) >= 4:
-                short_gtin = gtin[-4:]
-                full_name = f"{product_name} джит{short_gtin}"
             
             # Создаём словарь продукта
             product_dict = {

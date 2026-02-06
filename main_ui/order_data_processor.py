@@ -633,6 +633,41 @@ class OrderDataProcessor:
             self.parent.after(120, lambda: self.name_combobox.focus_set())
             self.parent.after(140, lambda: self.name_combobox.event_generate('<Down>'))
             
+    def _add_gtin_suffix(self, name: str, gtin: str) -> str:
+        """
+        Добавляет "джитXXXX" к названию если:
+        1. Есть GTIN (из тега или из скобок в названии)
+        2. Название еще не содержит "джитXXXX"
+        3. GTIN валидный (12-14 цифр)
+        
+        Всегда проверяет и в оригинальном названии тоже!
+        """
+        if not name or not gtin:
+            return name
+        
+        # Нормализуем GTIN (оставляем только цифры)
+        gtin_digits = re.sub(r'\D', '', gtin)
+        
+        if len(gtin_digits) < 12 or len(gtin_digits) > 14:
+            return name  # Невалидный GTIN
+        
+        short_gtin = gtin_digits[-4:]  # Последние 4 цифры
+        
+        # Проверяем, есть ли уже "джитXXXX" в названии (в разных форматах)
+        gtin_patterns = [
+            f"джит{short_gtin}",
+            f"(джит{short_gtin})",
+            f"[джит{short_gtin}]",
+            f"{{джит{short_gtin}}}"
+        ]
+        
+        for pattern in gtin_patterns:
+            if pattern in name:
+                return name  # Уже есть, не добавляем
+        
+        # Добавляем
+        return f"{name} джит{short_gtin}"            
+            
     def parse_xml_for_product_names(self, order_number):
         """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
         # Используем кэш из roll_module, если данные уже получены
@@ -665,8 +700,8 @@ class OrderDataProcessor:
                 
                 # Добавляем джит если есть
                 gtin = product.get('gtin', '')
-                if gtin and len(gtin) >= 4 and f"джит{gtin[-4:]}" not in display_name:
-                    display_name = f"{display_name} джит{gtin[-4:]}"
+                if gtin:
+                    display_name = self._add_gtin_suffix(display_name, gtin)
                 
                 product_dict = {
                     'name': display_name,  # ← Сокращенное или оригинальное имя
