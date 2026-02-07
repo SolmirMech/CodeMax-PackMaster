@@ -68,6 +68,7 @@ class RollLabelPrinter:
         self.manufacturer_full_data_map = {}  # Новая структура загрузки производителей
         # Росинка
         self.rosinka_var = BooleanVar(value=False)
+        self.ros_podlo_var = StringVar(value="")  # Подложка для Росинки
                     
         self.create_ui()
         self.load_box_sizes()
@@ -458,7 +459,17 @@ class RollLabelPrinter:
         self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
         self.streams_label.grid(row=9, column=0, sticky="w", pady=3)
         self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=8)
-        self.streams_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")        
+        self.streams_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")
+        
+        # Подложка Росинки
+        self.podlo_label = ttk.Label(data_frame, text="Подложка:")
+        self.podlo_entry = ttk.Entry(data_frame, textvariable=self.ros_podlo_var, width=35)
+        # Сразу скрываем, т.к. показываться будет только при включении галочки Росинка
+        self.podlo_label.grid(row=9, column=1, sticky="w", pady=3)
+        self.podlo_entry.grid(row=9, column=1, padx=(115, 0), pady=3, sticky="w")
+        self.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
+        self.podlo_label.grid_remove()
+        self.podlo_entry.grid_remove()
         
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
@@ -475,11 +486,17 @@ class RollLabelPrinter:
             if self.rosinka_var.get():
                 # Включаем - ставим шаблон "Росинка"
                 self.coordinator.set_font_template("Росинка")
+                # Показываем поле Подложка
+                self.podlo_label.grid()
+                self.podlo_entry.grid()
             else:
                 # Выключаем - возвращаем стандартный по цеху
                 workshop = self.coordinator.get_workshop()
                 default_template = "1_цех" if workshop == "1" else "2_цех"
                 self.coordinator.set_font_template(default_template)
+                # Скрываем поле Подложка
+                self.podlo_label.grid_remove()
+                self.podlo_entry.grid_remove()
             
             # Уведомляем всех
             self.coordinator.notify_list_changed("rosinka_changed")

@@ -13,6 +13,7 @@ class PDFTemplateFiller:
         # Общие поля для ролика и коробки
         "customer": "customer",      # Заказчик
         "product": "product",        # Изделие
+        "ros_podlo": "product",        # Подложка Росинки
         "packer": "packer",           # Упаковщик
         "onum": "order_number",      # Номер заказа
         
@@ -130,7 +131,7 @@ class PDFTemplateFiller:
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
             "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
-            "$batch_num", "$roul_num", "$issue"
+            "$batch_num", "$roul_num", "$issue", "$ros_podlo",
         ]
         
         # Очищаем области пустых плейсхолдеров
