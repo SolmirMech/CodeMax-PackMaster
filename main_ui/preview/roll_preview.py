@@ -37,9 +37,25 @@ class RollPreview:
         
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""
-        # Перезагружаем настройки шрифтов и шаблоны
-        self.load_font_settings()
-        self.reload_for_workshop_change()        
+        try:
+            # Получаем состояние галочки Росинка из roll_module
+            if hasattr(self, 'connected_roll_module') and self.connected_roll_module:
+                # Проверяем, есть ли переменная rosinka_var
+                if hasattr(self.connected_roll_module, 'rosinka_var'):
+                    # Получаем значение через get()
+                    self.rosinka_enabled = self.connected_roll_module.rosinka_var.get()
+                else:
+                    self.rosinka_enabled = False
+            else:
+                self.rosinka_enabled = False
+            
+            # Перезагружаем настройки шрифтов и шаблоны
+            self.load_font_settings()
+            self.reload_for_workshop_change()
+            
+        except Exception as e:
+            print(f"Ошибка в _on_settings_changed: {e}")
+            self.rosinka_enabled = False
         
     def create_preview_ui(self):
         """Создает интерфейс предпросмотра"""
@@ -108,13 +124,20 @@ class RollPreview:
         self.load_and_show_previews()
         
     def _update_template_paths(self):
-        """Обновляет пути к шаблонам в зависимости от настройки цеха"""
+        """Обновляет пути к шаблонам в зависимости от настроек"""
         workshop = self.coordinator.get_workshop()
         
+        # Определяем базовый шаблон в зависимости от цеха
         if workshop == "2":
-            self.roll_template_path = self.config_manager.get_asset_path("roll_2_cex.pdf")
-        else:  # По умолчанию 1 цех
-            self.roll_template_path = self.config_manager.get_asset_path("roll.pdf")
+            base_template = "roll_2_cex.pdf"
+        else:
+            base_template = "roll.pdf"
+        
+        # Если включена Росинка - используем rosinka.pdf
+        if hasattr(self, 'rosinka_enabled') and self.rosinka_enabled:
+            self.roll_template_path = self.config_manager.get_asset_path("rosinka.pdf")
+        else:
+            self.roll_template_path = self.config_manager.get_asset_path(base_template)
         
         # Коробка остается без изменений
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")

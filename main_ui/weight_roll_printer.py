@@ -66,6 +66,8 @@ class RollLabelPrinter:
         self._length_timer = None
         self._normalize_cache = {}
         self.manufacturer_full_data_map = {}  # Новая структура загрузки производителей
+        # Росинка
+        self.rosinka_var = BooleanVar(value=False)
                     
         self.create_ui()
         self.load_box_sizes()
@@ -315,6 +317,15 @@ class RollLabelPrinter:
             command=self._on_shorten_text_changed
         )
         self.shorten_checkbutton.pack(anchor="w", pady=(5, 0))
+        
+        # Галочка Росинка
+        self.rosinka_checkbutton = ttk.Checkbutton(
+            left_frame,
+            text="Росинка",
+            variable=self.rosinka_var,
+            command=self._on_rosinka_toggled  # Используем существующий механизм уведомлений
+        )
+        self.rosinka_checkbutton.pack(anchor="w", pady=(5, 0))
     
         # Многострочное текстовое поле
         self.product_text = tk.Text(data_frame, width=35, height=4, font=("Arial", 12))
@@ -456,6 +467,12 @@ class RollLabelPrinter:
         self.sleeve_diameter_var.trace_add("write", lambda *args: self.update_sleeve_weight_from_settings())
         self.toggle_weight_visibility()
         self.update_elements_visibility()
+        self.update_rosinka_visibility()
+        
+    def _on_rosinka_toggled(self):
+        """Уведомляет о Росинке через существующий механизм on_settings_changed"""
+        if self.coordinator:
+            self.coordinator.notify_list_changed("rosinka_toggle")
         
     def _on_shorten_text_changed(self):
         """Обрабатывает изменение галочки сокращения текста"""
@@ -1122,7 +1139,21 @@ class RollLabelPrinter:
                     
                     
         except Exception as e:
-            print(f"Ошибка обновления видимости элементов: {e}")            
+            print(f"Ошибка обновления видимости элементов: {e}")
+            
+    def update_rosinka_visibility(self):
+        """Показывает/скрывает галочку Росинка в зависимости от заказчика"""
+        customer = self.customer_var.get()
+        # Показываем только если заказчик "Росинка" (регистронезависимо)
+        show_rosinka = customer and "росинка" in customer.lower()
+        
+        if hasattr(self, 'rosinka_checkbutton'):
+            if show_rosinka:
+                self.rosinka_checkbutton.pack(anchor="w", pady=(5, 0))
+            else:
+                self.rosinka_checkbutton.pack_forget()
+                # Если скрываем, выключаем галочку
+                self.rosinka_var.set(False)
 
     def update_packers_list(self):
         """Обновляет список упаковщиков в комбобоксе"""
@@ -1371,7 +1402,8 @@ class RollLabelPrinter:
     def on_customer_changed(self, *args):
         """Обрабатывает изменение заказчика и проверяет видимость производителя"""
         customer_name = self.customer_var.get()
-        self.check_manufacturer_visibility(customer_name)              
+        self.check_manufacturer_visibility(customer_name)
+        self.update_rosinka_visibility()      
         
     def set_preview_module(self, preview_module):
         """Устанавливает связь с модулем предпросмотра для обратной связи"""
