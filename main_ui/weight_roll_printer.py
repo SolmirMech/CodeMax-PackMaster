@@ -470,9 +470,19 @@ class RollLabelPrinter:
         self.update_rosinka_visibility()
         
     def _on_rosinka_toggled(self):
-        """Уведомляет о Росинке через существующий механизм on_settings_changed"""
+        """При включении/выключении галочки Росинка"""
         if self.coordinator:
-            self.coordinator.notify_list_changed("rosinka_toggle")
+            if self.rosinka_var.get():
+                # Включаем - ставим шаблон "Росинка"
+                self.coordinator.set_font_template("Росинка")
+            else:
+                # Выключаем - возвращаем стандартный по цеху
+                workshop = self.coordinator.get_workshop()
+                default_template = "1_цех" if workshop == "1" else "2_цех"
+                self.coordinator.set_font_template(default_template)
+            
+            # Уведомляем всех
+            self.coordinator.notify_list_changed("rosinka_changed")
         
     def _on_shorten_text_changed(self):
         """Обрабатывает изменение галочки сокращения текста"""
