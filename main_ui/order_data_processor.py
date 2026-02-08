@@ -635,12 +635,15 @@ class OrderDataProcessor:
             
     def _add_gtin_suffix(self, name: str, gtin: str) -> str:
         """
-        Добавляет "джитXXXX" к названию если:
-        1. Есть GTIN (из тега или из скобок в названии)
-        2. Название еще не содержит "джитXXXX"
-        3. GTIN валидный (12-14 цифр)
+        Добавляет суффикс "джитXXXX" к названию, предварительно очищая его от полного GTIN.      
         
-        Всегда проверяет и в оригинальном названии тоже!
+        Args:
+            name (str): Оригинальное название продукта
+            gtin (str): Полный GTIN (12-14 цифр)
+        
+        Returns:
+            str: Название с суффиксом "джитXXXX" (без дублирования GTIN)
+        
         """
         if not name or not gtin:
             return name
@@ -648,25 +651,35 @@ class OrderDataProcessor:
         # Нормализуем GTIN (оставляем только цифры)
         gtin_digits = re.sub(r'\D', '', gtin)
         
-        if len(gtin_digits) < 12 or len(gtin_digits) > 14:
-            return name  # Невалидный GTIN
+        # Получаем короткий суффикс (последние 4 цифры)
+        short_gtin = gtin_digits[-4:] if len(gtin_digits) >= 4 else gtin_digits
         
-        short_gtin = gtin_digits[-4:]  # Последние 4 цифры
-        
-        # Проверяем, есть ли уже "джитXXXX" в названии (в разных форматах)
-        gtin_patterns = [
-            f"джит{short_gtin}",
-            f"(джит{short_gtin})",
-            f"[джит{short_gtin}]",
-            f"{{джит{short_gtin}}}"
+        # 1. Удаляем ВСЕ варианты полного GTIN из названия
+        patterns_to_remove = [
+            f"GTIN {gtin}",
+            f"GTIN{gtin}",
+            gtin,
+            f"GTIN {gtin_digits}",
+            f"GTIN{gtin_digits}",
+            gtin_digits,
+            f"({gtin})",
+            f"({gtin_digits})"
         ]
         
-        for pattern in gtin_patterns:
-            if pattern in name:
-                return name  # Уже есть, не добавляем
+        for pattern in patterns_to_remove:
+            name = name.replace(pattern, '')
         
-        # Добавляем
-        return f"{name} джит{short_gtin}"            
+        # 2. Удаляем лишние пробелы и знаки пунктуации
+        name = re.sub(r'\s+', ' ', name).strip()
+        name = name.strip(' ,;')
+        
+        # 3. Проверяем, нет ли уже "джитXXXX" в названии
+        # (на случай если суффикс уже был добавлен ранее или есть в оригинале)
+        if f"джит{short_gtin}" in name:
+            return name
+        
+        # 4. Добавляем суффикс "джитXXXX"
+        return f"{name} джит{short_gtin}"
             
     def parse_xml_for_product_names(self, order_number):
         """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""

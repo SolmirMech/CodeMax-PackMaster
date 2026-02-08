@@ -40,6 +40,12 @@ class XMLDataManager:
         # Путь к БД в папке data AppData
         self.db_path = config_manager.data_dir / "orders_cache.db"
         
+        # Списки для статистики
+        self._emission_orders = set()      # Заказы с датой эмиссии
+        self._solmark_orders = set()       # Solmark заказы (ID 321)
+        self._multi_customer_orders = []       # Заказы с множественными заказчиками
+        self._processed_files = 0          # Счетчик обработанных файлов
+        
         # Настройка логгирования
         self.log_file = config_manager.data_dir / "data_manager.log"
         self._setup_logging()
@@ -229,32 +235,139 @@ class XMLDataManager:
             
     def _analyze_and_log_statistics(self, parsed_data: Dict[str, Any], file_name: str):
         """
-        Анализирует данные и сразу логирует ВСЕ статистические случаи.
+        Анализирует данные и собирает статистику.
+        НЕ ЛОГИРУЕТ промежуточные результаты, только собирает.
+        
+        Args:
+            parsed_data: Распарсенные данные заказа
+            file_name: Имя файла (только для внутреннего учета)
         """
-        # 1. Множественные заказчики
-        customer_info = parsed_data.get('_customer_info', {})
-        if customer_info.get('has_multiple', False):
-            all_customers = customer_info.get('all_customers', [])
-            chosen_customer = customer_info.get('customer', '')
-            
-            logging.info(
-                f"МНОГИЕ ЗАКАЗЧИКИ | Файл: {file_name} | "
-                f"Всего заказчиков: {len(all_customers)} | "
-                f"Выбран: {chosen_customer} | "
-                f"Список: {', '.join(all_customers)}"
-            )
+        order_number = parsed_data.get('order_number', '')
+        if not order_number:
+            return
         
-        # 2. Даты эмиссии - просто факт наличия
+        # 1. Дата эмиссии - есть ли в продуктах
         products = parsed_data.get('products', [])
-        has_emission_date = False
-        
-        for product in products:
-            if product.get('date_emission', ''):
-                has_emission_date = True
-                break
+        has_emission_date = any(product.get('date_emission', '') for product in products)
         
         if has_emission_date:
-            logging.info(f"ДАТА ЭМИССИИ | Файл: {file_name}")
+            self._emission_orders.add(order_number)
+        
+        # 2. Solmark заказы - проверяем наличие операции с ID 321
+        has_solmark = parsed_data.get('has_solmark', False)
+        
+        if has_solmark:
+            self._solmark_orders.add(order_number)
+        
+        # 3. Множественные заказчики - добавляем в отдельный список
+        customer_info = parsed_data.get('_customer_info', {})
+        if customer_info.get('has_multiple', False):
+            # Сохраняем не только номер, но и информацию о выборе
+            self._multi_customer_orders.append({
+                'order_number': order_number,
+                'all_customers': customer_info.get('all_customers', []),
+                'selected_customer': customer_info.get('customer', ''),
+                'selection_method': customer_info.get('selection_method', '')
+            })
+        
+        # Увеличиваем счетчик (БЕЗ промежуточного логирования)
+        self._processed_files += 1
+            
+    def _log_collected_statistics(self, context: str = "сканирование"):
+        """
+        Логирует собранную статистику в компактном формате.
+        ТОЛЬКО ИТОГОВЫЙ ЛОГ.
+        
+        Args:
+            context: Контекст операции ("сканирование", "обновление", "проверка")
+        """
+        # Логируем только если есть что логировать
+        has_emission = len(self._emission_orders) > 0
+        has_solmark = len(self._solmark_orders) > 0
+        has_multi_customer = len(self._multi_customer_orders) > 0
+        
+        if not (has_emission or has_solmark or has_multi_customer):
+            logging.info(f"Статистика {context}: изменений не обнаружено")
+            return
+        
+        try:
+            # Разделитель для визуального выделения
+            logging.info("=" * 70)
+            logging.info(f"ИТОГОВАЯ СТАТИСТИКА ({context.upper()})")
+            logging.info("=" * 70)
+            
+            # 1. Заказы с датой эмиссии
+            if has_emission:
+                emission_list = sorted(self._emission_orders)
+                self._log_compact_list(
+                    title="Заказы с Дата эмиссии",
+                    items=emission_list,
+                    items_per_line=10
+                )
+            
+            # 2. Solmark заказы
+            if has_solmark:
+                solmark_list = sorted(self._solmark_orders)
+                self._log_compact_list(
+                    title="Solmark заказы (ID 321)",
+                    items=solmark_list,
+                    items_per_line=10
+                )
+            
+            # 3. Заказы с множественными заказчиками
+            if has_multi_customer:
+                logging.info(f"Заказы с множественными заказчиками ({len(self._multi_customer_orders)}):")
+                
+                for item in sorted(self._multi_customer_orders, 
+                                  key=lambda x: x['order_number']):
+                    order_num = item['order_number']
+                    selected = item['selected_customer']
+                    all_count = len(item['all_customers'])
+                    method = item['selection_method']
+                    
+                    # Компактный формат для одного заказа
+                    logging.info(f"  {order_num}: выбрано '{selected}' из {all_count} (метод: {method})")              
+                
+                logging.info("")  # Пустая строка
+            
+            # Общая статистика
+            logging.info(f"Обработано файлов: {self._processed_files}")
+            if has_emission:
+                logging.info(f"Заказов с датой эмиссии: {len(self._emission_orders)}")
+            if has_solmark:
+                logging.info(f"Solmark заказов: {len(self._solmark_orders)}")
+            if has_multi_customer:
+                logging.info(f"Заказов с множественными заказчиками: {len(self._multi_customer_orders)}")
+            
+            logging.info("=" * 70)
+            logging.info("")  # Пустая строка для разделения
+            
+        except (PermissionError, IOError, OSError):
+            pass
+        
+    def _log_compact_list(self, title: str, items: list, items_per_line: int = 10):
+        """
+        Логирует список в компактном формате.
+        
+        Args:
+            title: Заголовок списка
+            items: Список элементов для логирования
+            items_per_line: Количество элементов в одной строке
+        """
+        if not items:
+            return
+        
+        logging.info(f"{title} ({len(items)}):")
+        
+        # Разбиваем на группы по items_per_line
+        for i in range(0, len(items), items_per_line):
+            line_items = items[i:i + items_per_line]
+            line = ", ".join(line_items)
+            # Добавляем отступ для визуального отделения
+            logging.info(f"  {line}")
+        
+        # Пустая строка после списка
+        logging.info("")
     
     def _calculate_file_hash(self, file_path: Path) -> str:
         """Вычисляет MD5 хэш файла для отслеживания изменений."""
@@ -419,6 +532,12 @@ class XMLDataManager:
                 errors = 0
                 batch_size = 50  # Отправляем статус каждые N файлов
                 
+                # Инициализируем статистику перед сканированием
+                self._emission_orders = set()
+                self._solmark_orders = set()
+                self._multi_customer_orders = []
+                self._processed_files = 0
+                
                 for i, file_path in enumerate(xml_files):
                     try:
                         # Парсим файл
@@ -445,6 +564,9 @@ class XMLDataManager:
                     except Exception as e:
                         errors += 1
                         logging.error(f"Ошибка обработки {file_path.name}: {e}")
+                        
+                # Финальное логирование статистики
+                self._log_collected_statistics("первичное сканирование")
                 
                 if errors > 0:
                     self._notify_status(f"✅ База создана ({processed} заказов, {errors} ошибок)")
@@ -460,6 +582,46 @@ class XMLDataManager:
         # Запускаем в фоновом потоке
         thread = threading.Thread(target=scan_in_background, daemon=True)
         thread.start()
+        
+    def _collect_statistics_for_file(self, parsed_data: Dict[str, Any],
+                                    emission_set: set,
+                                    solmark_set: set,
+                                    multi_customer_list: list):
+        """
+        Собирает статистику для одного файла в указанные коллекции.
+        
+        Args:
+            parsed_data: Данные заказа
+            emission_set: Множество для заказов с датой эмиссии
+            solmark_set: Множество для Solmark заказов
+            multi_customer_list: Список для заказов с множественными заказчиками
+        """
+        order_number = parsed_data.get('order_number', '')
+        if not order_number:
+            return
+        
+        # 1. Дата эмиссии
+        products = parsed_data.get('products', [])
+        has_emission_date = any(product.get('date_emission', '') for product in products)
+        
+        if has_emission_date:
+            emission_set.add(order_number)
+        
+        # 2. Solmark заказы
+        has_solmark = parsed_data.get('has_solmark', False)
+        
+        if has_solmark:
+            solmark_set.add(order_number)
+        
+        # 3. Множественные заказчики
+        customer_info = parsed_data.get('_customer_info', {})
+        if customer_info.get('has_multiple', False):
+            multi_customer_list.append({
+                'order_number': order_number,
+                'all_customers': customer_info.get('all_customers', []),
+                'selected_customer': customer_info.get('customer', ''),
+                'selection_method': customer_info.get('selection_method', '')
+            })
     
     def _check_xml_source_available(self) -> bool:
         """
@@ -627,90 +789,143 @@ class XMLDataManager:
     
     def background_check(self) -> None:
         """
-        ФОНОВАЯ ПРОВЕРКА ПАПКИ
-        Вызывается после поиска, не блокирует UI
-        Проверяет новые/изменённые XML, НЕ удаляет отсутствующие
+        ФОНОВАЯ ПРОВЕРКА ПАПКИ XML (ОБНОВЛЕНИЕ БАЗЫ)      
+        
+        Примечания:
+        - Использует блокировку для потокобезопасности
+        - При ошибках БД не падает, а уведомляет пользователя
+        - Статистика логируется только при наличии изменений
         """
         try:
-            logging.info("Запущена фоновая проверка папки XML")
-            
-            # Быстрая проверка доступности
+            # Проверка доступности источника
             if not self._check_xml_source_available():
-                logging.warning(f"Папка XML недоступна: {self.xml_folder}")
-                self._notify_status("⚠️ Источник недоступен")
+                self._notify_status("⚠️ Источник XML недоступен")
                 return
             
-            with self._lock:
+            with self._lock:  # Блокировка для потокобезопасности
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 
-                # Получаем текущее состояние БД
+                # Получение текущего состояния бд
                 cursor.execute("SELECT file_name, file_hash, last_modified FROM orders")
                 db_files = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
                 
-                # Сканируем файловую систему
-                fs_files = {}
+                # Инициализация статистики (только для новых/изменённых файлов)
+                new_emission_orders = set()          # Заказы с датой эмиссии
+                new_solmark_orders = set()           # Solmark заказы (ID 321)
+                new_multi_customer_orders = []       # Заказы с множественными заказчиками
+                processed_files = 0                  # Счётчик обработанных файлов
+                
+                # Сканирование файловой системы
                 xml_files = list(self.xml_folder.glob("*.xml"))
                 
                 for file_path in xml_files:
                     file_name = file_path.name
+                    
                     try:
+                        # Пропускаем если файл недоступен
+                        if not file_path.exists():
+                            continue
+                        
+                        # Получаем метаданные файла
                         file_hash = self._calculate_file_hash(file_path)
                         last_modified = file_path.stat().st_mtime
-                        fs_files[file_name] = (file_hash, last_modified, file_path)
-                    except Exception as e:
-                        logging.error(f"Ошибка чтения {file_name}: {e}")
-                
-                # Определяем действия
-                added = 0
-                updated = 0
-                
-                # 1. Проверяем новые и изменённые файлы
-                for file_name, (fs_hash, fs_mtime, file_path) in fs_files.items():
-                    if file_name not in db_files:
-                        # Новый файл
-                        parsed_data = self._parse_xml_file(file_path)
-                        if parsed_data and self._save_order_to_db(conn, file_path, parsed_data, fs_hash):
-                            added += 1
-                            logging.info(f"Добавлен новый файл: {file_name}")
-                    
-                    else:
-                        db_hash, db_mtime = db_files[file_name]
-                        if fs_hash != db_hash or abs(fs_mtime - db_mtime) > 1:
-                            # Изменённый файл
+                        
+                        # Определение типа изменения
+                        needs_processing = False
+                        
+                        if file_name not in db_files:
+                            # СЛУЧАЙ 1: Новый файл (отсутствует в БД)
+                            needs_processing = True
+                        else:
+                            # СЛУЧАЙ 2: Изменённый файл (разный хэш или дата)
+                            db_hash, db_mtime = db_files[file_name]
+                            if file_hash != db_hash or abs(last_modified - db_mtime) > 1:
+                                needs_processing = True
+                        
+                        # Обработка файла (если требуется)
+                        if needs_processing:
+                            # Парсинг XML
                             parsed_data = self._parse_xml_file(file_path)
-                            if parsed_data and self._save_order_to_db(conn, file_path, parsed_data, fs_hash):
-                                updated += 1
-                                logging.info(f"Обновлён изменённый файл: {file_name}")
+                            if not parsed_data:
+                                continue  # Пропускаем невалидные файлы
+                            
+                            # Сохранение в БД
+                            if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
+                                processed_files += 1
+                                
+                                # Сбор статистики для обработанного файла
+                                self._collect_statistics_for_file(
+                                    parsed_data=parsed_data,
+                                    emission_set=new_emission_orders,
+                                    solmark_set=new_solmark_orders,
+                                    multi_customer_list=new_multi_customer_orders
+                                )
+                    
+                    except (PermissionError, FileNotFoundError) as e:
+                        # Файл недоступен или удалён во время обработки
+                        continue  # Пропускаем без паники
+                    except Exception as e:
+                        # Любая другая ошибка при обработке файла
+                        continue  # Пропускаем проблемный файл
                 
+                # Фиксация изменений в бд
                 conn.commit()
                 
-                # Уведомляем о результатах
-                if added > 0 or updated > 0:
-                    status_msg = ""
-                    if added > 0:
-                        status_msg += f"➕ {added} новых"
-                    if updated > 0:
-                        if status_msg:
-                            status_msg += ", "
-                        status_msg += f"✏️ {updated} изменённых"
+                # Обработка результатов
+                if processed_files > 0:
+                    # Сохраняем статистику для логирования
+                    self._emission_orders = new_emission_orders
+                    self._solmark_orders = new_solmark_orders
+                    self._multi_customer_orders = new_multi_customer_orders
+                    self._processed_files = processed_files
                     
-                    self._notify_status(f"Обновлено: {status_msg}")
-                    logging.info(f"Фоновая проверка: {status_msg}")
+                    # Логирование итоговой статистики
+                    # (метод сам обрабатывает блокировку файла лога)
+                    self._log_collected_statistics("обновление")
+                    
+                    # Формирование сообщения для ui
+                    status_parts = []
+                    if new_emission_orders:
+                        status_parts.append(f"📅 {len(new_emission_orders)} с датой эмиссии")
+                    if new_solmark_orders:
+                        status_parts.append(f"🖨 {len(new_solmark_orders)} Solmark")
+                    if new_multi_customer_orders:
+                        status_parts.append(f"👥 {len(new_multi_customer_orders)} с многими заказчиками")
+                    
+                    if status_parts:
+                        status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
+                    else:
+                        status_msg = f"Обновлено {processed_files} файлов"
+                    
+                    self._notify_status(status_msg)
                 else:
-                    logging.debug("Фоновая проверка: изменений не обнаружено")
-                
+                    # Нет изменений - просто уведомляем
+                    self._notify_status("✅ База актуальна")
+            
+        except sqlite3.Error as e:
+            # Ошибка базы данных
+            self._notify_status("⚠️ Ошибка обновления базы данных")
+            
         except Exception as e:
-            logging.error(f"Ошибка фоновой проверки: {e}")
+            # Непредвиденная ошибка
+            self._notify_status("⚠️ Ошибка при проверке файлов")
+            
         finally:
+            # Гарантированная очистка ресурсов
             if 'conn' in locals():
-                conn.close()
+                try:
+                    conn.close()
+                except:
+                    pass
+            
+            # Сброс флага выполнения
             self._background_running = False
-            if hasattr(self, '_background_lock') and hasattr(self._background_lock, 'locked'):
+            if hasattr(self, '_background_lock'):
                 try:
                     self._background_lock.release()
                 except:
-                    pass             
+                    pass
     
     def get_stats(self) -> Dict[str, Any]:
         """

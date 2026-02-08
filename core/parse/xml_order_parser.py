@@ -151,7 +151,7 @@ class XMLOrderParser:
                     products.append(product)
                                 
             # Данные из операций (технические свойства и комментарии)
-            operations, comments = self._parse_operations_and_comments(root)
+            operations, comments, has_solmark = self._parse_operations_and_comments(root)
             
             return {
                 'format': 'NEW_FORMAT',
@@ -164,7 +164,8 @@ class XMLOrderParser:
                 'order_suffix': order_suffix,
                 'products': products,
                 'operations': operations,
-                'comments': comments
+                'comments': comments,
+                'has_solmark': has_solmark
             }
             
         except ET.ParseError as e:
@@ -247,21 +248,25 @@ class XMLOrderParser:
                 'selection_method': 'no_match_returns_all'
             }
             
-    def _parse_operations_and_comments(self, root: ET.Element) -> tuple[Dict[str, str], Dict[str, str]]:
+    def _parse_operations_and_comments(self, root: ET.Element) -> tuple[Dict[str, str], Dict[str, str], bool]:
         """
-        Единый метод для парсинга операций и комментариев.
-        Ищет в операциях резки и упаковки для обоих цехов.
+        Единый метод для парсинга операций, комментариев и выявления Solmark заказов.
         
         Returns:
-            tuple: (operations_dict, comments_dict)
+            tuple: (operations_dict, comments_dict, has_solmark)
         """
         operations = {}
         comments = {}
+        has_solmark = False  # Флаг для определения Solmark заказов
         
         try:
             # Ищем операции с нужными идентификаторами (цех 1 и цех 2)
             for operation in root.findall('.//ОперацииЗаказа//Операция'):
                 op_id = operation.get('ВнутреннийИдентификатор', '')
+                
+                # Проверяем на Solmark (ID 321 - Струйная печать DM (Solmark))
+                if op_id == '321':
+                    has_solmark = True
                 
                 # Определяем тип операции по ID
                 is_cutting = op_id in ['31', '230']       # Резка (цех 1 и цех 2)
@@ -307,7 +312,10 @@ class XMLOrderParser:
         except Exception as e:
             print(f"Ошибка парсинга операций и комментариев: {e}")
         
-        return operations, comments
+        # Добавляем флаг Solmark в operations для удобства
+        operations['has_solmark'] = str(has_solmark)
+        
+        return operations, comments, has_solmark
         
     @staticmethod
     def extract_gtin_from_text(text: str) -> str:
