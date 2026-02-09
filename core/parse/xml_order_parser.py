@@ -162,6 +162,7 @@ class XMLOrderParser:
                 'order_number': order_number,
                 'order_prefix': order_prefix,
                 'order_suffix': order_suffix,
+                'order_name': order_name,
                 'products': products,
                 'operations': operations,
                 'comments': comments,

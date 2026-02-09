@@ -100,6 +100,7 @@ class XMLDataManager:
                         order_number TEXT,
                         order_prefix TEXT,
                         order_suffix TEXT,
+                        order_name TEXT,
                         customer TEXT,
                         executor TEXT,
                         tu_number TEXT,
@@ -152,6 +153,14 @@ class XMLDataManager:
                 if 'sheet_full_name' not in columns:
                     cursor.execute("ALTER TABLE products ADD COLUMN sheet_full_name TEXT")
                     logging.info("Добавлена колонка sheet_full_name в таблицу products")
+                    
+                # Проверяем наличие колонки order_name и добавляем если нет
+                cursor.execute("PRAGMA table_info(orders)")  # ← ИЗМЕНИТЬ С orders!
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                if 'order_name' not in columns:
+                    cursor.execute("ALTER TABLE orders ADD COLUMN order_name TEXT")
+                    logging.info("Добавлена колонка order_name в таблицу orders")                    
                 
                 conn.commit()
                 logging.info("База данных инициализирована")
@@ -298,20 +307,22 @@ class XMLDataManager:
             
             # 1. Заказы с датой эмиссии
             if has_emission:
-                emission_list = sorted(self._emission_orders)
+                # Получаем информацию о заказчиках для заказов с датой эмиссии
+                emission_with_customers = self._get_orders_with_customers(self._emission_orders)
                 self._log_compact_list(
                     title="Заказы с Дата эмиссии",
-                    items=emission_list,
-                    items_per_line=10
+                    items=emission_with_customers,
+                    items_per_line=5  # Уменьшаем количество в строке из-за длинных записей
                 )
             
             # 2. Solmark заказы
             if has_solmark:
-                solmark_list = sorted(self._solmark_orders)
+                # Получаем информацию о заказчиках для Solmark заказов
+                solmark_with_customers = self._get_orders_with_customers(self._solmark_orders)
                 self._log_compact_list(
                     title="Solmark заказы (ID 321)",
-                    items=solmark_list,
-                    items_per_line=10
+                    items=solmark_with_customers,
+                    items_per_line=5  # Уменьшаем количество в строке из-за длинных записей
                 )
             
             # 3. Заказы с множественными заказчиками
@@ -344,6 +355,53 @@ class XMLDataManager:
             
         except (PermissionError, IOError, OSError):
             pass
+            
+    def _get_orders_with_customers(self, order_numbers: set) -> list:
+        """
+        Получает список заказов с информацией о заказчике в формате:
+        "номер_заказа (заказчик)"
+        
+        Args:
+            order_numbers: Множество номеров заказов
+            
+        Returns:
+            Список строк с номером заказа и заказчиком
+        """
+        if not order_numbers:
+            return []
+        
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                # Создаем список для запроса
+                placeholders = ','.join('?' for _ in order_numbers)
+                query = f"""
+                    SELECT order_number, customer 
+                    FROM orders 
+                    WHERE order_number IN ({placeholders})
+                """
+                
+                cursor.execute(query, list(order_numbers))
+                results = cursor.fetchall()
+                conn.close()
+                
+                # Создаем словарь номер_заказа -> заказчик
+                customer_map = {row[0]: row[1] for row in results}
+                
+                # Формируем список в формате "номер (заказчик)"
+                formatted_list = []
+                for order_num in sorted(order_numbers):
+                    customer = customer_map.get(order_num, 'неизвестно')
+                    formatted_list.append(f"{order_num} ({customer})")
+                
+                return formatted_list
+                
+        except Exception as e:
+            logging.error(f"Ошибка получения информации о заказчиках: {e}")
+            # Возвращаем просто номера заказов в случае ошибки
+            return sorted(order_numbers)            
         
     def _log_compact_list(self, title: str, items: list, items_per_line: int = 10):
         """
@@ -399,6 +457,7 @@ class XMLDataManager:
                 parsed_data.get('order_number', ''),
                 parsed_data.get('order_prefix', ''),
                 parsed_data.get('order_suffix', ''),
+                parsed_data.get('order_name', ''),
                 parsed_data.get('customer', ''),
                 parsed_data.get('executor', ''),
                 parsed_data.get('tu_number', ''),
@@ -412,9 +471,9 @@ class XMLDataManager:
             cursor.execute("""
                 INSERT OR REPLACE INTO orders 
                 (file_name, file_path, order_number, order_prefix, order_suffix, 
-                 customer, executor, tu_number, parsed_data, file_hash, 
+                 order_name, customer, executor, tu_number, parsed_data, file_hash, 
                  last_modified, cached_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, order_data)
             
             # Удаляем старые записи для этого файла в products и sheets
@@ -433,7 +492,7 @@ class XMLDataManager:
                     product.get('date_emission', ''),
                     product.get('quantity', ''),
                     product.get('sheet_number', ''),       # ← Цифры оттиска (совместимость)
-                    product.get('sheet_full_name', ''),    # ← НОВОЕ: полное название оттиска
+                    product.get('sheet_full_name', ''),    # Полное название оттиска
                     product.get('stream', '')
                 )
                 cursor.execute("""

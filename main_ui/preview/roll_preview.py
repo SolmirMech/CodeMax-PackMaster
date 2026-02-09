@@ -247,6 +247,7 @@ class RollPreview:
             self.connected_roll_module.batch_num_var,
             self.connected_roll_module.roll_num_var,
             self.connected_roll_module.ros_podlo_var,
+            self.connected_roll_module.ros_size_var,
         ]
         
         # Устанавливаем отслеживание для каждой переменной
@@ -306,6 +307,7 @@ class RollPreview:
                 "batch_num": roll_module.batch_num_var.get(),
                 "roll_num": roll_module.roll_num_var.get(),
                 "ros_podlo": roll_module.ros_podlo_var.get(),
+                "ros_size": roll_module.ros_size_var.get(),
                 # Добавляем данные производителя
                 "manufacturer_name": manufacturer_data['name'],
                 "manufacturer_address": manufacturer_data['address'],
@@ -457,6 +459,7 @@ class RollPreview:
             "$roul_num": data.get('roll_num', ''),
             # Подложка для Росинки
             "$ros_podlo": data.get('ros_podlo', ''),
+            "$ros_size": data.get('ros_size', ''),
         }
         
         return data_map

@@ -69,6 +69,7 @@ class RollLabelPrinter:
         # Росинка
         self.rosinka_var = BooleanVar(value=False)
         self.ros_podlo_var = StringVar(value="")  # Подложка для Росинки
+        self.ros_size_var = StringVar(value="")  # Размер этикетки для Росинки
                     
         self.create_ui()
         self.load_box_sizes()
@@ -489,6 +490,8 @@ class RollLabelPrinter:
                 # Показываем поле Подложка
                 self.podlo_label.grid()
                 self.podlo_entry.grid()
+                # Извлекаем размер этикетки из БД
+                self.extract_label_size_from_db()
             else:
                 # Выключаем - возвращаем стандартный по цеху
                 workshop = self.coordinator.get_workshop()
@@ -497,9 +500,41 @@ class RollLabelPrinter:
                 # Скрываем поле Подложка
                 self.podlo_label.grid_remove()
                 self.podlo_entry.grid_remove()
+                # Очищаем размер этикетки
+                self.ros_size_var.set("")
             
             # Уведомляем всех
             self.coordinator.notify_list_changed("rosinka_changed")
+            
+    def extract_label_size_from_db(self):
+        """Извлекает размер этикетки из order_name для Росинки из кэша"""
+        # Проверяем order_data_module
+        if not hasattr(self, 'order_data_module') or not self.order_data_module:
+            self.ros_size_var.set("")
+            return
+        
+        # Проверяем кэш в order_data_module
+        if not hasattr(self.order_data_module, 'cached_order_data') or not self.order_data_module.cached_order_data:
+            self.ros_size_var.set("")
+            return
+        
+        # Берем первый заказ из кэша order_data_module
+        order_data = self.order_data_module.cached_order_data[0]
+        order_name = order_data.get('order_name', '')
+        
+        if not order_name:
+            self.ros_size_var.set("")
+            return
+        
+        # Ищем паттерн размеров
+        match = re.search(r'(\d+)\s*[хxХX\*]\s*(\d+)', order_name, re.IGNORECASE)
+        
+        if match:
+            width = match.group(1)
+            height = match.group(2)
+            self.ros_size_var.set(f"{width}х{height} мм")
+        else:
+            self.ros_size_var.set("")            
         
     def _on_shorten_text_changed(self):
         """Обрабатывает изменение галочки сокращения текста"""

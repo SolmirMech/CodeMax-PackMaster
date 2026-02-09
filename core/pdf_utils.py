@@ -14,6 +14,7 @@ class PDFTemplateFiller:
         "customer": "customer",      # Заказчик
         "product": "product",        # Изделие
         "ros_podlo": "product",        # Подложка Росинки
+        "ros_size": "product",        # Размер Росинки
         "packer": "packer",           # Упаковщик
         "onum": "order_number",      # Номер заказа
         
@@ -131,7 +132,7 @@ class PDFTemplateFiller:
             "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
             "$printhouse", "$printaddress", "$total", "$tu_number",
             "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
-            "$batch_num", "$roul_num", "$issue", "$ros_podlo",
+            "$batch_num", "$roul_num", "$issue", "$ros_podlo", "$ros_size",
         ]
         
         # Очищаем области пустых плейсхолдеров
