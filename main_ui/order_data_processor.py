@@ -792,6 +792,18 @@ class OrderDataProcessor:
                     foreground="green"
                 )
                 
+                # Передаём GTIN в preview_module для QR-кода
+                if hasattr(self, 'preview_module') and self.preview_module:
+                    # Сохраняем GTIN в current_data preview_module
+                    gtin = product_data.get('gtin', '')
+                    if gtin:
+                        self.preview_module.current_data['gtin'] = gtin
+                        self.preview_module.set_product_gtin(gtin)
+                    else:
+                        # Очищаем если нет GTIN
+                        if 'gtin' in self.preview_module.current_data:
+                            del self.preview_module.current_data['gtin']
+                
                 # Сбрасываем статусные сообщения
                 self.reset_status_messages()
                 

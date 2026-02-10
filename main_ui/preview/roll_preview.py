@@ -239,12 +239,22 @@ class RollPreview:
         self._active_tracking_vars = []
         # Инициализируем состояния
         self.rosinka_enabled = False
-        self.weight_enabled = False        
+        self.weight_enabled = False
+        self.product_gtin = ""
         
         self.create_preview_ui()
         self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
-            self.coordinator.subscribe(self._on_settings_changed)          
+            self.coordinator.subscribe(self._on_settings_changed)
+
+    def set_product_gtin(self, gtin):
+        """Сохраняет GTIN продукта для QR-кода"""
+        self.product_gtin = gtin
+        if gtin:
+            self.current_data['gtin'] = gtin
+        elif 'gtin' in self.current_data:
+            del self.current_data['gtin']
+        self.update_preview_displays()
             
     def delayed_initialization(self):
         """Вызывается после установки всех связей"""
@@ -718,6 +728,17 @@ class RollPreview:
             "$box_brut": data.get('box_brut', ''),
             "$box_net": data.get('box_net', ''),
         })
+        
+        # ДОБАВЛЯЕМ ДАННЫЕ ДЛЯ QR-КОДА
+        gtin = self.product_gtin
+        total_for_qr = data.get('total_quantity', '')  # Без форматирования пробелами!
+        
+        if gtin and total_for_qr:
+            # Формат: "GTIN:1234567890123,TOTAL:1000"
+            data_map["$box_qr"] = f"GTIN:{gtin},TOTAL:{total_for_qr}"
+        else:
+            # Пустая строка = QR не генерируется
+            data_map["$box_qr"] = ""
         
         return data_map
         

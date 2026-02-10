@@ -5,6 +5,16 @@ from typing import Dict, List, Tuple, Optional
 import os
 import io
 
+try:
+    import qrcode
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import SquareModuleDrawer
+    from qrcode.image.styles.colormasks import SolidFillColorMask
+    HAS_QRCODE = True
+except ImportError:
+    HAS_QRCODE = False
+    print("Библиотека qrcode не установлена. Установите: pip install qrcode[pil]")
+
 # Добавляем конфигурацию форматирования полей
 FIELD_FORMATTING = {
     'brutto': {
@@ -77,7 +87,8 @@ ALL_PLACEHOLDERS = [
     "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
     "$printhouse", "$printaddress", "$total", "$tu_number",
     "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
-    "$batch_num", "$roul_num", "$issue", "$ros_podlo", "$ros_size",
+    "$batch_num", "$roul_num", "$ros_podlo", "$ros_size", "$gtin",
+    "$box_qr",
 ]
 
 
@@ -243,6 +254,12 @@ class PDFTemplateFiller:
     def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default", for_print: bool = False):
         """Заменяет текст в указанной области"""
         try:
+            
+            # ЕСЛИ ЭТО QR-КОД - ОБРАБАТЫВАЕМ ОСОБО
+            if field_type == "box_qr":
+                self._draw_qr_code(draw, rect, text, mat, for_print)
+                return  # Выходим, QR обработан
+            
             # Если текст пустой - очищаем область и выходим
             if not text or text.strip() == "":
                 transformed_rect = rect * mat
@@ -310,7 +327,92 @@ class PDFTemplateFiller:
             
         except Exception as e:
             print(f"Ошибка замены текста {field_type}: {e}")
-    
+            
+    def _draw_qr_code(self, draw, rect, qr_data_str, mat, for_print):
+        """Рисует QR-код в указанной области если есть GTIN и total"""
+        try:
+            if not qr_data_str or not HAS_QRCODE:
+                # Очищаем область и выходим
+                transformed_rect = rect * mat
+                x0, y0 = transformed_rect.x0, transformed_rect.y0
+                x1, y1 = transformed_rect.x1, transformed_rect.y1
+                draw.rectangle([x0, y0, x1, y1], fill='white')
+                return
+            
+            # Парсим строку
+            gtin = ""
+            total = ""
+            parts = qr_data_str.split(',')
+            for part in parts:
+                if 'GTIN:' in part:
+                    gtin = part.replace('GTIN:', '').strip()
+                elif 'TOTAL:' in part:
+                    total = part.replace('TOTAL:', '').strip()
+            
+            # Проверяем наличие GTIN
+            if not gtin:
+                transformed_rect = rect * mat
+                x0, y0 = transformed_rect.x0, transformed_rect.y0
+                x1, y1 = transformed_rect.x1, transformed_rect.y1
+                draw.rectangle([x0, y0, x1, y1], fill='white')
+                return
+            
+            # Формируем строку для QR: zz + GTIN + total
+            qr_string = f"zz GTIN: {gtin} TOTAL: {total}"
+            
+            # Создаём QR-код
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(qr_string)
+            qr.make(fit=True)
+            
+            # Генерируем изображение QR
+            qr_img = qr.make_image(
+                fill_color="black",
+                back_color="white"
+            )
+            
+            # Фиксированный размер в PDF-пунктах
+            qr_size_pdf_units = 50  
+            qr_size_pixels = int(qr_size_pdf_units * mat.a)
+            
+            # Масштабируем QR
+            qr_img = qr_img.resize(
+                (qr_size_pixels, qr_size_pixels), 
+                Image.Resampling.LANCZOS
+            )
+            
+            # Получаем координаты плейсхолдера
+            transformed_rect = rect * mat
+            x0, y0 = transformed_rect.x0, transformed_rect.y0
+            x1, y1 = transformed_rect.x1, transformed_rect.y1
+            
+            # Рассчитываем область для QR (центрируем)
+            rect_width = x1 - x0
+            rect_height = y1 - y0
+            qr_x = x0 + (rect_width - qr_size_pixels) // 2
+            qr_y = y0 + (rect_height - qr_size_pixels) // 2
+            
+            # ОЧИЩАЕМ ТОЛЬКО ОБЛАСТЬ QR, а не весь плейсхолдер!
+            draw.rectangle([qr_x, qr_y, qr_x + qr_size_pixels, qr_y + qr_size_pixels], fill='white')
+            
+            # Вставляем QR-код
+            draw._image.paste(qr_img, (int(qr_x), int(qr_y)))
+            
+        except Exception as e:
+            print(f"Ошибка генерации QR: {e}")
+            try:
+                transformed_rect = rect * mat
+                x0, y0 = transformed_rect.x0, transformed_rect.y0
+                x1, y1 = transformed_rect.x1, transformed_rect.y1
+                draw.rectangle([x0, y0, x1, y1], fill='white')
+            except:
+                pass
+            
     def _format_display_text(self, field_type: str, text: str) -> str:
         """Форматирует текст для отображения с учетом настроек поля"""
         formatting = FIELD_FORMATTING.get(field_type, FIELD_FORMATTING['default'])
