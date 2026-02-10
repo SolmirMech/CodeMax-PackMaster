@@ -68,6 +68,157 @@ TRACKING_CONFIG = {
     }
 }
 
+# Добавляем конфигурацию данных для превью
+DATA_MAPPING_CONFIG = {
+    # Основные данные
+    'BASIC': {
+        'customer': {
+            'source': lambda rm: rm.customer_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$customer'
+        },
+        'product': {
+            'source': lambda rm: rm.product_text.get("1.0", "end-1c").strip(),
+            'condition': lambda self: True,
+            'placeholder': '$product'
+        },
+        'order_full': {
+            'source': lambda rm: f"{rm.order_prefix.get()}{rm.order_number.get()}{rm.order_suffix.get()}",
+            'condition': lambda self: True,
+            'placeholder': '$onum'
+        },
+        'date': {
+            'source': lambda rm: rm.date_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$date'
+        },
+        'packer': {
+            'source': lambda rm: rm.packer_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$packer'
+        },
+        'quantity': {
+            'source': lambda rm: rm.quantity_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$rol'
+        },
+        'rolls_count': {
+            'source': lambda rm: rm.rolls_count_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$tr'
+        },
+    },
+    
+    # Технические параметры
+    'TECHNICAL': {
+        'winding_scheme': {
+            'source': lambda rm: rm.winding_scheme_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$sx'
+        },
+        'sleeve_diameter': {
+            'source': lambda rm: rm.sleeve_diameter_var.get(),
+            'condition': lambda self: True,
+            'placeholder': 'dia'
+        },
+        'date_emission': {
+            'source': lambda rm: rm.date_emission_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$emission'
+        },
+    },
+    
+    # Данные производителя
+    'MANUFACTURER': {
+        'manufacturer_name': {
+            'source': lambda rm: rm.get_manufacturer_full_data()['name'],
+            'condition': lambda self: not self.current_data.get('show_manufacturer', False),
+            'placeholder': '$printhouse'
+        },
+        'manufacturer_address': {
+            'source': lambda rm: rm.get_manufacturer_full_data()['address'],
+            'condition': lambda self: not self.current_data.get('show_manufacturer', False),
+            'placeholder': '$printaddress'
+        },
+        'tu_number': {
+            'source': lambda rm: rm.get_manufacturer_full_data()['tu_number'],
+            'condition': lambda self: True,
+            'placeholder': '$tu_number'
+        },
+    },
+    
+    # Весовые данные (с условием)
+    'WEIGHT': {
+        'gross_weight_kg': {
+            'source': lambda rm: rm.gross_weight_kg_var.get(),
+            'condition': lambda self: self.weight_enabled,
+            'placeholder': '$brutto'
+        },
+        'net_weight_kg': {
+            'source': lambda rm: rm.net_weight_kg_var.get(),
+            'condition': lambda self: self.weight_enabled,
+            'placeholder': '$netto'
+        },
+        'box_brut': {
+            'source': lambda rm: rm.total_gross_var.get(),
+            'condition': lambda self: self.weight_enabled,
+            'placeholder': '$box_brut'
+        },
+        'box_net': {
+            'source': lambda rm: rm.total_net_var.get(),
+            'condition': lambda self: self.weight_enabled,
+            'placeholder': '$box_net'
+        },
+    },
+    
+    # Данные для коробки
+    'BOX': {
+        'total_quantity': {
+            'source': lambda rm: rm.total_quantity_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$total'
+        },
+    },
+    
+    # Данные для 2-го цеха
+    'WORKSHOP_2': {
+        'cutter': {
+            'source': lambda rm: rm.cutter_var.get(),
+            'condition': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+            'placeholder': '$cutter'
+        },
+        'roll_length': {
+            'source': lambda rm: rm.roll_length.get(),
+            'condition': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+            'placeholder': '$rll_length'
+        },
+        'batch_num': {
+            'source': lambda rm: rm.batch_num_var.get(),
+            'condition': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+            'placeholder': '$batch_num'
+        },
+        'roll_num': {
+            'source': lambda rm: rm.roll_num_var.get(),
+            'condition': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+            'placeholder': '$roul_num'
+        },
+    },
+    
+    # Данные для Росинки
+    'ROSINKA': {
+        'ros_podlo': {
+            'source': lambda rm: rm.ros_podlo_var.get(),
+            'condition': lambda self: self.rosinka_enabled,
+            'placeholder': '$ros_podlo'
+        },
+        'ros_size': {
+            'source': lambda rm: rm.ros_size_var.get(),
+            'condition': lambda self: self.rosinka_enabled,
+            'placeholder': '$ros_size'
+        },
+    }
+}
+
 class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
@@ -93,7 +244,7 @@ class RollPreview:
         self.create_preview_ui()
         self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
-            self.coordinator.subscribe(self._on_settings_changed)
+            self.coordinator.subscribe(self._on_settings_changed)          
             
     def delayed_initialization(self):
         """Вызывается после установки всех связей"""
@@ -373,7 +524,7 @@ class RollPreview:
         self._update_from_connected_roll_module()
 
     def _update_from_connected_roll_module(self):
-        """Обновляет данные из подключенного модуля ролика с группировкой"""
+        """Обновляет данные из подключенного модуля ролика через конфигурацию"""
         if not self.connected_roll_module:
             return
 
@@ -381,95 +532,30 @@ class RollPreview:
             roll_module = self.connected_roll_module
             preview_data = {}
             
-            # 1. Основные данные
-            preview_data.update({
-                "customer": roll_module.customer_var.get(),
-                "product_text": roll_module.product_text.get("1.0", "end-1c").strip(),
-                "order_prefix": roll_module.order_prefix.get(),
-                "order_number": roll_module.order_number.get(),
-                "order_suffix": roll_module.order_suffix.get(),
-                "date": roll_module.date_var.get(),
-                "packer": roll_module.packer_var.get(),
-                "quantity": roll_module.quantity_var.get(),
-                "show_manufacturer": roll_module.show_manufacturer_var.get(),
-                "rolls_count": roll_module.rolls_count_var.get(),
-            })
+            # Сначала собираем базовые данные для условий
+            basic_data = {
+                'customer': roll_module.customer_var.get(),
+                'show_manufacturer': roll_module.show_manufacturer_var.get(),
+            }
+            preview_data.update(basic_data)
+            self.current_data.update(basic_data)
             
-            # 2. Данные производителя
-            manufacturer_data = roll_module.get_manufacturer_full_data()
-            preview_data.update({
-                "manufacturer_name": manufacturer_data['name'],
-                "manufacturer_address": manufacturer_data['address'],
-                "tu_number": manufacturer_data['tu_number'],
-                "product_type": manufacturer_data['product'],
-            })
+            # Проходим по всем категориям конфигурации
+            for category, fields in DATA_MAPPING_CONFIG.items():
+                for field_name, config in fields.items():
+                    # Проверяем условие (если есть)
+                    if config['condition'] and not config['condition'](self):
+                        continue
+                    
+                    # Получаем значение из источника
+                    try:
+                        value = config['source'](roll_module)
+                        preview_data[field_name] = value
+                    except Exception as e:
+                        print(f"Ошибка получения {field_name}: {e}")
+                        preview_data[field_name] = ""
             
-            # 3. Технические параметры
-            preview_data.update({
-                "winding_scheme": roll_module.winding_scheme_var.get(),
-                "sleeve_diameter": roll_module.sleeve_diameter_var.get(),
-                "date_emission": roll_module.date_emission_var.get(),
-                "stream_width": roll_module.stream_width_var.get(),
-            })
-            
-            # 4. Весовые данные (только если вес включен)
-            if roll_module.show_weight_var.get():
-                preview_data.update({
-                    "gross_weight_kg": roll_module.gross_weight_kg_var.get(),
-                    "net_weight_kg": roll_module.net_weight_kg_var.get(),
-                    "box_brut": roll_module.total_gross_var.get(),
-                    "box_net": roll_module.total_net_var.get(),
-                })
-            else:
-                # Если вес выключен, очищаем эти поля
-                preview_data.update({
-                    "gross_weight_kg": "",
-                    "net_weight_kg": "",
-                    "box_brut": "",
-                    "box_net": "",
-                })
-            
-            # 5. Данные для коробки
-            preview_data.update({
-                "total_quantity": roll_module.total_quantity_var.get(),
-            })
-            
-            # 6. Данные для 2-го цеха
-            workshop = self.coordinator.get_workshop() if self.coordinator else "1"
-            if workshop == "2":
-                preview_data.update({
-                    "cutter": roll_module.cutter_var.get(),
-                    "roll_length": roll_module.roll_length.get(),
-                    "batch_num": roll_module.batch_num_var.get(),
-                    "roll_num": roll_module.roll_num_var.get(),
-                    "streams": roll_module.streams_var.get(),
-                    "label_length": roll_module.label_length_mm.get(),
-                })
-            else:
-                # Если не 2 цех, очищаем эти поля
-                preview_data.update({
-                    "cutter": "",
-                    "roll_length": "",
-                    "batch_num": "",
-                    "roll_num": "",
-                    "streams": "",
-                    "label_length": "",
-                })
-            
-            # 7. Данные для Росинки
-            if roll_module.rosinka_var.get():
-                preview_data.update({
-                    "ros_podlo": roll_module.ros_podlo_var.get(),
-                    "ros_size": roll_module.ros_size_var.get(),
-                })
-            else:
-                # Если Росинка выключена, очищаем эти поля
-                preview_data.update({
-                    "ros_podlo": "",
-                    "ros_size": "",
-                })
-            
-            # Обновляем предпросмотр
+            # Обновляем текущие данные
             self.current_data = preview_data
             self.update_preview_displays()
             
@@ -586,8 +672,8 @@ class RollPreview:
         data_map = {
             # Основные поля
             "$customer": data.get('customer', ''),
-            "$product": data.get('product_text', ''),
-            "$onum": order_full,
+            "$product": data.get('product', ''),
+            "$onum": data.get('order_full', ''),
             "$date": data.get('date', ''),
             "$packer": data.get('packer', ''),
             "$rol": self._format_number_with_spaces(data.get('quantity', '')),

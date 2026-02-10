@@ -5,6 +5,82 @@ from typing import Dict, List, Tuple, Optional
 import os
 import io
 
+# Добавляем конфигурацию форматирования полей
+FIELD_FORMATTING = {
+    'brutto': {
+        'unit': ' кг',
+        'align': 'center',
+        'add_unit': True
+    },
+    'netto': {
+        'unit': ' кг',
+        'align': 'center',
+        'add_unit': True
+    },
+    'dia': {
+        'unit': '',
+        'align': 'center',
+        'add_unit': False
+    },
+    'tr': {
+        'unit': ' шт',
+        'align': 'center',
+        'add_unit': True
+    },
+    'rol': {
+        'unit': ' шт',
+        'align': 'center',
+        'add_unit': True
+    },
+    'total': {
+        'unit': ' шт',
+        'align': 'center',
+        'add_unit': True
+    },
+    'box_brut': {
+        'unit': ' кг',
+        'align': 'center',
+        'add_unit': True,
+        'prefix': 'Брутто '
+    },
+    'box_net': {
+        'unit': ' кг',
+        'align': 'center',
+        'add_unit': True,
+        'prefix': 'Нетто '
+    },
+    'rll_length': {
+        'unit': ' м',
+        'align': 'center',
+        'add_unit': True
+    },
+    'customer': {
+        'unit': '',
+        'align': 'left',
+        'add_unit': False
+    },
+    'product': {
+        'unit': '',
+        'align': 'left',
+        'add_unit': False
+    },
+    'default': {
+        'unit': '',
+        'align': 'center',
+        'add_unit': False
+    }
+}
+
+# Добавляем список всех плейсхолдеров в начало класса
+ALL_PLACEHOLDERS = [
+    "$customer", "$product", "$onum", "$date", "$packer",
+    "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
+    "$printhouse", "$printaddress", "$total", "$tu_number",
+    "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
+    "$batch_num", "$roul_num", "$issue", "$ros_podlo", "$ros_size",
+]
+
+
 class PDFTemplateFiller:
     """Класс для заполнения PDF шаблонов с плейсхолдерами"""
     
@@ -51,8 +127,8 @@ class PDFTemplateFiller:
         "Дата эмиссии:": "$emission", 
         "Длина ролика:": "$rll_length",
         "№ съема/№ ролика :": "$batch_num",
-        "Вес рулонов, брутто:": "$brutto",
-        "Вес рулонов, нетто:": "$netto",
+        "Вес рулона, брутто:": "$brutto",
+        "Вес рулона, нетто:": "$netto",
         "Кол-во этикеток:": "$rol",
         "—": "$roul_num",
     }    
@@ -126,17 +202,8 @@ class PDFTemplateFiller:
         # Очистка статического текста для пустых плейсхолдеров
         self._clear_empty_static_text(draw, page, mat, data_map)
         
-        # Список всех плейсхолдеров для очистки
-        all_placeholders = [
-            "$customer", "$product", "$onum", "$date", "$packer",
-            "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
-            "$printhouse", "$printaddress", "$total", "$tu_number",
-            "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
-            "$batch_num", "$roul_num", "$issue", "$ros_podlo", "$ros_size",
-        ]
-        
-        # Очищаем области пустых плейсхолдеров
-        for placeholder in all_placeholders:
+        # Очищаем области пустых плейсхолдеров (используем общий список)
+        for placeholder in ALL_PLACEHOLDERS:
             if placeholder in data_map_without_d and (not data_map_without_d[placeholder] or data_map_without_d[placeholder].strip() == ""):
                 instances = page.search_for(placeholder)
                 for rect in instances:
@@ -151,7 +218,7 @@ class PDFTemplateFiller:
                     x1, y1 = transformed_rect.x1, transformed_rect.y1
                     draw.rectangle([x0, y0, x1, y1], fill='white')
         
-        # Обрабатываем Все плейсхолдеры
+        # Обрабатываем все плейсхолдеры
         for placeholder, new_text in data_map_without_d.items():
             if not new_text or new_text.strip() == "":
                 continue
@@ -172,6 +239,105 @@ class PDFTemplateFiller:
                 self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
         
         return img
+    
+    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default", for_print: bool = False):
+        """Заменяет текст в указанной области"""
+        try:
+            # Если текст пустой - очищаем область и выходим
+            if not text or text.strip() == "":
+                transformed_rect = rect * mat
+                x0, y0 = transformed_rect.x0, transformed_rect.y0
+                x1, y1 = transformed_rect.x1, transformed_rect.y1
+                draw.rectangle([x0, y0, x1, y1], fill='white')
+                return
+                
+            transformed_rect = rect * mat
+            
+            setting_field_type = self.FIELD_MAPPING.get(field_type, field_type)
+                        
+            # Определяем размер шрифта из настроек или используем значения по умолчанию
+            if self.font_settings:
+                font_size = self._get_font_size_from_settings(setting_field_type, for_print)
+            else:
+                # Значения по умолчанию
+                if for_print:
+                    if field_type in ['customer', 'product']:
+                        font_size = 48
+                    else:
+                        font_size = 42
+                else:
+                    if field_type in ['customer', 'product']:
+                        font_size = 30
+                    else:
+                        font_size = 18
+            
+            # Для поля product используем многострочную отрисовку (даже для одной строки)
+            if field_type == "product" and self.font_settings:
+                wrap_settings = self.font_settings.get("multiline_settings", {})
+                
+                if wrap_settings:
+                    # Разбиваем текст на строки (может вернуть 1, 2, 3 или больше строк)
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings, for_print)
+                    
+                    # Отрисовываем через многострочный метод (работает и для одной строки)
+                    self._draw_multiline_text(draw, rect, lines, mat, font_size, for_print)
+                    return  # Выходим, так как текст уже отрисован
+            
+            # Для остальных полей - стандартная однострочная отрисовка
+            font = self._get_font(font_size, 'bold' if for_print else 'normal')
+            
+            x0, y0 = transformed_rect.x0, transformed_rect.y0
+            x1, y1 = transformed_rect.x1, transformed_rect.y1
+            
+            rect_width = x1 - x0
+            rect_height = y1 - y0
+            
+            # Форматирование текста на основе конфигурации
+            display_text = self._format_display_text(field_type, text)
+            
+            bbox = draw.textbbox((0, 0), display_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # Выравнивание на основе конфигурации
+            text_x = self._get_text_alignment_x(field_type, x0, rect_width, text_width)
+                
+            text_y = y0 + (rect_height - text_height) / 2 - 3
+            
+            # Очищаем область и рисуем новый текст
+            draw.rectangle([x0, y0, x1, y1], fill='white')
+            draw.text((text_x, text_y), display_text, fill='black', font=font)
+            
+        except Exception as e:
+            print(f"Ошибка замены текста {field_type}: {e}")
+    
+    def _format_display_text(self, field_type: str, text: str) -> str:
+        """Форматирует текст для отображения с учетом настроек поля"""
+        formatting = FIELD_FORMATTING.get(field_type, FIELD_FORMATTING['default'])
+        
+        display_text = text
+        
+        # Добавляем префикс если есть
+        if 'prefix' in formatting and text:
+            display_text = f"{formatting['prefix']}{display_text}"
+            
+        # Добавляем единицы измерения
+        if formatting.get('add_unit', False) and text:
+            display_text = f"{display_text}{formatting['unit']}"
+            
+        return display_text
+    
+    def _get_text_alignment_x(self, field_type: str, x0: float, rect_width: float, text_width: float) -> float:
+        """Возвращает X-координату для выравнивания текста"""
+        formatting = FIELD_FORMATTING.get(field_type, FIELD_FORMATTING['default'])
+        align = formatting.get('align', 'center')
+        
+        if align == 'left' or field_type in ['customer', 'product']:
+            return x0 + 2
+        elif align == 'right':
+            return x0 + rect_width - text_width - 2
+        else:  # center
+            return x0 + (rect_width - text_width) / 2
         
     def _clear_empty_static_text(self, draw: ImageDraw.Draw, page, mat, data_map: Dict[str, str]):
         """Очищает статический текст, если соответствующий плейсхолдер пустой"""
@@ -248,99 +414,6 @@ class PDFTemplateFiller:
             lines.append(current_line)
 
         return lines
-
-    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default", for_print: bool = False):
-        """Заменяет текст в указанной области"""
-        try:
-            # Если текст пустой - очищаем область и выходим
-            if not text or text.strip() == "":
-                transformed_rect = rect * mat
-                x0, y0 = transformed_rect.x0, transformed_rect.y0
-                x1, y1 = transformed_rect.x1, transformed_rect.y1
-                draw.rectangle([x0, y0, x1, y1], fill='white')
-                return
-                
-            transformed_rect = rect * mat
-            
-            setting_field_type = self.FIELD_MAPPING.get(field_type, field_type)
-                        
-            # Определяем размер шрифта из настроек или используем значения по умолчанию
-            if self.font_settings:
-                font_size = self._get_font_size_from_settings(setting_field_type, for_print)
-            else:
-                # Значения по умолчанию
-                if for_print:
-                    if field_type in ['customer', 'product']:
-                        font_size = 48
-                    else:
-                        font_size = 42
-                else:
-                    if field_type in ['customer', 'product']:
-                        font_size = 30
-                    else:
-                        font_size = 18
-            
-            # Для поля product используем многострочную отрисовку (даже для одной строки)
-            if field_type == "product" and self.font_settings:
-                wrap_settings = self.font_settings.get("multiline_settings", {})
-                
-                if wrap_settings:
-                    # Разбиваем текст на строки (может вернуть 1, 2, 3 или больше строк)
-                    lines = self._prepare_text_lines(text, font_size, wrap_settings, for_print)
-                    
-                    # Отрисовываем через многострочный метод (работает и для одной строки)
-                    self._draw_multiline_text(draw, rect, lines, mat, font_size, for_print)
-                    return  # Выходим, так как текст уже отрисован
-            
-            # Для остальных полей - стандартная однострочная отрисовка
-            font = self._get_font(font_size, 'bold' if for_print else 'normal')
-            
-            x0, y0 = transformed_rect.x0, transformed_rect.y0
-            x1, y1 = transformed_rect.x1, transformed_rect.y1
-            
-            rect_width = x1 - x0
-            rect_height = y1 - y0
-            
-            # Добавляем единицы измерения (только для определенных полей)
-            display_text = text
-            if field_type == 'brutto' and text:
-                display_text = f"{text} кг"
-            elif field_type == 'netto' and text:
-                display_text = f"{text} кг" 
-            elif field_type == 'dia' and text:
-                display_text = f"{text}"
-            elif field_type == 'tr' and text:
-                display_text = f"{text} шт"
-            elif field_type == 'rol' and text:
-                display_text = f"{text} шт"
-            elif field_type == 'total' and text:
-                display_text = f"{text} шт"                
-            elif field_type == 'box_brut' and text:
-                display_text = f"Брутто {text} кг"
-            elif field_type == 'box_net' and text:
-                display_text = f"Нетто {text} кг"
-            elif field_type == 'rll_length' and text:
-                display_text = f"{text} м"
-            
-            bbox = draw.textbbox((0, 0), display_text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # Выравнивание в зависимости от типа поля
-            if field_type in ['customer', 'product']:
-                text_x = x0 + 2
-            else:
-                # Центрирование для всех остальных полей
-                text_x = x0 + (rect_width - text_width) / 2
-                
-            text_y = y0 + (rect_height - text_height) / 2 - 3
-            
-            # Очищаем область и рисуем новый текст
-            draw.rectangle([x0, y0, x1, y1], fill='white')
-            draw.text((text_x, text_y), display_text, fill='black', font=font)
-            
-        except Exception as e:
-            print(f"Ошибка замены текста {field_type}: {e}")
             
     def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int, for_print: bool):
         """Рисует многострочный текст"""

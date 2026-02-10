@@ -203,6 +203,9 @@ class RollLabelPrinter:
             
         if hasattr(self, 'coordinator') and self.coordinator:
             self.coordinator.check_weight_status(self)
+        if hasattr(self, 'preview_module') and self.preview_module:
+            # Обновляем данные в preview_module
+            self.preview_module._update_from_connected_roll_module()
             
     def _on_producer_visibility_changed(self, *args):
         """Обрабатывает изменение видимости производителя"""
@@ -335,19 +338,29 @@ class RollLabelPrinter:
         # Контекстное меню для текстового поля
         self.add_context_menu_to_text(self.product_text)
         self.product_text.bind("<Control-KeyPress>", self.control_key_handler_text)
-        self.product_text.bind("<Return>", self.search_in_product_text)       
+        self.product_text.bind("<Return>", self.search_in_product_text)
+        
+        # Подложка Росинки
+        self.podlo_label = ttk.Label(data_frame, text="Подложка:")
+        self.podlo_entry = ttk.Entry(data_frame, textvariable=self.ros_podlo_var, width=35)
+        # Сразу скрываем, т.к. показываться будет только при включении галочки Росинка
+        self.podlo_label.grid(row=3, column=1, sticky="w", pady=3)
+        self.podlo_entry.grid(row=3, column=1, padx=(115, 0), pady=3, sticky="w")
+        self.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
+        self.podlo_label.grid_remove()
+        self.podlo_entry.grid_remove()        
         
         # Основные поля ввода
         
         # Номер заказа (3 части)
         ttk.Label(data_frame, text="№ заказа:").grid(
-            row=3, column=0, sticky="w", pady=5
+            row=4, column=0, sticky="w", pady=5
         )
         entry_prefix = ttk.Entry(data_frame, textvariable=self.order_prefix, width=4)
-        entry_prefix.grid(row=3, column=1, padx=(5, 0), pady=5, sticky="w")
+        entry_prefix.grid(row=4, column=1, padx=(5, 0), pady=5, sticky="w")
 
         entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
-        entry_number.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
+        entry_number.grid(row=4, column=1, padx=(42, 0), pady=5, sticky="w")
         entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
         self.order_entry = entry_number
         
@@ -357,12 +370,12 @@ class RollLabelPrinter:
             width=7,
             state="readonly"
         )
-        self.order_combobox.grid(row=3, column=1, padx=(42, 0), pady=5, sticky="w")
+        self.order_combobox.grid(row=4, column=1, padx=(42, 0), pady=5, sticky="w")
         self.order_combobox.bind("<<ComboboxSelected>>", self.on_order_selected)
         self.order_combobox.grid_remove()  # Скрываем изначально
 
         entry_suffix = ttk.Entry(data_frame, textvariable=self.order_suffix, width=6)
-        entry_suffix.grid(row=3, column=1, padx=(95, 0), pady=5, sticky="w")
+        entry_suffix.grid(row=4, column=1, padx=(95, 0), pady=5, sticky="w")
         self.entry_suffix = entry_suffix     
         
         
@@ -372,21 +385,21 @@ class RollLabelPrinter:
             font=("Arial", 18),
             cursor="hand2"
         )
-        date_update_label.grid(row=3, column=1, sticky="w", padx=(200, 0), pady=5)
+        date_update_label.grid(row=4, column=1, sticky="w", padx=(200, 0), pady=5)
         date_update_label.bind("<Button-1>", lambda e: self.update_date_field())
         # Дата
         self.date_entry = ttk.Entry(data_frame, textvariable=self.date_var, width=12)
-        self.date_entry.grid(row=3, column=1, padx=(240, 0), pady=5, sticky="w")        
+        self.date_entry.grid(row=4, column=1, padx=(240, 0), pady=5, sticky="w")        
         
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
-            row=4, column=0, sticky="w", pady=2
+            row=5, column=0, sticky="w", pady=2
         )
         # Кол-во этикеток в одном ролике
         quantity_entry = ttk.Entry(data_frame, textvariable=self.quantity_var, width=15)
-        quantity_entry.grid(row=4, column=1, padx=5, pady=2, sticky="w")
+        quantity_entry.grid(row=5, column=1, padx=5, pady=2, sticky="w")
         # Кол-во роликов
         rolls_entry = ttk.Entry(data_frame, textvariable=self.rolls_count_var, width=15)
-        rolls_entry.grid(row=4, column=1, padx=(115, 0), pady=2, sticky="w")
+        rolls_entry.grid(row=5, column=1, padx=(115, 0), pady=2, sticky="w")
         rolls_entry.bind("<KeyRelease>", self.calculate_total_quantity)
         
         # Добавляем галочку "Вес"
@@ -397,80 +410,70 @@ class RollLabelPrinter:
             variable=self.show_weight_var,
             command=self.toggle_weight_visibility
         )
-        self.weight_checkbutton.grid(row=4, column=1, padx=(240, 10), pady=2, sticky="w")
+        self.weight_checkbutton.grid(row=5, column=1, padx=(240, 10), pady=2, sticky="w")
         
         # Дополнительные поля:
         
         # Вес рулона
         self.weight_label = ttk.Label(data_frame, text="Вес ролика брутто, кг:")
-        self.weight_label.grid(row=5, column=0, sticky="w", pady=3)
+        self.weight_label.grid(row=6, column=0, sticky="w", pady=3)
         
         self.gross_entry = ttk.Entry(data_frame, textvariable=self.gross_weight_kg_var, width=15)
-        self.gross_entry.grid(row=5, column=1, padx=(5, 0), pady=3, sticky="w")
+        self.gross_entry.grid(row=6, column=1, padx=(5, 0), pady=3, sticky="w")
         
         # Вес втулки
         self.sleeve_label = ttk.Label(data_frame, text="Вес втулки, г:")
-        self.sleeve_label.grid(row=5, column=1, sticky="w", padx=(115, 0), pady=3)
+        self.sleeve_label.grid(row=6, column=1, sticky="w", padx=(115, 0), pady=3)
         self.sleeve_entry = ttk.Entry(data_frame, textvariable=self.sleeve_weight_var, width=7)
-        self.sleeve_entry.grid(row=5, column=1, padx=(265, 0), pady=3, sticky="w")
+        self.sleeve_entry.grid(row=6, column=1, padx=(265, 0), pady=3, sticky="w")
         
         # Длина ролика
         self.roll_length_label = ttk.Label(data_frame, text="Длина ролика, м:")
-        self.roll_length_label.grid(row=6, column=0, sticky="w", pady=2)
+        self.roll_length_label.grid(row=7, column=0, sticky="w", pady=2)
         self.roll_length_entry = ttk.Entry(data_frame, textvariable=self.roll_length, width=8)
-        self.roll_length_entry.grid(row=6, column=0, padx=(183, 0), pady=2, sticky="w")
+        self.roll_length_entry.grid(row=7, column=0, padx=(183, 0), pady=2, sticky="w")
         
         # № съёма
         self.batch_label = ttk.Label(data_frame, text="№ съёма:")
-        self.batch_label.grid(row=6, column=1, sticky="w", pady=3)
+        self.batch_label.grid(row=7, column=1, sticky="w", pady=3)
         self.batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
-        self.batch_entry.grid(row=6, column=1, padx=(100, 0), pady=3, sticky="w")
+        self.batch_entry.grid(row=7, column=1, padx=(100, 0), pady=3, sticky="w")
 
         # № ролика
         self.roll_label = ttk.Label(data_frame, text="№ ролика:")
-        self.roll_label.grid(row=6, column=1, sticky="w", padx=(160, 0), pady=3)
+        self.roll_label.grid(row=7, column=1, sticky="w", padx=(160, 0), pady=3)
         self.roll_entry = ttk.Entry(data_frame, textvariable=self.roll_num_var, width=7)
-        self.roll_entry.grid(row=6, column=1, padx=(265, 0), pady=3, sticky="w")               
+        self.roll_entry.grid(row=7, column=1, padx=(265, 0), pady=3, sticky="w")               
         
         # Ширина ручья
         self.stream_width_label = ttk.Label(data_frame, text="Ширина ручья, мм:")
-        self.stream_width_label.grid(row=7, column=0, sticky="w", pady=2)
+        self.stream_width_label.grid(row=8, column=0, sticky="w", pady=2)
         self.stream_width_entry = ttk.Entry(data_frame, textvariable=self.stream_width_var, width=8)
-        self.stream_width_entry.grid(row=7, column=0, padx=(183, 0), pady=2, sticky="w")
+        self.stream_width_entry.grid(row=8, column=0, padx=(183, 0), pady=2, sticky="w")
         
         # Длина этикетки
         self.label_length_label = ttk.Label(data_frame, text="Длина этикетки, мм:")
-        self.label_length_label.grid(row=7, column=1, sticky="w", pady=2)
+        self.label_length_label.grid(row=8, column=1, sticky="w", pady=2)
         self.label_length_entry = ttk.Entry(data_frame, textvariable=self.label_length_mm, width=7)
-        self.label_length_entry.grid(row=7, column=1, padx=(265, 0), pady=2, sticky="w")         
+        self.label_length_entry.grid(row=8, column=1, padx=(265, 0), pady=2, sticky="w")         
         
         # Схема намотки
         self.winding_label = ttk.Label(data_frame, text="Схема намотки:")
-        self.winding_label.grid(row=8, column=0, sticky="w", pady=3)       
+        self.winding_label.grid(row=9, column=0, sticky="w", pady=3)       
         self.winding_entry = ttk.Entry(data_frame, textvariable=self.winding_scheme_var, width=8)
-        self.winding_entry.grid(row=8, column=0, padx=(183, 0), pady=3, sticky="w")
+        self.winding_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")
         
         # Диаметр втулки
         self.diameter_label = ttk.Label(data_frame, text="Диаметр втулки, мм:")
-        self.diameter_label.grid(row=8, column=1, sticky="w", pady=3)       
+        self.diameter_label.grid(row=9, column=1, sticky="w", pady=3)       
         self.diameter_entry = ttk.Entry(data_frame, textvariable=self.sleeve_diameter_var, width=7)
-        self.diameter_entry.grid(row=8, column=1, padx=(265, 0), pady=3, sticky="w")
+        self.diameter_entry.grid(row=9, column=1, padx=(265, 0), pady=3, sticky="w")
         
         # Кол-во ручьев      
         self.streams_label = ttk.Label(data_frame, text="Кол-во ручьев:")
-        self.streams_label.grid(row=9, column=0, sticky="w", pady=3)
+        self.streams_label.grid(row=10, column=0, sticky="w", pady=3)
         self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=8)
-        self.streams_entry.grid(row=9, column=0, padx=(183, 0), pady=3, sticky="w")
-        
-        # Подложка Росинки
-        self.podlo_label = ttk.Label(data_frame, text="Подложка:")
-        self.podlo_entry = ttk.Entry(data_frame, textvariable=self.ros_podlo_var, width=35)
-        # Сразу скрываем, т.к. показываться будет только при включении галочки Росинка
-        self.podlo_label.grid(row=9, column=1, sticky="w", pady=3)
-        self.podlo_entry.grid(row=9, column=1, padx=(115, 0), pady=3, sticky="w")
-        self.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
-        self.podlo_label.grid_remove()
-        self.podlo_entry.grid_remove()
+        self.streams_entry.grid(row=10, column=0, padx=(183, 0), pady=3, sticky="w")
         
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
