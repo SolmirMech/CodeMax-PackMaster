@@ -68,7 +68,7 @@ class SettingsCoordinator:
             if weight_value and str(weight_value).strip() and str(weight_value).strip() != '0':
                 has_weight = True
         
-        # Сохраняем статус и уведомляем подписчиков
+        # Всегда обновляем и уведомляем (старая логика)
         self._has_weight = has_weight
         self._notify_subscribers()
         

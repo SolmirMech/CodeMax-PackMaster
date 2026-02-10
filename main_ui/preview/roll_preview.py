@@ -8,6 +8,66 @@ import json
 from datetime import datetime
 from typing import Dict
 
+TRACKING_CONFIG = {
+    # Основные данные (всегда отслеживаются)
+    'BASIC': {
+        'customer_var': None,
+        'order_prefix': None,
+        'order_number': None,
+        'order_suffix': None,
+        'date_var': None,
+        'packer_var': None,
+        'quantity_var': None,
+        'rolls_count_var': None,
+        'show_manufacturer_var': None,
+    },
+    
+    # Данные производителя (всегда отслеживаются)
+    'MANUFACTURER': {
+        'manufacturer_var': None,
+        'product_type_var': None,
+    },
+    
+    # Технические параметры (всегда отслеживаются)
+    'TECHNICAL': {
+        'winding_scheme_var': None,
+        'sleeve_diameter_var': None,
+        'date_emission_var': None,
+        'stream_width_var': None,
+    },
+    
+    # Весовые данные (только при включенном весе)
+    'WEIGHT': {
+        'gross_weight_kg_var': lambda self: self.weight_enabled,
+        'net_weight_kg_var': lambda self: self.weight_enabled,
+        'sleeve_weight_var': lambda self: self.weight_enabled,
+        'box_weight_var': lambda self: self.weight_enabled,
+    },
+    
+    # Данные для коробки
+    'BOX': {
+        'total_quantity_var': None,
+        'total_gross_var': lambda self: self.weight_enabled,
+        'total_net_var': lambda self: self.weight_enabled,
+    },
+    
+    # Специфичные для 2-го цеха
+    'WORKSHOP_2': {
+        'cutter_var': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+        'roll_length': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+        'batch_num_var': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+        'roll_num_var': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+        'streams_var': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+        'label_length_mm': lambda self: self.coordinator and self.coordinator.get_workshop() == "2",
+    },
+    
+    # Специфичные для Росинки
+    'ROSINKA': {
+        'ros_podlo_var': lambda self: self.rosinka_enabled,
+        'ros_size_var': lambda self: self.rosinka_enabled,
+    }
+}
+
 class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
@@ -25,6 +85,10 @@ class RollPreview:
         self.font_settings = None
         
         self.connected_roll_module = None
+        self._active_tracking_vars = []
+        # Инициализируем состояния
+        self.rosinka_enabled = False
+        self.weight_enabled = False        
         
         self.create_preview_ui()
         self.load_font_settings()
@@ -38,24 +102,32 @@ class RollPreview:
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""
         try:
-            # Получаем состояние галочки Росинка из roll_module
+            # 1. Получаем состояние галочки Росинка из roll_module
             if hasattr(self, 'connected_roll_module') and self.connected_roll_module:
-                # Проверяем, есть ли переменная rosinka_var
                 if hasattr(self.connected_roll_module, 'rosinka_var'):
-                    # Получаем значение через get()
                     self.rosinka_enabled = self.connected_roll_module.rosinka_var.get()
                 else:
                     self.rosinka_enabled = False
             else:
                 self.rosinka_enabled = False
             
-            # Перезагружаем настройки шрифтов и шаблоны
+            # 2. Получаем статус веса из координатора
+            if self.coordinator:
+                self.weight_enabled = self.coordinator.get_weight_status()
+            else:
+                self.weight_enabled = False
+            
+            # 3. Перезагружаем настройки шрифтов и шаблоны
             self.load_font_settings()
             self.reload_for_workshop_change()
+            
+            # 4. ОБНОВЛЯЕМ ПОДПИСКИ при изменении настроек
+            self.refresh_tracking()
             
         except Exception as e:
             print(f"Ошибка в _on_settings_changed: {e}")
             self.rosinka_enabled = False
+            self.weight_enabled = False
         
     def create_preview_ui(self):
         """Создает интерфейс предпросмотра"""
@@ -122,6 +194,29 @@ class RollPreview:
         
         # Сразу загружаем PDF и показываем превью
         self.load_and_show_previews()
+        
+    def _cleanup_tracking(self):
+        """Очищает все активные подписки на переменные"""
+        if hasattr(self, '_active_tracking_vars'):
+            for var_name, var_obj, trace_id in self._active_tracking_vars:
+                try:
+                    if var_name == 'product_text':
+                        # Для Text виджета удаляем bind
+                        var_obj.unbind("<<Modified>>")
+                    elif trace_id is not None:
+                        # Для StringVar удаляем trace
+                        var_obj.trace_remove("write", trace_id)
+                except (ValueError, AttributeError, TypeError):
+                    pass  # Игнорируем ошибки удаления
+            self._active_tracking_vars.clear()
+        else:
+            self._active_tracking_vars = []
+    
+    def refresh_tracking(self):
+        """Пересоздаёт подписки при изменении условий (вес, цех, росинка)"""
+        if self.connected_roll_module:
+            self._cleanup_tracking()
+            self._setup_data_tracking()        
         
     def _update_template_paths(self):
         """Обновляет пути к шаблонам в зависимости от настроек"""
@@ -217,45 +312,54 @@ class RollPreview:
         FontSettingsDialog(self.parent, self.config_manager, self)
 
     def _setup_data_tracking(self):
-        """Настраивает отслеживание изменений в модуле ролика"""
+        """Настраивает отслеживание только активных переменных"""
         if not self.connected_roll_module:
             return
-
-        # Список переменных для отслеживания
-        variables_to_track = [
-            self.connected_roll_module.customer_var,
-            self.connected_roll_module.gross_weight_kg_var, 
-            self.connected_roll_module.net_weight_kg_var,
-            self.connected_roll_module.order_prefix,
-            self.connected_roll_module.order_number,
-            self.connected_roll_module.order_suffix,
-            self.connected_roll_module.date_var,
-            self.connected_roll_module.packer_var,
-            self.connected_roll_module.quantity_var,
-            self.connected_roll_module.rolls_count_var,
-            self.connected_roll_module.total_quantity_var,
-            self.connected_roll_module.total_gross_var,
-            self.connected_roll_module.total_net_var,
-            self.connected_roll_module.winding_scheme_var,
-            self.connected_roll_module.sleeve_diameter_var,
-            self.connected_roll_module.show_manufacturer_var,
-            self.connected_roll_module.date_emission_var,
-            self.connected_roll_module.cutter_var,
-            self.connected_roll_module.roll_length,
-            self.connected_roll_module.manufacturer_var,
-            self.connected_roll_module.product_type_var,
-            self.connected_roll_module.batch_num_var,
-            self.connected_roll_module.roll_num_var,
-            self.connected_roll_module.ros_podlo_var,
-            self.connected_roll_module.ros_size_var,
-        ]
         
-        # Устанавливаем отслеживание для каждой переменной
-        for var in variables_to_track:
-            var.trace_add("write", self._on_roll_data_changed)
+        # Инициализируем список активных подписок
+        if not hasattr(self, '_active_tracking_vars'):
+            self._active_tracking_vars = []
         
-        # Отслеживаем изменения в текстовом поле изделия
-        self.connected_roll_module.product_text.bind("<<Modified>>", self._on_product_text_modified)
+        roll_module = self.connected_roll_module
+        
+        # Проходим по всем категориям конфигурации
+        for category, variables in TRACKING_CONFIG.items():
+            for var_name, condition in variables.items():
+                # Пропускаем product_text - обрабатываем отдельно
+                if var_name == 'product_text':
+                    continue
+                    
+                # Проверяем условие (если есть)
+                should_track = True
+                if condition is not None:
+                    try:
+                        # Условия проверяются на self (RollPreview), а не на roll_module!
+                        should_track = condition(self)
+                    except Exception as e:
+                        print(f"Ошибка проверки условия для {var_name}: {e}")
+                        should_track = False
+                
+                if should_track:
+                    # Получаем объект переменной из roll_module
+                    var_obj = getattr(roll_module, var_name, None)
+                    if var_obj:
+                        try:
+                            # Добавляем отслеживание
+                            trace_id = var_obj.trace_add("write", self._on_roll_data_changed)
+                            # Сохраняем информацию для последующей очистки
+                            self._active_tracking_vars.append((var_name, var_obj, trace_id))
+                        except Exception as e:
+                            print(f"Ошибка добавления отслеживания для {var_name}: {e}")
+        
+        # Обрабатываем product_text отдельно (это tk.Text, не StringVar)
+        try:
+            if hasattr(roll_module, 'product_text'):
+                # Для Text виджета используем bind, а не trace_add
+                roll_module.product_text.bind("<<Modified>>", self._on_product_text_modified)
+                # Сохраняем информацию
+                self._active_tracking_vars.append(('product_text', roll_module.product_text, None))
+        except Exception as e:
+            print(f"Ошибка привязки к product_text: {e}")
 
     def _on_product_text_modified(self, event=None):
         """Обрабатывает изменение текста изделия"""
@@ -269,25 +373,18 @@ class RollPreview:
         self._update_from_connected_roll_module()
 
     def _update_from_connected_roll_module(self):
-        """Обновляет данные из подключенного модуля ролика"""
+        """Обновляет данные из подключенного модуля ролика с группировкой"""
         if not self.connected_roll_module:
             return
 
         try:
             roll_module = self.connected_roll_module
+            preview_data = {}
             
-            # Получаем текст изделия из текстового поля
-            product_text = roll_module.product_text.get("1.0", "end-1c").strip()
-            
-            # Получаем данные производителя из roll_module
-            manufacturer_data = roll_module.get_manufacturer_full_data()
-            
-            # Собираем данные с правильными ключами
-            preview_data = {
+            # 1. Основные данные
+            preview_data.update({
                 "customer": roll_module.customer_var.get(),
-                "product_text": product_text,
-                "gross_weight_kg": roll_module.gross_weight_kg_var.get(),
-                "net_weight_kg": roll_module.net_weight_kg_var.get(),
+                "product_text": roll_module.product_text.get("1.0", "end-1c").strip(),
                 "order_prefix": roll_module.order_prefix.get(),
                 "order_number": roll_module.order_number.get(),
                 "order_suffix": roll_module.order_suffix.get(),
@@ -296,27 +393,85 @@ class RollPreview:
                 "quantity": roll_module.quantity_var.get(),
                 "show_manufacturer": roll_module.show_manufacturer_var.get(),
                 "rolls_count": roll_module.rolls_count_var.get(),
-                "total_quantity": roll_module.total_quantity_var.get(),
-                "box_brut": roll_module.total_gross_var.get(),
-                "box_net": roll_module.total_net_var.get(),
-                "winding_scheme": roll_module.winding_scheme_var.get(),
-                "sleeve_diameter": roll_module.sleeve_diameter_var.get(),
-                "cutter": roll_module.cutter_var.get(),
-                "roll_length": roll_module.roll_length.get(),
-                "date_emission": roll_module.date_emission_var.get(),
-                "batch_num": roll_module.batch_num_var.get(),
-                "roll_num": roll_module.roll_num_var.get(),
-                "ros_podlo": roll_module.ros_podlo_var.get(),
-                "ros_size": roll_module.ros_size_var.get(),
-                # Добавляем данные производителя
+            })
+            
+            # 2. Данные производителя
+            manufacturer_data = roll_module.get_manufacturer_full_data()
+            preview_data.update({
                 "manufacturer_name": manufacturer_data['name'],
                 "manufacturer_address": manufacturer_data['address'],
                 "tu_number": manufacturer_data['tu_number'],
                 "product_type": manufacturer_data['product'],
-            }
+            })
+            
+            # 3. Технические параметры
+            preview_data.update({
+                "winding_scheme": roll_module.winding_scheme_var.get(),
+                "sleeve_diameter": roll_module.sleeve_diameter_var.get(),
+                "date_emission": roll_module.date_emission_var.get(),
+                "stream_width": roll_module.stream_width_var.get(),
+            })
+            
+            # 4. Весовые данные (только если вес включен)
+            if roll_module.show_weight_var.get():
+                preview_data.update({
+                    "gross_weight_kg": roll_module.gross_weight_kg_var.get(),
+                    "net_weight_kg": roll_module.net_weight_kg_var.get(),
+                    "box_brut": roll_module.total_gross_var.get(),
+                    "box_net": roll_module.total_net_var.get(),
+                })
+            else:
+                # Если вес выключен, очищаем эти поля
+                preview_data.update({
+                    "gross_weight_kg": "",
+                    "net_weight_kg": "",
+                    "box_brut": "",
+                    "box_net": "",
+                })
+            
+            # 5. Данные для коробки
+            preview_data.update({
+                "total_quantity": roll_module.total_quantity_var.get(),
+            })
+            
+            # 6. Данные для 2-го цеха
+            workshop = self.coordinator.get_workshop() if self.coordinator else "1"
+            if workshop == "2":
+                preview_data.update({
+                    "cutter": roll_module.cutter_var.get(),
+                    "roll_length": roll_module.roll_length.get(),
+                    "batch_num": roll_module.batch_num_var.get(),
+                    "roll_num": roll_module.roll_num_var.get(),
+                    "streams": roll_module.streams_var.get(),
+                    "label_length": roll_module.label_length_mm.get(),
+                })
+            else:
+                # Если не 2 цех, очищаем эти поля
+                preview_data.update({
+                    "cutter": "",
+                    "roll_length": "",
+                    "batch_num": "",
+                    "roll_num": "",
+                    "streams": "",
+                    "label_length": "",
+                })
+            
+            # 7. Данные для Росинки
+            if roll_module.rosinka_var.get():
+                preview_data.update({
+                    "ros_podlo": roll_module.ros_podlo_var.get(),
+                    "ros_size": roll_module.ros_size_var.get(),
+                })
+            else:
+                # Если Росинка выключена, очищаем эти поля
+                preview_data.update({
+                    "ros_podlo": "",
+                    "ros_size": "",
+                })
             
             # Обновляем предпросмотр
-            self.update_from_roll_data(preview_data)         
+            self.current_data = preview_data
+            self.update_preview_displays()
             
         except Exception as e:
             print(f"Ошибка обновления предпросмотра: {e}")
@@ -548,4 +703,5 @@ class RollPreview:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика для отслеживания данных"""
         self.connected_roll_module = roll_module
-        self._setup_data_tracking()
+        self._cleanup_tracking()  # Очищаем старые подписки
+        self._setup_data_tracking()  # Настраиваем новые

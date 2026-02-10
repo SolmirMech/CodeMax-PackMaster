@@ -1155,6 +1155,9 @@ class RollLabelPrinter:
                 # 3. Пересчитываем только количество (отдельный trace, работает)
                 self.calculate_total_quantity()
                 
+                if hasattr(self, 'coordinator') and self.coordinator:
+                    self.coordinator.check_weight_status(self)
+                
         finally:
             # Всегда снимаем флаг
             self._skip_weight_calculation = False
