@@ -121,7 +121,7 @@ class OrderDataProcessor:
         detail_num_entry = ttk.Entry(xml_frame, textvariable=self.detail_num_search, width=12)
         detail_num_entry.grid(row=0, column=0, padx=(125, 0), pady=5, sticky="w")
         # Ручной ввод + сканирование кода
-        detail_num_entry.bind("<Return>", self.handle_detail_num_enter)  
+        detail_num_entry.bind("<Return>", self.handle_detail_num_enter)
         
         # Кнопка поиска архива
         archive_frame = ttk.Frame(xml_frame)
@@ -398,7 +398,6 @@ class OrderDataProcessor:
         
     def _extract_gtin_from_input(self, text):
         """Извлекает GTIN из введённого текста"""
-        
         if not text:
             return None
         
@@ -407,10 +406,13 @@ class OrderDataProcessor:
             r'\(01\)(\d{14})',           # (01)04680328050213...
             r'01(\d{14})',               # 0104680328050213...
             r'^\d{14}$',                 # 04680328050213 (чистый GTIN)
+            r'GTIN:\s*(\d{14})',         # GTIN: 04680000193177
+            r'GTIN\s*(\d{14})',          # GTIN 04680000193177
+            r'zz\s+GTIN:\s*(\d{14})',    # zz GTIN: 04680000193177
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.IGNORECASE)  # игнорируем регистр
             if match:
                 return match.group(1) if match.lastindex else match.group(0)
         

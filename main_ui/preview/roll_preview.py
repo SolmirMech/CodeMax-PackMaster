@@ -241,6 +241,8 @@ class RollPreview:
         self.rosinka_enabled = False
         self.weight_enabled = False
         self.product_gtin = ""
+        self.preview_timer_id = None  # Добавляем таймер
+        self.last_total_value = ""    # Для отслеживания изменений        
         
         self.create_preview_ui()
         self.load_font_settings()
@@ -531,10 +533,31 @@ class RollPreview:
 
     def _on_roll_data_changed(self, *args):
         """Обрабатывает изменение любых данных в модуле ролика"""
-        self._update_from_connected_roll_module()
+        # Проверяем, изменился ли total (для дебаунса QR)
+        current_total = ""
+        if hasattr(self.connected_roll_module, 'total_quantity_var'):
+            current_total = self.connected_roll_module.total_quantity_var.get()
+        
+        # Если изменился total - используем дебаунс
+        if current_total != self.last_total_value:
+            self.last_total_value = current_total
+            self._update_with_debounce()
+        else:
+            # Для других полей - сразу обновляем
+            self._update_from_connected_roll_module()
+    
+    def _update_with_debounce(self):
+        """Обновляет превью с задержкой для предотвращения частых обновлений"""
+        # Отменяем предыдущий таймер
+        if self.preview_timer_id:
+            self.parent.after_cancel(self.preview_timer_id)
+        
+        # Устанавливаем новый таймер
+        self.preview_timer_id = self.parent.after(600, self._update_from_connected_roll_module)
 
     def _update_from_connected_roll_module(self):
         """Обновляет данные из подключенного модуля ролика через конфигурацию"""
+        self.preview_timer_id = None
         if not self.connected_roll_module:
             return
 
