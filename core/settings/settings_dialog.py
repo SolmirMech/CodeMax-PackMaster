@@ -5,7 +5,6 @@ import win32ui
 import os
 import sys
 import shutil
-from core.config_manager import ConfigManager
 
 def get_default_printer():
     return win32print.GetDefaultPrinter()
@@ -13,11 +12,11 @@ def get_default_printer():
 
 class SettingsDialog:
     """Диалог настроек"""
-    def __init__(self, parent_frame, preview_export_module):
+    def __init__(self, parent_frame, preview_export_module, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
         self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
-        self.coordinator = preview_export_module.coordinator
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.parent_manager = None
         self.last_status = ""
         
@@ -45,11 +44,11 @@ class SettingsDialog:
         content_frame.grid_columnconfigure(0, weight=1)
         content_frame.grid_columnconfigure(1, weight=1)
 
-        # 1. НАСТРОЙКИ ПЕЧАТИ - ВЫБОР ПРИНТЕРА
+        # Настройки печати - выбор принтера
         print_frame = ttk.LabelFrame(content_frame, text="Настройки печати", padding=5)
         print_frame.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
 
-        # Загружаем принтер из JSON, а не из PrintModule
+        # Загружаем принтер из JSON
         print_settings = self.config_manager.load_json_settings("print_settings.json")
         weight_settings = print_settings.get("weight_box_print", {})
         saved_printer = weight_settings.get("printer", "")
@@ -165,7 +164,7 @@ class SettingsDialog:
         )
         self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
-        # 2. РАЗДЕЛ: ИЗГОТОВИТЕЛЬ
+        # РАЗДЕЛ: ИЗГОТОВИТЕЛЬ
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Изготовитель", padding=5)
         manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
 

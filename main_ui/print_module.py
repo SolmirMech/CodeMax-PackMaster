@@ -141,7 +141,7 @@ class PrintModule:
         """Открывает единое окно настроек с вкладками"""
         from core.settings.settings_manager import SettingsManager
         if not hasattr(self, '_settings_manager'):
-            self._settings_manager = SettingsManager(self.parent, self)
+            self._settings_manager = SettingsManager(self.parent, self, config_manager=self.config_manager, coordinator=self.coordinator)
             # Передаем колбэк для статуса
             self._settings_manager.set_status_callback(self.set_status)
         self._settings_manager.show()

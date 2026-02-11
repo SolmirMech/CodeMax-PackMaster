@@ -1,17 +1,15 @@
-# core/settings/lists_settings_dialog.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os
 import shutil
-from core.config_manager import ConfigManager
 
 
 class ListsSettingsDialog:
     """Диалог для редактируемых списков"""
-    def __init__(self, parent_frame, preview_export_module):
+    def __init__(self, parent_frame, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.parent_manager = None
         self.last_status = ""
         self.status_var = tk.StringVar(value="")
@@ -106,42 +104,67 @@ class ListsSettingsDialog:
     def open_box_editor(self, pallets_mode=False):
         """Открывает редактор коробок или поддонов"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = BoxEditorDialog(parent_window, self.preview_export_module, pallets_mode=pallets_mode)
+        dialog = BoxEditorDialog(
+            parent_window,
+            pallets_mode=pallets_mode,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         dialog.parent_dialog = self
         dialog.show()
         
     def open_customers_editor(self):
         """Открывает окно редактирования списка клиентов без производителя"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = CustomersEditorDialog(parent_window, self.preview_export_module)
+        dialog = CustomersEditorDialog(
+            parent_window,
+            config_manager=self.config_manager,   # добавляем
+            coordinator=self.coordinator          # добавляем
+        )
         dialog.parent_dialog = self
         dialog.show()
 
     def open_special_clients_editor(self):
         """Открывает окно редактирования списка особых клиентов"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = SpecialClientsEditorDialog(parent_window, self.preview_export_module)
+        dialog = SpecialClientsEditorDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         dialog.parent_dialog = self
         dialog.show()
         
     def open_tu_editor(self):
         """Открывает окно редактирования списка ТУ"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = TechnicalSpecificationsDialog(parent_window, self.preview_export_module)
+        dialog = TechnicalSpecificationsDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         dialog.parent_dialog = self
         dialog.show()
         
     def open_sleeve_weights_editor(self):
         """Открывает окно редактирования веса втулок"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = SleeveWeightsDialog(parent_window, self.preview_export_module)
+        dialog = SleeveWeightsDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         dialog.parent_dialog = self
         dialog.show()
         
     def open_shortening_rules_editor(self):
         """Открывает редактор списка сокращений"""
         parent_window = self.parent_frame.winfo_toplevel()
-        dialog = ShorteningRulesDialog(parent_window, self.preview_export_module)
+        dialog = ShorteningRulesDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         dialog.parent_dialog = self
         dialog.show()        
         
@@ -157,10 +180,10 @@ class ListsSettingsDialog:
 class ShorteningRulesDialog:
     """Диалог редактирования списка сокращений"""
     
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.original_entries = []
         self.replacement_entries = []
@@ -388,8 +411,8 @@ class ShorteningRulesDialog:
                 self.parent_dialog.status_var.set("✅ Список сокращений успешно сохранен!")
                 
                 # Уведомляем координатора об изменении списка
-                if hasattr(self.preview_export_module, 'coordinator'):
-                    self.preview_export_module.coordinator.notify_list_changed('shortening_rules')
+                if self.coordinator:
+                    self.coordinator.notify_list_changed('shortening_rules')
                 
                 if self.window:
                     self.window.destroy()
@@ -402,11 +425,11 @@ class ShorteningRulesDialog:
 class BoxEditorDialog:
     """Диалог редактирования списка коробок"""
 
-    def __init__(self, parent, preview_export_module, pallets_mode=False):
+    def __init__(self, parent, pallets_mode=False, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
         self.pallets_mode = pallets_mode
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.box_size_entries = []
         self.box_height_entries = []  # Новый список для высот
@@ -593,10 +616,10 @@ class BoxEditorDialog:
             
             if self.config_manager.save_json_settings("shared_utils.json", settings):
                 # Уведомляем координатора об изменении списка
-                if hasattr(self.preview_export_module, 'coordinator'):
-                    self.preview_export_module.coordinator.notify_list_changed(key_for_update)
+                if self.coordinator:
+                    self.coordinator.notify_list_changed(key_for_update)
                     if not self.pallets_mode:
-                        self.preview_export_module.coordinator.notify_list_changed('box_heights')
+                        self.coordinator.notify_list_changed('box_heights')
                 
                 # Статус
                 item_name = "поддонов" if self.pallets_mode else "коробок"
@@ -613,10 +636,10 @@ class BoxEditorDialog:
 class CustomersEditorDialog:
     """Диалог редактирования списка клиентов без производителя"""
 
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.customer_entries = []
 
@@ -789,10 +812,10 @@ class CustomersEditorDialog:
 class SpecialClientsEditorDialog:
     """Диалог редактирования списка особых клиентов"""
 
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.special_name_entries = []
         self.special_text_entries = []
@@ -1052,10 +1075,10 @@ class SpecialClientsEditorDialog:
 class TechnicalSpecificationsDialog:
     """Диалог редактирования списка технических условий (ТУ)"""
     
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.manufacturer_entries = []
         self.address_entries = []
@@ -1307,8 +1330,8 @@ class TechnicalSpecificationsDialog:
             
             # Сохраняем через ConfigManager
             if self.config_manager.save_json_settings("packaging_tu.json", data):
-                if hasattr(self.preview_export_module, 'coordinator'):
-                    self.preview_export_module.coordinator.notify_list_changed('tu_list')                
+                if self.coordinator:
+                    self.coordinator.notify_list_changed('tu_list')
                 self.parent_dialog.status_var.set("✅ Список ТУ успешно сохранен!")
                 self.window.destroy()
             else:
@@ -1358,10 +1381,10 @@ class SleeveWeightsDialog:
         }
     }    
     
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, config_manager=None, coordinator=None):
         self.parent = parent
-        self.preview_export_module = preview_export_module
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         
         # Списки для хранения полей ввода
@@ -1640,8 +1663,8 @@ class SleeveWeightsDialog:
             # Сохраняем обратно
             if self.config_manager.save_json_settings("shared_utils.json", settings):
                 # Уведомляем координатора об изменении
-                if hasattr(self.preview_export_module, 'coordinator'):
-                    self.preview_export_module.coordinator.notify_list_changed("sleeve_weights")
+                if self.coordinator:
+                    self.coordinator.notify_list_changed("sleeve_weights")
                 
                 self.parent_dialog.status_var.set("✅ Вес втулок успешно сохранен!")
                 self.window.destroy()

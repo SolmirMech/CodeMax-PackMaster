@@ -7,9 +7,11 @@ from .font_settings_dialog import FontSettingsDialog
 
 
 class SettingsManager:
-    def __init__(self, parent, preview_export_module):
+    def __init__(self, parent, preview_export_module, config_manager=None, coordinator=None):
         self.parent = parent
         self.preview_export_module = preview_export_module
+        self.config_manager = config_manager
+        self.coordinator = coordinator
         self.window = None
         self.status_callback = None
         self.general_dialog = None
@@ -58,19 +60,29 @@ class SettingsManager:
         notebook.add(font_frame, text="Настройки шрифтов")
         
         # Инициализируем диалоги
-        self.general_dialog = SettingsDialog(left_frame, self.preview_export_module)
-        self.general_dialog.set_parent_manager(self)
+        self.general_dialog = SettingsDialog(
+            left_frame, 
+            self.preview_export_module,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
+        self.general_dialog.set_parent_manager(self) # передаём ссылку на SettingsManager
         self.general_dialog.create_ui()
         
-        self.lists_dialog = ListsSettingsDialog(right_frame, self.preview_export_module)
+        self.lists_dialog = ListsSettingsDialog(
+            right_frame,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
         self.lists_dialog.set_parent_manager(self)
         self.lists_dialog.create_ui()
         
         self.font_dialog = FontSettingsDialog(
-            font_frame, 
-            self.preview_export_module.config_manager,
+            font_frame,
+            self.config_manager,
             self.preview_export_module.preview_module,
-            self.preview_export_module
+            self.preview_export_module,
+            coordinator=self.coordinator
         )
         self.font_dialog.set_parent_manager(self)
         self.font_dialog.create_ui()

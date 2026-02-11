@@ -89,12 +89,12 @@ class FontSettingsDialog:
             }
         }
     
-    def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module):
+    def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
         self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.preview_printer = preview_printer
         self.preview_export_module = preview_export_module
-        self.coordinator = preview_export_module.coordinator
+        self.coordinator = coordinator
         self.parent_manager = None
         self.last_status = ""
         
@@ -611,11 +611,6 @@ class FontSettingsDialog:
                     
                 entry.pack(side=tk.LEFT, padx=5)
                 self.box_wrap_entries[key] = var
-
-    def open_customers_editor(self):
-        """Открывает диалог редактирования списка клиентов без производителя"""
-        customers_editor = CustomersEditorDialog(self.main_frame.winfo_toplevel(), self.config_manager)
-        customers_editor.show()
 
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
