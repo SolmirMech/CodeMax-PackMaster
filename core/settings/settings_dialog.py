@@ -45,23 +45,32 @@ class SettingsDialog:
         content_frame.grid_columnconfigure(0, weight=1)
         content_frame.grid_columnconfigure(1, weight=1)
 
-        # 1.Настройки печати
+        # 1. НАСТРОЙКИ ПЕЧАТИ - ВЫБОР ПРИНТЕРА
         print_frame = ttk.LabelFrame(content_frame, text="Настройки печати", padding=5)
         print_frame.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
 
-        # Выбор принтера
-        printers = win32print.EnumPrinters(2)
-        self.printer_var = tk.StringVar(value=self.preview_export_module.settings["printer"])
+        # Загружаем принтер из JSON, а не из PrintModule
+        print_settings = self.config_manager.load_json_settings("print_settings.json")
+        weight_settings = print_settings.get("weight_box_print", {})
+        saved_printer = weight_settings.get("printer", "")
+
+        # Получаем список доступных принтеров
+        try:
+            import win32print
+            printers = win32print.EnumPrinters(2)
+            printer_list = [p[2] for p in printers]
+        except:
+            printer_list = [saved_printer] if saved_printer else []
+
+        self.printer_var = tk.StringVar(value=saved_printer)
         printer_combo = ttk.Combobox(
             print_frame,
             textvariable=self.printer_var,
-            values=[p[2] for p in printers],
+            values=printer_list,
             width=25,
         )
         printer_combo.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-
-        self.settings_vars = {}
-        
+      
         # Кнопка обновления принтеров
         update_printers_btn = ttk.Button(
             print_frame, text="🔄 Обновить принтеры", command=self.update_printers
@@ -156,21 +165,32 @@ class SettingsDialog:
         )
         self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
-        # 2. РАЗДЕЛ: Изготовитель
+        # 2. РАЗДЕЛ: ИЗГОТОВИТЕЛЬ
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Изготовитель", padding=5)
         manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
-        
-        self.manufacturer_var = tk.StringVar(value=self.preview_export_module.manufacturer)
+
+        # Загружаем производителя из JSON
+        shared_settings = self.config_manager.load_json_settings("shared_utils.json")
+        saved_manufacturer = shared_settings.get("manufacturer", "")
+
+        self.manufacturer_var = tk.StringVar(value=saved_manufacturer)
         manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
-        manufacturer_entry.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")      
+        manufacturer_entry.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+        # Префикс заказа
+        order_settings = shared_settings.get("order_number", {})
+        saved_prefix = order_settings.get("prefix", "Ф")
+        self.settings_prefix_var = tk.StringVar(value=saved_prefix)
 
         ttk.Label(manufacturer_frame, text="Префикс заказа:").grid(row=1, column=0, sticky="w", pady=5)
-        self.settings_prefix_var = tk.StringVar(value=self.preview_export_module.order_prefix.get())
         prefix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_prefix_var, width=6)
         prefix_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
+        # Суффикс заказа
+        saved_suffix = order_settings.get("suffix", "/5")
+        self.settings_suffix_var = tk.StringVar(value=saved_suffix)
+
         ttk.Label(manufacturer_frame, text="Суффикс заказа:").grid(row=2, column=0, sticky="w", pady=5)
-        self.settings_suffix_var = tk.StringVar(value=self.preview_export_module.order_suffix.get())
         suffix_entry = ttk.Entry(manufacturer_frame, textvariable=self.settings_suffix_var, width=6)
         suffix_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         
@@ -386,27 +406,29 @@ class SettingsDialog:
     def save_settings(self):
         """Сохраняет настройки этой вкладки"""
         try:
-            self.preview_export_module.settings["printer"] = self.printer_var.get()
-            self.preview_export_module.settings["paper_width_mm"] = int(self.paper_width_var.get())
-            self.preview_export_module.settings["paper_height_mm"] = int(self.paper_height_var.get())
-            
             # Сохраняем настройки печати
-            all_settings = self.preview_export_module.config_manager.load_json_settings(self.preview_export_module.settings_file)
-            all_settings["weight_box_print"] = self.preview_export_module.settings
-            self.preview_export_module.config_manager.save_json_settings(self.preview_export_module.settings_file, all_settings)
+            print_settings = {
+                "printer": self.printer_var.get(),
+                "paper_width_mm": int(self.paper_width_var.get()),
+                "paper_height_mm": int(self.paper_height_var.get())
+            }
+            
+            all_settings = self.config_manager.load_json_settings("print_settings.json")
+            all_settings["weight_box_print"] = print_settings
+            self.config_manager.save_json_settings("print_settings.json", all_settings)
 
             # Сохраняем производителя
             new_manufacturer = self.manufacturer_var.get().strip()
             if new_manufacturer:
-                self.preview_export_module.config_manager.save_manufacturer(new_manufacturer)
-                self.preview_export_module.manufacturer = new_manufacturer
+                # 1. Сохраняем в JSON
+                self.config_manager.save_manufacturer(new_manufacturer)
 
             # Сохраняем настройки номера заказа
-            shared_settings = self.preview_export_module.config_manager.load_json_settings("shared_utils.json")
+            shared_settings = self.config_manager.load_json_settings("shared_utils.json")
             shared_settings["order_number"] = {
                 "prefix": self.settings_prefix_var.get().strip(),
                 "suffix": self.settings_suffix_var.get().strip()
-            }
+            }            
             
             # Сохраняем статус архивации
             shared_settings["archive_status"] = self.archive_status_var.get()
@@ -428,24 +450,17 @@ class SettingsDialog:
                 packer_name = entry.get().strip()
                 if packer_name:
                     new_packers.append(packer_name)
-            shared_settings["packers"] = new_packers
-            
-            # Сохраняем упаковщиков через config_manager
-            self.preview_export_module.config_manager.save_packers(new_packers)            
+            shared_settings["packers"] = new_packers                   
             
             # Сохраняем значение номера цеха
             workshop = self.workshop_var.get()
-            self.coordinator.set_workshop(workshop)
             shared_settings["workshop"] = workshop
             
-            self.coordinator.apply_workshop_changes(self.preview_export_module.preview_module)
+            # Применяем изменения цеха
+            self.coordinator.set_workshop(workshop)
 
             # Сохраняем все изменения в shared_utils.json
-            self.preview_export_module.config_manager.save_json_settings("shared_utils.json", shared_settings)
-
-            # Обновляем текущие значения
-            self.preview_export_module.order_prefix.set(shared_settings["order_number"]["prefix"])
-            self.preview_export_module.order_suffix.set(shared_settings["order_number"]["suffix"])
+            self.config_manager.save_json_settings("shared_utils.json", shared_settings)
 
             self.coordinator.refresh_archive_status()
             self.coordinator._notify_subscribers()
@@ -455,7 +470,7 @@ class SettingsDialog:
 
         except Exception as e:
             self.last_status = f"❌ Ошибка сохранения общих настроек: {str(e)}"
-            return False        
+            return False
     
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""

@@ -174,15 +174,3 @@ class SettingsCoordinator:
         except Exception as e:
             print(f"Ошибка сохранения цеха: {e}")
     
-    def apply_workshop_changes(self, preview_module):
-        """Применяет изменения цеха ко всем компонентам"""
-        try:          
-            # Уведомляем подписчиков
-            self._notify_subscribers()
-            
-            # Перезагружаем превью модуль
-            if hasattr(preview_module, 'reload_for_workshop_change'):
-                preview_module.reload_for_workshop_change()
-                
-        except Exception as e:
-            print(f"Ошибка применения изменений цеха: {e}")

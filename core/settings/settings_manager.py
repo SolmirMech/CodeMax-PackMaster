@@ -78,8 +78,8 @@ class SettingsManager:
         # Привязки клавиш на главное окно
         self.window.bind('<Return>', self.save_all_and_close)
         self.window.bind('<Escape>', self.close)
-        self.window.focus_set()
-        
+        self.window.focus_set()      
+
     def save_all_and_close(self, event=None):
         """Сохраняет настройки из активной вкладки"""
         # Получаем активную вкладку из notebook
@@ -93,7 +93,7 @@ class SettingsManager:
             current_tab = notebook.index(notebook.select())
             
             if current_tab == 0:  # Общие настройки
-                # Сохраняем обе колонки
+                # Сохраняем обе колонки - они сами сохраняют в JSON
                 success_general = self.general_dialog.save_settings()
                 success_lists = self.lists_dialog.save_settings()
                 
@@ -111,6 +111,7 @@ class SettingsManager:
                 success = self.font_dialog.save_settings()
                 if success:
                     self.update_status("✅ Настройки шрифтов сохранены!", "green")
+                    self.close()
                 else:
                     self.update_status(self.font_dialog.last_status, "red")
             

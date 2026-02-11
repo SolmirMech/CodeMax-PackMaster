@@ -112,10 +112,30 @@ class PrintModule:
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""
         if hasattr(self, 'preview_module') and self.preview_module:
-            self.preview_module.update_preview_displays()        
-        
+            self.preview_module.update_preview_displays()
+
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
+        try:
+            # Загружаем свежие настройки из JSON
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            
+            # 1. Обновляем префикс/суффикс номера заказа
+            order_settings = settings.get("order_number", {})
+            self.order_prefix.set(order_settings.get("prefix", "Ф"))
+            self.order_suffix.set(order_settings.get("suffix", "/5"))
+            
+            # 2. Обновляем производителя
+            self.manufacturer = settings.get("manufacturer", "")
+            
+            # 3. Обновляем настройки печати (если изменились размеры/принтер)
+            print_settings = self.config_manager.load_json_settings("print_settings.json")
+            weight_settings = print_settings.get("weight_box_print", {})
+            if weight_settings:
+                self.settings.update(weight_settings)
+                
+        except Exception as e:
+            print(f"Ошибка в on_settings_changed PrintModule: {e}")
 
     def open_settings_manager(self):
         """Открывает единое окно настроек с вкладками"""
@@ -259,21 +279,6 @@ class PrintModule:
         except Exception as e:
             print(f"Ошибка загрузки настроек печати: {e}")
             self.settings = self.default_settings.copy()
-
-    def save_settings(self):
-        """Сохраняет настройки для weight_box_print"""
-        try:
-            all_settings = self.config_manager.load_json_settings(self.settings_file)
-            all_settings["weight_box_print"] = self.settings
-
-            if self.config_manager.save_json_settings(self.settings_file, all_settings):
-                self.set_status("✅ Настройки печати сохранены!", "green")
-                
-        except Exception as e:
-            self.print_status_label.config(
-                text=f"❌ Не удалось сохранить настройки: {str(e)}",
-                foreground="red"
-                )
             
     def load_font_settings(self):
         """Загружает настройки шрифтов"""

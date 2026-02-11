@@ -1077,6 +1077,14 @@ class RollLabelPrinter:
     def on_settings_changed(self):
         """Обработчик изменений настроек от координатора"""
         try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            # 1. Обновляем префикс/суффикс номера заказа
+            order_settings = settings.get("order_number", {})
+            self.order_prefix.set(order_settings.get("prefix", "Ф"))
+            self.order_suffix.set(order_settings.get("suffix", "/5"))
+            
+            # 2. Обновляем производителя
+            self.manufacturer = settings.get("manufacturer", "")            
             self.config_manager.reload_settings()
             self.update_packers_list()
             self.update_cutters_list()
