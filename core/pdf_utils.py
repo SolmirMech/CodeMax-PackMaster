@@ -357,8 +357,15 @@ class PDFTemplateFiller:
                 draw.rectangle([x0, y0, x1, y1], fill='white')
                 return
             
-            # Формируем строку для QR: zz + GTIN + total
-            qr_string = f"zz GTIN: {gtin} TOTAL: {total}"
+            # Удаляем первый ноль из GTIN если он есть
+            if gtin.startswith('0'):
+                gtin = gtin[1:]
+            
+            # Формируем total в формате 8 цифр с ведущими нулями
+            total_padded = total.zfill(8)
+            
+            # Формируем строку для QR: ZZ + GTIN + # + total (8 цифр)
+            qr_string = f"ZZ{gtin}#{total_padded}"
             
             # Создаём QR-код
             qr = qrcode.QRCode(
@@ -377,7 +384,7 @@ class PDFTemplateFiller:
             )
             
             # Фиксированный размер в PDF-пунктах
-            qr_size_pdf_units = 50  
+            qr_size_pdf_units = 55
             qr_size_pixels = int(qr_size_pdf_units * mat.a)
             
             # Масштабируем QR

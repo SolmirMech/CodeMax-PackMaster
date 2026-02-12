@@ -409,15 +409,20 @@ class OrderDataProcessor:
             r'GTIN:\s*(\d{14})',         # GTIN: 04680000193177
             r'GTIN\s*(\d{14})',          # GTIN 04680000193177
             r'zz\s+GTIN:\s*(\d{14})',    # zz GTIN: 04680000193177
+            r'ZZ(\d{12,13})#\d{8}',      # ZZ4680328050213#00001000
         ]
         
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)  # игнорируем регистр
+        for i, pattern in enumerate(patterns):
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                return match.group(1) if match.lastindex else match.group(0)
+                result = match.group(1) if match.lastindex else match.group(0)
+                # Для нового формата ZZ: если длина 13, добавляем ведущий ноль
+                if i == 6 and len(result) == 13:
+                    result = '0' + result
+                return result
         
         return None
-        
+    
     def _get_detail_num_by_gtin(self, gtin):
         """
         Находит detail_num по GTIN в parsed_data
