@@ -12,9 +12,8 @@ def get_default_printer():
 
 class SettingsDialog:
     """Диалог настроек"""
-    def __init__(self, parent_frame, preview_export_module, config_manager=None, coordinator=None):
+    def __init__(self, parent_frame, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
-        self.preview_export_module = preview_export_module
         self.config_manager = config_manager
         self.coordinator = coordinator
         self.parent_manager = None

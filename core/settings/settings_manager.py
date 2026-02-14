@@ -61,8 +61,7 @@ class SettingsManager:
         
         # Инициализируем диалоги
         self.general_dialog = SettingsDialog(
-            left_frame, 
-            self.preview_export_module,
+            left_frame,
             config_manager=self.config_manager,
             coordinator=self.coordinator
         )

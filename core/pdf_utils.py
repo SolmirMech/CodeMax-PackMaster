@@ -150,17 +150,76 @@ class PDFTemplateFiller:
         self.zoom_level = 1.5
         self.font_settings = None
         
+        # НОВОЕ: Кэш для оптимизации
+        self._cached_page_image = None      # Кэш изображения страницы для превью
+        self._cached_print_image = None     # Кэш для печати (высокое DPI)
+        self._cached_mat = None             # Матрица трансформации
+        self._placeholder_positions = {}    # Кэш позиций плейсхолдеров {placeholder: [rects]}
+        self._static_text_positions = {}    # Кэш позиций статического текста
+        self._page_loaded = False           # Флаг загрузки страницы
+        
     def set_font_settings(self, font_settings: Dict):
         """Устанавливает настройки шрифтов"""
         self.font_settings = font_settings
         
     def open_template(self):
-        """Открывает PDF шаблон"""
+        """Открывает PDF шаблон и кэширует все необходимые данные"""
         if not os.path.exists(self.template_path):
             raise FileNotFoundError(f"PDF шаблон не найден: {self.template_path}")
         
+        # Открываем документ
         self.doc = fitz.open(self.template_path)
+        
+        # Кэшируем все позиции при первой загрузке
+        self._cache_all_positions()
+        
+        # Предварительно рендерим страницу для превью
+        self._precache_page_image(for_print=False)
+        
         return self.doc
+        
+    def _cache_all_positions(self):
+        """Находит и кэширует позиции ВСЕХ плейсхолдеров и статического текста"""
+        if not self.doc:
+            return
+        
+        # Берем первую страницу (у нас всегда одна страница в шаблоне)
+        page = self.doc[0]
+        
+        # Очищаем старые кэши
+        self._placeholder_positions.clear()
+        self._static_text_positions.clear()
+        
+        # 1. Кэшируем все плейсхолдеры
+        for placeholder in ALL_PLACEHOLDERS:
+            instances = page.search_for(placeholder)
+            
+            # Фильтруем артефакты (слишком маленькие прямоугольники)
+            valid_instances = []
+            for rect in instances:
+                width = rect.x1 - rect.x0
+                height = rect.y1 - rect.y0
+                if width >= 8 and height >= 4:  # Эмпирические значения
+                    valid_instances.append(rect)
+            
+            if valid_instances:
+                self._placeholder_positions[placeholder] = valid_instances
+        
+        # 2. Кэшируем статический текст для очистки
+        for static_text in self.STATIC_TEXT_MAPPING.keys():
+            instances = page.search_for(static_text)
+            
+            valid_instances = []
+            for rect in instances:
+                width = rect.x1 - rect.x0
+                height = rect.y1 - rect.y0
+                if width >= 15 and height >= 5:  # Статический текст обычно больше
+                    valid_instances.append(rect)
+            
+            if valid_instances:
+                self._static_text_positions[static_text] = valid_instances
+        
+        self._page_loaded = True
     
     def find_placeholder_positions(self, placeholders: List[str]) -> Dict[str, List[Dict]]:
         """Находит позиции всех плейсхолдеров в PDF"""
@@ -186,80 +245,102 @@ class PDFTemplateFiller:
         return positions
 
     def render_page_with_data(self, page_num: int, data_map: Dict[str, str], for_print: bool = False) -> Image.Image:
-        """Рендерит страницу PDF с подставленными данными"""
+        """Рендерит страницу PDF с подставленными данными (оптимизированная версия)"""
         if not self.doc:
             self.open_template()
-            
-        page = self.doc[page_num]
         
-        # Определяем DPI в зависимости от назначения
+        # Получаем базовое изображение из кэша или рендерим новое
         if for_print:
-            dpi = 300
-            mat = fitz.Matrix(dpi/72, dpi/72)
+            if self._cached_print_image is None:
+                base_img = self._precache_page_image(for_print=True)
+            else:
+                base_img = self._cached_print_image.copy()
         else:
-            mat = fitz.Matrix(self.zoom_level, self.zoom_level)
-            
-        pix = page.get_pixmap(matrix=mat)
-        img_data = pix.tobytes("ppm")
-        img = Image.open(io.BytesIO(img_data))
+            if self._cached_page_image is None:
+                base_img = self._precache_page_image(for_print=False)
+            else:
+                base_img = self._cached_page_image.copy()
         
-        draw = ImageDraw.Draw(img)
+        # Если нет кэша позиций - создаем его
+        if not self._placeholder_positions:
+            self._cache_all_positions()
+        
+        draw = ImageDraw.Draw(base_img)
+        mat = self._cached_mat
         
         # Копируем data_map и удаляем служебное поле $d если есть
         data_map_without_d = data_map.copy()
         if '$d' in data_map_without_d:
             del data_map_without_d['$d']
-            
-        # Очистка статического текста для пустых плейсхолдеров
-        self._clear_empty_static_text(draw, page, mat, data_map)
         
-        # Очищаем области пустых плейсхолдеров (используем общий список)
-        for placeholder in ALL_PLACEHOLDERS:
-            if placeholder in data_map_without_d and (not data_map_without_d[placeholder] or data_map_without_d[placeholder].strip() == ""):
-                instances = page.search_for(placeholder)
-                for rect in instances:
-                    # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
-                    rect_width = rect.x1 - rect.x0
-                    rect_height = rect.y1 - rect.y0
-                    if rect_width < 10 or rect_height < 5:
-                        continue
-                        
+        # 1. Очистка статического текста для пустых плейсхолдеров (используем кэш)
+        for static_text, placeholder in self.STATIC_TEXT_MAPPING.items():
+            if not data_map.get(placeholder) and static_text in self._static_text_positions:
+                for rect in self._static_text_positions[static_text]:
                     transformed_rect = rect * mat
-                    x0, y0 = transformed_rect.x0, transformed_rect.y0
-                    x1, y1 = transformed_rect.x1, transformed_rect.y1
-                    draw.rectangle([x0, y0, x1, y1], fill='white')
+                    draw.rectangle(
+                        [transformed_rect.x0, transformed_rect.y0, 
+                         transformed_rect.x1, transformed_rect.y1], 
+                        fill='white'
+                    )
         
-        # Обрабатываем все плейсхолдеры
+        # 2. Очистка пустых плейсхолдеров (используем кэш)
+        for placeholder, rects in self._placeholder_positions.items():
+            if placeholder in data_map_without_d and not data_map_without_d[placeholder]:
+                for rect in rects:
+                    transformed_rect = rect * mat
+                    draw.rectangle(
+                        [transformed_rect.x0, transformed_rect.y0,
+                         transformed_rect.x1, transformed_rect.y1], 
+                        fill='white'
+                    )
+        
+        # 3. Замена заполненных плейсхолдеров
         for placeholder, new_text in data_map_without_d.items():
-            if not new_text or new_text.strip() == "":
+            if not new_text or placeholder not in self._placeholder_positions:
                 continue
-                
-            instances = page.search_for(placeholder)
-            for rect in instances:
-                # Фильтр: пропускаем слишком маленькие прямоугольники (артефакты)
-                rect_width = rect.x1 - rect.x0
-                rect_height = rect.y1 - rect.y0
-                
-                # Если прямоугольник меньше 10 пикселей по ширине - скорее всего артефакт
-                if rect_width < 10 or rect_height < 5:
-                    print(f"Пропускаем артефакт: {placeholder} размер {rect_width}x{rect_height}")
-                    continue
-                    
-                # Передаем тип поля без знака $
+            
+            for rect in self._placeholder_positions[placeholder]:
                 field_type = placeholder[1:] if placeholder.startswith('$') else placeholder
-                self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
+                # Вызываем оптимизированную версию замены (без поиска)
+                self._replace_text_in_rect(draw, rect, new_text, mat, field_type)
+        
+        return base_img
+        
+    def _precache_page_image(self, for_print=False):
+        if not self.doc:
+            return None
+        
+        page = self.doc[0]
+        
+        if for_print:
+            dpi = 300
+            mat = fitz.Matrix(dpi/72, dpi/72)
+        else:
+            # Для превью используем zoom_level, как в оригинале
+            mat = fitz.Matrix(self.zoom_level, self.zoom_level)
+        
+        self._cached_mat = mat
+        
+        pix = page.get_pixmap(matrix=mat)
+        img_data = pix.tobytes("ppm")
+        img = Image.open(io.BytesIO(img_data))
+        
+        if for_print:
+            self._cached_print_image = img
+        else:
+            self._cached_page_image = img
         
         return img
     
-    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default", for_print: bool = False):
+    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default"):
         """Заменяет текст в указанной области"""
         try:
-            
             # ЕСЛИ ЭТО QR-КОД - ОБРАБАТЫВАЕМ ОСОБО
             if field_type == "box_qr":
-                self._draw_qr_code(draw, rect, text, mat, for_print)
-                return  # Выходим, QR обработан
-            
+                self._draw_qr_code(draw, rect, text, mat, False)
+                return
+
             # Если текст пустой - очищаем область и выходим
             if not text or text.strip() == "":
                 transformed_rect = rect * mat
@@ -267,64 +348,54 @@ class PDFTemplateFiller:
                 x1, y1 = transformed_rect.x1, transformed_rect.y1
                 draw.rectangle([x0, y0, x1, y1], fill='white')
                 return
-                
+
             transformed_rect = rect * mat
-            
+
             setting_field_type = self.FIELD_MAPPING.get(field_type, field_type)
-                        
+
             # Определяем размер шрифта из настроек или используем значения по умолчанию
             if self.font_settings:
-                font_size = self._get_font_size_from_settings(setting_field_type, for_print)
+                font_size = self._get_font_size_from_settings(setting_field_type, False)
             else:
                 # Значения по умолчанию
-                if for_print:
-                    if field_type in ['customer', 'product']:
-                        font_size = 48
-                    else:
-                        font_size = 42
+                if field_type in ['customer', 'product']:
+                    font_size = 30
                 else:
-                    if field_type in ['customer', 'product']:
-                        font_size = 30
-                    else:
-                        font_size = 18
-            
-            # Для поля product используем многострочную отрисовку (даже для одной строки)
+                    font_size = 18
+
+            # Для поля product используем многострочную отрисовку
             if field_type == "product" and self.font_settings:
                 wrap_settings = self.font_settings.get("multiline_settings", {})
-                
                 if wrap_settings:
-                    # Разбиваем текст на строки (может вернуть 1, 2, 3 или больше строк)
-                    lines = self._prepare_text_lines(text, font_size, wrap_settings, for_print)
-                    
-                    # Отрисовываем через многострочный метод (работает и для одной строки)
-                    self._draw_multiline_text(draw, rect, lines, mat, font_size, for_print)
-                    return  # Выходим, так как текст уже отрисован
-            
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings, False)
+                    self._draw_multiline_text(draw, rect, lines, mat, font_size)
+                    return
+
             # Для остальных полей - стандартная однострочная отрисовка
-            font = self._get_font(font_size, 'bold' if for_print else 'normal')
-            
+            font = self._get_font(font_size, 'normal')
+
             x0, y0 = transformed_rect.x0, transformed_rect.y0
             x1, y1 = transformed_rect.x1, transformed_rect.y1
-            
+
             rect_width = x1 - x0
             rect_height = y1 - y0
-            
+
             # Форматирование текста на основе конфигурации
             display_text = self._format_display_text(field_type, text)
-            
+
             bbox = draw.textbbox((0, 0), display_text, font=font)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
-            
+
             # Выравнивание на основе конфигурации
             text_x = self._get_text_alignment_x(field_type, x0, rect_width, text_width)
-                
+
             text_y = y0 + (rect_height - text_height) / 2 - 3
-            
+
             # Очищаем область и рисуем новый текст
             draw.rectangle([x0, y0, x1, y1], fill='white')
             draw.text((text_x, text_y), display_text, fill='black', font=font)
-            
+
         except Exception as e:
             print(f"Ошибка замены текста {field_type}: {e}")
             
@@ -384,7 +455,7 @@ class PDFTemplateFiller:
             )
             
             # Фиксированный размер в PDF-пунктах
-            qr_size_pdf_units = 55
+            qr_size_pdf_units = 53
             qr_size_pixels = int(qr_size_pdf_units * mat.a)
             
             # Масштабируем QR
@@ -524,44 +595,42 @@ class PDFTemplateFiller:
 
         return lines
             
-    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int, for_print: bool):
+    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int):
         """Рисует многострочный текст"""
         transformed_rect = rect * mat
         x0, y0 = transformed_rect.x0, transformed_rect.y0
         x1, y1 = transformed_rect.x1, transformed_rect.y1
-        
+
         rect_width = x1 - x0
         rect_height = y1 - y0
-        
+
         # Получаем настройки шрифта из wrap_settings
-        template_type = "roll" if "roll" in str(self.template_path) else "box"
         wrap_settings = self.font_settings.get("multiline_settings", {})
-        
+
         font_family = wrap_settings.get("font_family", "Arial")
         font_style = wrap_settings.get("font_style", "normal")
-        
+
         font = self._get_font(font_size, font_style, font_family)
-        
+
         # Очищаем область
         draw.rectangle([x0, y0, x1, y1], fill='white')
-        
+
         # Рассчитываем высоту строки
         bbox = draw.textbbox((0, 0), "Test", font=font)
-        # Добавляем межстрочный интервал
         line_spacing = 1.4
         line_height = (bbox[3] - bbox[1]) * line_spacing
         total_height = line_height * len(lines)
-        
+
         # Начальная позиция Y (центрируем по вертикали)
         start_y = y0 + (rect_height - total_height) / 2
-        
+
         # Рисуем каждую строку
         for i, line in enumerate(lines):
             bbox = draw.textbbox((0, 0), line, font=font)
             text_width = bbox[2] - bbox[0]
             text_x = x0 + (rect_width - text_width) / 2  # Центрируем по горизонтали
             text_y = start_y + (i * line_height)
-            
+
             draw.text((text_x, text_y), line, fill='black', font=font)
     
     def _get_font_size_from_settings(self, field_type: str, for_print: bool) -> int:
@@ -642,3 +711,17 @@ class PDFTemplateFiller:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+        
+    def invalidate_cache(self):
+        """Сбрасывает кэш (нужно при смене шаблона)"""
+        self._cached_page_image = None
+        self._cached_print_image = None
+        self._cached_mat = None
+        self._placeholder_positions.clear()
+        self._static_text_positions.clear()
+        self._page_loaded = False
+        
+        if self.doc:
+            # Перекэшируем с новым документом
+            self._cache_all_positions()
+            self._precache_page_image(for_print=False)
