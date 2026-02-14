@@ -796,6 +796,7 @@ class RollLabelPrinter:
         self.cached_order_number = ""
         if hasattr(self, 'preview_module') and self.preview_module:
             self.preview_module.set_product_gtin("")
+            self.preview_module.cancel_update_timer()
         
         # Получаем номер заказа
         order_num = self.order_number.get().strip()

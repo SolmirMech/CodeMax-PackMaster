@@ -6,6 +6,7 @@ from core.settings.font_settings_dialog import FontSettingsDialog
 import os
 import json
 from datetime import datetime
+import time
 from typing import Dict
 
 TRACKING_CONFIG = {
@@ -248,6 +249,15 @@ class RollPreview:
         self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self._on_settings_changed)
+            
+    def cancel_update_timer(self):
+        """Безопасно отменяет таймер обновления"""
+        if hasattr(self, '_update_timer') and self._update_timer:
+            try:
+                self.parent.after_cancel(self._update_timer)
+            except:
+                pass
+            self._update_timer = None
 
     def set_product_gtin(self, gtin):
         """Сохраняет GTIN продукта для QR-кода"""
@@ -533,6 +543,14 @@ class RollPreview:
 
     def _on_roll_data_changed(self, *args):
         """Универсальный дебаунсинг для любых изменений данных"""
+        # Защита от слишком частых вызовов
+        current_time = time.time()
+        
+        if hasattr(self, '_last_update_time'):
+            if current_time - self._last_update_time < 0.1:  # 100ms
+                return  # Слишком часто, игнорируем
+        
+        self._last_update_time = current_time
         # Отменяем предыдущий таймер
         if hasattr(self, '_update_timer') and self._update_timer:
             try:
@@ -579,6 +597,9 @@ class RollPreview:
             # Обновляем текущие данные
             self.current_data = preview_data
             self.update_preview_displays()
+            # Принудительная сборка мусора
+            import gc
+            gc.collect()
             
         except Exception as e:
             print(f"Ошибка обновления предпросмотра: {e}")
