@@ -178,6 +178,13 @@ class PDFTemplateFiller:
         
         return self.doc
         
+    def invalidate_image_cache(self):
+        """Сбрасывает только кэш изображений, сохраняя кэш позиций"""
+        self._cached_page_image = None
+        self._cached_print_image = None
+        self._cached_mat = None
+        # НЕ очищаем _placeholder_positions и _static_text_positions!
+        
     def _cache_all_positions(self):
         """Находит и кэширует позиции ВСЕХ плейсхолдеров и статического текста"""
         if not self.doc:
@@ -254,11 +261,13 @@ class PDFTemplateFiller:
             if self._cached_print_image is None:
                 base_img = self._precache_page_image(for_print=True)
             else:
+                # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
                 base_img = self._cached_print_image.copy()
         else:
             if self._cached_page_image is None:
                 base_img = self._precache_page_image(for_print=False)
             else:
+                # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
                 base_img = self._cached_page_image.copy()
         
         # Если нет кэша позиций - создаем его
@@ -303,11 +312,12 @@ class PDFTemplateFiller:
             for rect in self._placeholder_positions[placeholder]:
                 field_type = placeholder[1:] if placeholder.startswith('$') else placeholder
                 # Вызываем оптимизированную версию замены (без поиска)
-                self._replace_text_in_rect(draw, rect, new_text, mat, field_type)
+                self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
         
         return base_img
         
     def _precache_page_image(self, for_print=False):
+        """Предварительно рендерит страницу и кэширует изображение"""
         if not self.doc:
             return None
         
@@ -326,19 +336,22 @@ class PDFTemplateFiller:
         img_data = pix.tobytes("ppm")
         img = Image.open(io.BytesIO(img_data))
         
+        # СОЗДАЕМ КОПИЮ ДЛЯ КЭША, чтобы избежать наложения при множественных вызовах
+        img_copy = img.copy()
+        
         if for_print:
-            self._cached_print_image = img
+            self._cached_print_image = img_copy
         else:
-            self._cached_page_image = img
+            self._cached_page_image = img_copy
         
         return img
     
-    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default"):
+    def _replace_text_in_rect(self, draw: ImageDraw.Draw, rect, text: str, mat, field_type: str = "default", for_print: bool = False):
         """Заменяет текст в указанной области"""
         try:
-            # ЕСЛИ ЭТО QR-КОД - ОБРАБАТЫВАЕМ ОСОБО
+            # Если это qr-код - обрабатываем особо
             if field_type == "box_qr":
-                self._draw_qr_code(draw, rect, text, mat, False)
+                self._draw_qr_code(draw, rect, text, mat, for_print)
                 return
 
             # Если текст пустой - очищаем область и выходим
@@ -355,24 +368,28 @@ class PDFTemplateFiller:
 
             # Определяем размер шрифта из настроек или используем значения по умолчанию
             if self.font_settings:
-                font_size = self._get_font_size_from_settings(setting_field_type, False)
+                font_size = self._get_font_size_from_settings(setting_field_type, for_print)
+                font_style = self._get_font_style_from_settings(setting_field_type, for_print)
             else:
                 # Значения по умолчанию
                 if field_type in ['customer', 'product']:
                     font_size = 30
                 else:
                     font_size = 18
+                font_style = 'normal'
 
             # Для поля product используем многострочную отрисовку
             if field_type == "product" and self.font_settings:
                 wrap_settings = self.font_settings.get("multiline_settings", {})
                 if wrap_settings:
-                    lines = self._prepare_text_lines(text, font_size, wrap_settings, False)
-                    self._draw_multiline_text(draw, rect, lines, mat, font_size)
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings, for_print)
+                    font_style = 'bold' if for_print else 'normal'
+                    self._draw_multiline_text(draw, rect, lines, mat, font_size, font_style)
                     return
 
             # Для остальных полей - стандартная однострочная отрисовка
-            font = self._get_font(font_size, 'normal')
+            # font_style = 'bold' if for_print else 'normal'
+            font = self._get_font(font_size, font_style)
 
             x0, y0 = transformed_rect.x0, transformed_rect.y0
             x1, y1 = transformed_rect.x1, transformed_rect.y1
@@ -398,6 +415,17 @@ class PDFTemplateFiller:
 
         except Exception as e:
             print(f"Ошибка замены текста {field_type}: {e}")
+            
+    def _get_font_style_from_settings(self, field_type: str, for_print: bool) -> str:
+        """Получает стиль шрифта из настроек"""
+        if not self.font_settings:
+            return 'normal'
+        
+        # Для конкретного поля может быть свой стиль
+        if field_type in self.font_settings:
+            return self.font_settings[field_type].get('font_style', 'normal')
+        
+        return 'normal'
             
     def _draw_qr_code(self, draw, rect, qr_data_str, mat, for_print):
         """Рисует QR-код в указанной области если есть GTIN и total"""
@@ -595,7 +623,7 @@ class PDFTemplateFiller:
 
         return lines
             
-    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int):
+    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int, font_style: str = 'normal'):
         """Рисует многострочный текст"""
         transformed_rect = rect * mat
         x0, y0 = transformed_rect.x0, transformed_rect.y0

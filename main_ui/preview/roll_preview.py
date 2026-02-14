@@ -458,7 +458,9 @@ class RollPreview:
             
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
-        # Гарантируем, что все необходимые ключи присутствуют
+        # ОЧИЩАЕМ ВСЁ ПЕРЕД ПРИМЕНЕНИЕМ НОВЫХ НАСТРОЕК
+        self.cleanup_preview()
+        
         default_settings = FontSettingsDialog.get_default_font_settings()
         
         # Для ролика
@@ -472,13 +474,31 @@ class RollPreview:
                 new_settings["box"][key] = default_settings["box"][key]
         
         self.font_settings = new_settings
-        # Передаем ТОЛЬКО СВОИ секции настроек
+        
+        # Передаем настройки
         if self.roll_pdf_filler:
-            self.roll_pdf_filler.set_font_settings(new_settings["roll"])  # Только roll
+            self.roll_pdf_filler.set_font_settings(new_settings["roll"])
         if self.box_pdf_filler:
-            self.box_pdf_filler.set_font_settings(new_settings["box"])   # Только box
-        # Обновляем превью
+            self.box_pdf_filler.set_font_settings(new_settings["box"])
+        
+        # ПЕРЕСОЗДАЕМ ПОДПИСКИ
+        self._setup_data_tracking()
+        
         self.update_preview_displays()
+        
+    def cleanup_preview(self):
+        """Очищает все подписки и кэш перед повторной инициализацией"""
+        # Отменяем таймеры
+        self.cancel_update_timer()
+        
+        # Очищаем подписки на переменные
+        self._cleanup_tracking()
+        
+        # Сбрасываем кэш PDF filler'ов
+        if self.roll_pdf_filler:
+            self.roll_pdf_filler.invalidate_image_cache()
+        if self.box_pdf_filler:
+            self.box_pdf_filler.invalidate_image_cache()
         
     def open_font_settings(self):
         """Открывает окно настроек шрифтов"""
