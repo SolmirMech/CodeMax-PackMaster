@@ -249,6 +249,36 @@ class RollPreview:
         self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self._on_settings_changed)
+        self.parent.after(100, self.initialize_templates)
+        
+    def initialize_templates(self):
+        """Инициализирует PDF шаблоны (вызывается один раз)"""
+        self._update_template_paths()
+        self.load_font_settings()
+        
+        # Создаем filler'ы ТОЛЬКО если их еще нет
+        if self.roll_pdf_filler is None:
+            if os.path.exists(self.roll_template_path):
+                try:
+                    self.roll_pdf_filler = PDFTemplateFiller(self.roll_template_path)
+                    self.roll_pdf_filler.open_template()
+                    if self.font_settings:
+                        self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
+                except Exception as e:
+                    print(f"Ошибка загрузки шаблона ролика: {e}")
+        
+        if self.box_pdf_filler is None:
+            if os.path.exists(self.box_template_path):
+                try:
+                    self.box_pdf_filler = PDFTemplateFiller(self.box_template_path)
+                    self.box_pdf_filler.open_template()
+                    if self.font_settings:
+                        self.box_pdf_filler.set_font_settings(self.font_settings["box"])
+                except Exception as e:
+                    print(f"Ошибка загрузки шаблона коробки: {e}")
+        
+        # Обновляем превью
+        self.update_preview_displays()        
             
     def force_preview_refresh(self):
         """Принудительно обновляет превью при смене заказа"""
@@ -284,7 +314,8 @@ class RollPreview:
             
     def delayed_initialization(self):
         """Вызывается после установки всех связей"""
-        self.check_templates()
+        # НЕ вызываем check_templates() здесь!
+        pass
         
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""
@@ -425,9 +456,25 @@ class RollPreview:
         self.box_template_path = self.config_manager.get_asset_path("box.pdf")
 
     def reload_templates(self):
-        """Перезагружает шаблоны при изменении цеха"""
+        """Перезагружает шаблоны (вызывается при смене цеха)"""
         self._update_template_paths()
-        self.check_templates()  # Перезагружаем и проверяем шаблоны      
+        
+        # Обновляем пути в существующих filler'ах
+        if self.roll_pdf_filler:
+            self.roll_pdf_filler.template_path = self.roll_template_path
+            self.roll_pdf_filler.close()  # Закрываем старый документ
+            self.roll_pdf_filler.open_template()  # Открываем новый
+            if self.font_settings:
+                self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
+        
+        if self.box_pdf_filler:
+            self.box_pdf_filler.template_path = self.box_template_path
+            self.box_pdf_filler.close()
+            self.box_pdf_filler.open_template()
+            if self.font_settings:
+                self.box_pdf_filler.set_font_settings(self.font_settings["box"])
+        
+        self.update_preview_displays()      
         
     def print_selected_preview(self):
         """Печатает выбранное превью через print_module"""
@@ -658,44 +705,15 @@ class RollPreview:
         self.update_preview_displays()
         
     def check_templates(self):
-        """Проверяет наличие PDF шаблонов"""
-        templates_ok = True
-        
-        # Проверяем ролик
+        """Устаревший метод - оставляем для совместимости"""
+        # Просто проверяем существование файлов
         if not os.path.exists(self.roll_template_path):
-            self.status_label.config(text=f"Файл roll.pdf не найден по пути:\n{self.roll_template_path}", foreground="red")
-            templates_ok = False
-        else:
-            try:
-                self.roll_pdf_filler = PDFTemplateFiller(self.roll_template_path)
-                self.roll_pdf_filler.open_template()
-                # Передаем настройки шрифтов
-                if self.font_settings:
-                    self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
-            except Exception as e:
-                self.status_label.config(text=f"Ошибка загрузки шаблона ролика: {e}", foreground="red")
-                templates_ok = False
-        
-        # Проверяем коробку
+            self.status_label.config(text=f"Файл {self.roll_template_path} не найден", foreground="red")
+            return False
         if not os.path.exists(self.box_template_path):
-            self.status_label.config(text=f"Файл box.pdf не найден по пути:\n{self.box_template_path}", foreground="red")
-            templates_ok = False
-        else:
-            try:
-                self.box_pdf_filler = PDFTemplateFiller(self.box_template_path)
-                self.box_pdf_filler.open_template()
-                # Передаем настройки шрифтов
-                if self.font_settings:
-                    self.box_pdf_filler.set_font_settings(self.font_settings["box"])
-            except Exception as e:
-                self.status_label.config(text=f"Ошибка загрузки шаблона коробки: {e}", foreground="red")
-                templates_ok = False
-        
-        if templates_ok:
-            # Сразу запускаем отрисовку превью
-            self.load_and_show_previews()
-        
-        return templates_ok
+            self.status_label.config(text=f"Файл {self.box_template_path} не найден", foreground="red")
+            return False
+        return True
         
     def reload_for_workshop_change(self):
         """Перезагружает шаблоны и настройки при смене цеха"""
