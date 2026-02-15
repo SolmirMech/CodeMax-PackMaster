@@ -250,6 +250,20 @@ class RollPreview:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self._on_settings_changed)
             
+    def force_preview_refresh(self):
+        """Принудительно обновляет превью при смене заказа"""
+        # Сбрасываем кэш PDF filler'ов
+        if self.roll_pdf_filler:
+            self.roll_pdf_filler.invalidate_cache()  # Увеличит _cache_version
+        if self.box_pdf_filler:
+            self.box_pdf_filler.invalidate_cache()
+        
+        # Отменяем все ожидающие обновления
+        self.cancel_update_timer()
+        
+        # Немедленно обновляем превью
+        self._update_from_connected_roll_module()
+            
     def cancel_update_timer(self):
         """Безопасно отменяет таймер обновления"""
         if hasattr(self, '_update_timer') and self._update_timer:
@@ -565,14 +579,22 @@ class RollPreview:
 
     def _on_roll_data_changed(self, *args):
         """Универсальный дебаунсинг для любых изменений данных"""
+        # Если это первое обновление после смены заказа - ускоряем
+        if hasattr(self, '_waiting_for_new_order') and self._waiting_for_new_order:
+            # Укорачиваем задержку для первого обновления
+            delay = 50  # 50ms вместо 300
+            self._waiting_for_new_order = False
+        else:
+            delay = 300
+        
         # Защита от слишком частых вызовов
         current_time = time.time()
-        
         if hasattr(self, '_last_update_time'):
-            if current_time - self._last_update_time < 0.1:  # 100ms
-                return  # Слишком часто, игнорируем
+            if current_time - self._last_update_time < 0.1:
+                return
         
         self._last_update_time = current_time
+        
         # Отменяем предыдущий таймер
         if hasattr(self, '_update_timer') and self._update_timer:
             try:
@@ -580,8 +602,12 @@ class RollPreview:
             except (ValueError, AttributeError):
                 pass
         
-        # Устанавливаем новый таймер
-        self._update_timer = self.parent.after(300, self._update_from_connected_roll_module)
+        # Устанавливаем новый таймер с адаптивной задержкой
+        self._update_timer = self.parent.after(delay, self._update_from_connected_roll_module)
+
+    def set_waiting_for_new_order(self, waiting=True):
+        """Устанавливает флаг ожидания нового заказа"""
+        self._waiting_for_new_order = waiting
 
     def _update_from_connected_roll_module(self):
         """Обновляет данные из подключенного модуля ролика через конфигурацию"""

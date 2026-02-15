@@ -262,12 +262,16 @@ class PDFTemplateFiller:
         with self._lock:
             if not self.doc:
                 self.open_template()
-                
+            
+            # ВСЕГДА увеличиваем версию при каждом рендеринге с новыми данными
+            # Это гарантирует, что кэш будет пересоздан
+            self._cache_version += 1
+            
             # проверяем версию кэша
             if self._cache_version != self._current_version:
                 self._cached_page_image = None
                 self._cached_print_image = None
-                self._current_version = self._cache_version                
+                self._current_version = self._cache_version
             
             # Получаем базовое изображение из кэша или рендерим новое
             if for_print:
