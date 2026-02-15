@@ -486,6 +486,10 @@ class RollLabelPrinter:
         
     def _on_rosinka_toggled(self):
         """При включении/выключении галочки Росинка"""
+        # Сохраняем текущие значения префикса и суффикса
+        current_prefix = self.order_prefix.get()
+        current_suffix = self.order_suffix.get()
+        
         if self.coordinator:
             if self.rosinka_var.get():
                 # Включаем - ставим шаблон "Росинка"
@@ -508,6 +512,10 @@ class RollLabelPrinter:
             
             # Уведомляем всех
             self.coordinator.notify_list_changed("rosinka_changed")
+            
+            # Восстанавливаем сохраненные значения
+            self.order_prefix.set(current_prefix)
+            self.order_suffix.set(current_suffix)
             
     def extract_label_size_from_db(self):
         """Извлекает размер этикетки из order_name для Росинки из кэша"""

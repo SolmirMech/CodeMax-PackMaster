@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 from typing import Dict, List, Tuple, Optional
 import os
 import io
+import threading
 
 try:
     import qrcode
@@ -150,13 +151,17 @@ class PDFTemplateFiller:
         self.zoom_level = 1.5
         self.font_settings = None
         
-        # НОВОЕ: Кэш для оптимизации
+        # Кэш для оптимизации
         self._cached_page_image = None      # Кэш изображения страницы для превью
         self._cached_print_image = None     # Кэш для печати (высокое DPI)
         self._cached_mat = None             # Матрица трансформации
         self._placeholder_positions = {}    # Кэш позиций плейсхолдеров {placeholder: [rects]}
         self._static_text_positions = {}    # Кэш позиций статического текста
         self._page_loaded = False           # Флаг загрузки страницы
+        self._lock = threading.Lock()
+        # добавляем версионность
+        self._cache_version = 0
+        self._current_version = 0        
         
     def set_font_settings(self, font_settings: Dict):
         """Устанавливает настройки шрифтов"""
@@ -175,6 +180,7 @@ class PDFTemplateFiller:
         
         # Предварительно рендерим страницу для превью
         self._precache_page_image(for_print=False)
+        self._current_version = self._cache_version
         
         return self.doc
         
@@ -253,68 +259,75 @@ class PDFTemplateFiller:
 
     def render_page_with_data(self, page_num: int, data_map: Dict[str, str], for_print: bool = False) -> Image.Image:
         """Рендерит страницу PDF с подставленными данными (оптимизированная версия)"""
-        if not self.doc:
-            self.open_template()
-        
-        # Получаем базовое изображение из кэша или рендерим новое
-        if for_print:
-            if self._cached_print_image is None:
-                base_img = self._precache_page_image(for_print=True)
-            else:
-                # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
-                base_img = self._cached_print_image.copy()
-        else:
-            if self._cached_page_image is None:
-                base_img = self._precache_page_image(for_print=False)
-            else:
-                # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
-                base_img = self._cached_page_image.copy()
-        
-        # Если нет кэша позиций - создаем его
-        if not self._placeholder_positions:
-            self._cache_all_positions()
-        
-        draw = ImageDraw.Draw(base_img)
-        mat = self._cached_mat
-        
-        # Копируем data_map и удаляем служебное поле $d если есть
-        data_map_without_d = data_map.copy()
-        if '$d' in data_map_without_d:
-            del data_map_without_d['$d']
-        
-        # 1. Очистка статического текста для пустых плейсхолдеров (используем кэш)
-        for static_text, placeholder in self.STATIC_TEXT_MAPPING.items():
-            if not data_map.get(placeholder) and static_text in self._static_text_positions:
-                for rect in self._static_text_positions[static_text]:
-                    transformed_rect = rect * mat
-                    draw.rectangle(
-                        [transformed_rect.x0, transformed_rect.y0, 
-                         transformed_rect.x1, transformed_rect.y1], 
-                        fill='white'
-                    )
-        
-        # 2. Очистка пустых плейсхолдеров (используем кэш)
-        for placeholder, rects in self._placeholder_positions.items():
-            if placeholder in data_map_without_d and not data_map_without_d[placeholder]:
-                for rect in rects:
-                    transformed_rect = rect * mat
-                    draw.rectangle(
-                        [transformed_rect.x0, transformed_rect.y0,
-                         transformed_rect.x1, transformed_rect.y1], 
-                        fill='white'
-                    )
-        
-        # 3. Замена заполненных плейсхолдеров
-        for placeholder, new_text in data_map_without_d.items():
-            if not new_text or placeholder not in self._placeholder_positions:
-                continue
+        with self._lock:
+            if not self.doc:
+                self.open_template()
+                
+            # проверяем версию кэша
+            if self._cache_version != self._current_version:
+                self._cached_page_image = None
+                self._cached_print_image = None
+                self._current_version = self._cache_version                
             
-            for rect in self._placeholder_positions[placeholder]:
-                field_type = placeholder[1:] if placeholder.startswith('$') else placeholder
-                # Вызываем оптимизированную версию замены (без поиска)
-                self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
-        
-        return base_img
+            # Получаем базовое изображение из кэша или рендерим новое
+            if for_print:
+                if self._cached_print_image is None:
+                    base_img = self._precache_page_image(for_print=True)
+                else:
+                    # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
+                    base_img = self._cached_print_image.copy()
+            else:
+                if self._cached_page_image is None:
+                    base_img = self._precache_page_image(for_print=False)
+                else:
+                    # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
+                    base_img = self._cached_page_image.copy()
+            
+            # Если нет кэша позиций - создаем его
+            if not self._placeholder_positions:
+                self._cache_all_positions()
+            
+            draw = ImageDraw.Draw(base_img)
+            mat = self._cached_mat
+            
+            # Копируем data_map и удаляем служебное поле $d если есть
+            data_map_without_d = data_map.copy()
+            if '$d' in data_map_without_d:
+                del data_map_without_d['$d']
+            
+            # 1. Очистка статического текста для пустых плейсхолдеров (используем кэш)
+            for static_text, placeholder in self.STATIC_TEXT_MAPPING.items():
+                if not data_map.get(placeholder) and static_text in self._static_text_positions:
+                    for rect in self._static_text_positions[static_text]:
+                        transformed_rect = rect * mat
+                        draw.rectangle(
+                            [transformed_rect.x0, transformed_rect.y0, 
+                             transformed_rect.x1, transformed_rect.y1], 
+                            fill='white'
+                        )
+            
+            # 2. Очистка пустых плейсхолдеров (используем кэш)
+            for placeholder, rects in self._placeholder_positions.items():
+                if placeholder in data_map_without_d and not data_map_without_d[placeholder]:
+                    for rect in rects:
+                        transformed_rect = rect * mat
+                        draw.rectangle(
+                            [transformed_rect.x0, transformed_rect.y0,
+                             transformed_rect.x1, transformed_rect.y1], 
+                            fill='white'
+                        )
+            
+            # 3. Замена заполненных плейсхолдеров
+            for placeholder, new_text in data_map_without_d.items():
+                if not new_text or placeholder not in self._placeholder_positions:
+                    continue
+                
+                for rect in self._placeholder_positions[placeholder]:
+                    field_type = placeholder[1:] if placeholder.startswith('$') else placeholder
+                    # Вызываем оптимизированную версию замены (без поиска)
+                    self._replace_text_in_rect(draw, rect, new_text, mat, field_type, for_print)
+            
+            return base_img
         
     def _precache_page_image(self, for_print=False):
         """Предварительно рендерит страницу и кэширует изображение"""
@@ -741,15 +754,9 @@ class PDFTemplateFiller:
         self.close()
         
     def invalidate_cache(self):
-        """Сбрасывает кэш (нужно при смене шаблона)"""
-        self._cached_page_image = None
-        self._cached_print_image = None
-        self._cached_mat = None
-        self._placeholder_positions.clear()
-        self._static_text_positions.clear()
-        self._page_loaded = False
-        
-        if self.doc:
-            # Перекэшируем с новым документом
-            self._cache_all_positions()
-            self._precache_page_image(for_print=False)
+        """Сбрасывает кэш с увеличением версии"""
+        with self._lock:
+            self._cache_version += 1
+            self._cached_page_image = None
+            self._cached_print_image = None
+            self._cached_mat = None

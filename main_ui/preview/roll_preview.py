@@ -458,7 +458,7 @@ class RollPreview:
             
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
-        # ОЧИЩАЕМ ВСЁ ПЕРЕД ПРИМЕНЕНИЕМ НОВЫХ НАСТРОЕК
+        # Очищаем всё перед применением новых настроек
         self.cleanup_preview()
         
         default_settings = FontSettingsDialog.get_default_font_settings()
@@ -481,10 +481,12 @@ class RollPreview:
         if self.box_pdf_filler:
             self.box_pdf_filler.set_font_settings(new_settings["box"])
         
-        # ПЕРЕСОЗДАЕМ ПОДПИСКИ
-        self._setup_data_tracking()
+        # Пересоздаем подписки только если есть подключенный модуль
+        if self.connected_roll_module:
+            self._setup_data_tracking()
         
-        self.update_preview_displays()
+        # Обновляем превью с задержкой, чтобы избежать рекурсии
+        self.parent.after(100, self.update_preview_displays)
         
     def cleanup_preview(self):
         """Очищает все подписки и кэш перед повторной инициализацией"""
