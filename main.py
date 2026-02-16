@@ -70,7 +70,7 @@ class WeightOrdersApp:
         self.config_manager = ConfigManager()
         # Инициализация XMLDataManager (менеджер создания БД)
         from core.data_manager import XMLDataManager
-        self.data_manager = XMLDataManager(self.config_manager)        
+        self.data_manager = XMLDataManager(self.config_manager, coordinator=self.coordinator)        
         
         self.create_ui()
         self.center_window()

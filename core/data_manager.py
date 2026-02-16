@@ -23,7 +23,7 @@ class XMLDataManager:
     Прозрачно заменяет прямой парсинг XML на поиск из БД.
     """
     
-    def __init__(self, config_manager):
+    def __init__(self, config_manager, coordinator=None):
         """
         Инициализация через существующий ConfigManager.
         
@@ -31,6 +31,7 @@ class XMLDataManager:
             config_manager: Экземпляр ConfigManager для получения путей
         """
         self.config = config_manager
+        self.coordinator = coordinator
         self.status_callback = None
         
         # Получаем путь к XML заказам
@@ -59,7 +60,10 @@ class XMLDataManager:
         self._background_lock = threading.Lock()
         
         # Инициализация БД
-        self._init_database()        
+        self._init_database()
+        # Подписываемся на уведомления координатора
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)
         
         logging.info(f"DataManager инициализирован. XML папка: {self.xml_folder}")
         logging.info(f"БД: {self.db_path}")
@@ -70,6 +74,12 @@ class XMLDataManager:
         self._periodic_check_running = False
         self._start_periodic_check()
         
+    def on_settings_changed(self, context=None):
+        if context and isinstance(context, dict):
+            # Проверяем тип уведомления
+            if context.get("type") == "list_changed" and context.get("list_name") == "update_date_request":
+                self.start_background_check(silent=False)
+            
     def _start_periodic_check(self):
         """Запускает периодическую проверку каждые 5 минут"""
         if self._periodic_check_running:
@@ -868,13 +878,9 @@ class XMLDataManager:
                             results.append(parsed_data)
                             
                     except json.JSONDecodeError as e:
-                        logging.error(f"Ошибка декодирования JSON для {row['file_name']}: {e}")
-                
-                # Запускаем фоновую проверку
-                self._start_background_check(silent=True)
+                        logging.error(f"Ошибка декодирования JSON для {row['file_name']}: {e}")              
                 
                 elapsed = (time.time() - start_time) * 1000
-                logging.debug(f"Поиск '{order_query}' выполнен за {elapsed:.1f} мс. Найдено: {len(results)}")
                 
                 return results
                 
@@ -907,6 +913,17 @@ class XMLDataManager:
             except:
                 self._background_running = False
                 self._background_lock.release()
+                
+    def start_background_check(self, silent=False):
+        """
+        ПУБЛИЧНЫЙ МЕТОД для запуска фоновой проверки извне.
+        
+        Args:
+            silent: Если True - не показывать уведомления в UI
+        """
+        if not silent and self.status_callback:
+            self._notify_status("🔄 Проверка обновлений базы заказов...")
+        self._start_background_check(silent=silent)
     
     def background_check(self, silent=False):
         """
@@ -1036,6 +1053,9 @@ class XMLDataManager:
                     conn.close()
                 except:
                     pass
+                    
+                if not silent and self.status_callback:
+                    self._notify_status("✅ Проверка обновлений завершена")
             
             # Сброс флага выполнения
             self._background_running = False

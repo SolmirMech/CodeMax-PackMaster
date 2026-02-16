@@ -556,6 +556,10 @@ class RollLabelPrinter:
     def update_date_field(self):
         """Обновляет поле даты на текущую дату"""
         try:
+            # Запускаем фоновую проверку XML после обновления даты
+            if hasattr(self, 'coordinator') and self.coordinator:
+                self.coordinator.notify_list_changed("update_date_request")
+            
             # Способ 1: PowerShell (наиболее надёжный)
             import subprocess
             try:
@@ -651,7 +655,7 @@ class RollLabelPrinter:
                 
         except Exception as e:
             print(f"Общая ошибка в update_date_field: {e}")
-            self._show_date_message("Ошибка обновления даты", is_error=True)
+            self._show_date_message("Ошибка обновления даты", is_error=True)        
 
     def _show_date_message(self, message, is_error=False):
         """Показывает сообщение о дате в preview_module и скрывает через 5 секунд"""
