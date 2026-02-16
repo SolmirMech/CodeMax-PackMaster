@@ -252,7 +252,7 @@ class RollPreview:
         self.parent.after(100, self.initialize_templates)
         
     def initialize_templates(self):
-        """Инициализирует PDF шаблоны (вызывается один раз)"""
+        """Инициализирует PDF шаблоны"""
         self._update_template_paths()
         self.load_font_settings()
         
@@ -278,21 +278,7 @@ class RollPreview:
                     print(f"Ошибка загрузки шаблона коробки: {e}")
         
         # Обновляем превью
-        self.update_preview_displays()        
-            
-    def force_preview_refresh(self):
-        """Принудительно обновляет превью при смене заказа"""
-        # Сбрасываем кэш PDF filler'ов
-        if self.roll_pdf_filler:
-            self.roll_pdf_filler.invalidate_cache()  # Увеличит _cache_version
-        if self.box_pdf_filler:
-            self.box_pdf_filler.invalidate_cache()
-        
-        # Отменяем все ожидающие обновления
-        self.cancel_update_timer()
-        
-        # Немедленно обновляем превью
-        self._update_from_connected_roll_module()
+        self.update_preview_displays()
             
     def cancel_update_timer(self):
         """Безопасно отменяет таймер обновления"""
@@ -306,11 +292,10 @@ class RollPreview:
     def set_product_gtin(self, gtin):
         """Сохраняет GTIN продукта для QR-кода"""
         self.product_gtin = gtin
+        self.current_data.pop('gtin', None)  # всегда удаляем, если есть
         if gtin:
-            self.current_data['gtin'] = gtin
-        elif 'gtin' in self.current_data:
-            del self.current_data['gtin']
-        self.update_preview_displays()         
+            self.current_data['gtin'] = gtin  # если есть gtin - добавляем обратно
+        self.update_preview_displays()
         
     def _on_settings_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
@@ -624,16 +609,11 @@ class RollPreview:
 
     def _on_roll_data_changed(self, *args):
         """Немедленное обновление при изменениях"""
-        # Защита от слишком частых вызовов (но не откладываем)
-        current_time = time.time()
-        if hasattr(self, '_last_update_time'):
-            if current_time - self._last_update_time < 0.05:  # 50ms
-                return
+        # Отменяем предыдущий таймер
+        self.cancel_update_timer()
         
-        self._last_update_time = current_time
-        
-        # Немедленно обновляем, без таймера
-        self._update_from_connected_roll_module()
+        # Создаем новый таймер
+        self._update_timer = self.parent.after(300, self._update_from_connected_roll_module)
 
     def _update_from_connected_roll_module(self):
         """Обновляет данные из подключенного модуля ролика через конфигурацию"""
@@ -671,9 +651,6 @@ class RollPreview:
             # Обновляем текущие данные
             self.current_data = preview_data
             self.update_preview_displays()
-            # Принудительная сборка мусора
-            import gc
-            gc.collect()
             
         except Exception as e:
             print(f"Ошибка обновления предпросмотра: {e}")
@@ -751,77 +728,56 @@ class RollPreview:
         )
     
     def _prepare_roll_data_map(self) -> Dict[str, str]:
-        """Подготавливает данные для ролика"""
+        """Подготавливает данные для ролика из self.current_data"""
         data = self.current_data or {}
-        
-        # Формируем полный номер заказа
-        order_prefix = data.get('order_prefix', '')
-        order_number = data.get('order_number', '') 
-        order_suffix = data.get('order_suffix', '')
-        order_full = f"{order_prefix}{order_number}{order_suffix}"
-        
         show_manufacturer = not data.get('show_manufacturer', False)
         
-        # Карта для ролика
-        data_map = {
-            # Основные поля
-            "$customer": data.get('customer', ''),
-            "$product": data.get('product', ''),
-            "$onum": data.get('order_full', ''),
-            "$date": data.get('date', ''),
-            "$packer": data.get('packer', ''),
-            "$rol": self._format_number_with_spaces(data.get('quantity', '')),
-            "$tr": data.get('rolls_count', ''),
-            "$emission": data.get('date_emission', ''),
-            
-            # Весовые данные
-            "$brutto": data.get('gross_weight_kg', ''),
-            "$netto": data.get('net_weight_kg', ''),
-            
-            # Технические параметры
-            "$sx": data.get('winding_scheme', ''),
-            "dia": data.get('sleeve_diameter', ''),
-            
-            # Данные производителя - берем из current_data
-            "$tu_number": data.get('tu_number', ''),
-            "$printhouse": data.get('manufacturer_name', '') if show_manufacturer else "",
-            "$printaddress": data.get('manufacturer_address', '') if show_manufacturer else "",
-            
-            # Специфичные для 2 цеха параметры
-            "$cutter": data.get('cutter', ''),
-            "$rll_length": data.get('roll_length', ''),
-            "$batch_num": data.get('batch_num', ''),
-            "$roul_num": data.get('roll_num', ''),
-            # Подложка для Росинки
-            "$ros_podlo": data.get('ros_podlo', ''),
-            "$ros_size": data.get('ros_size', ''),
-        }
+        data_map = {}
+        
+        for category, fields in DATA_MAPPING_CONFIG.items():
+            for field_name, config in fields.items():
+                placeholder = config.get('placeholder')
+                if not placeholder:
+                    continue
+                
+                # Проверяем условие
+                condition_met = True
+                if config['condition']:
+                    try:
+                        condition_met = config['condition'](self)
+                    except:
+                        condition_met = False
+                
+                # ВАЖНО: Добавляем ВСЕ плейсхолдеры, даже если условие не выполнено
+                # Но если условие не выполнено - значение будет пустым
+                if condition_met:
+                    value = data.get(field_name, '')
+                else:
+                    value = ""  # Явно пустое значение для очистки
+                
+                # Специальные случаи
+                if placeholder in ['$rol', '$total'] and value:
+                    value = self._format_number_with_spaces(value)
+                elif placeholder == '$printhouse' and not show_manufacturer:
+                    value = ""
+                elif placeholder == '$printaddress' and not show_manufacturer:
+                    value = ""
+                
+                data_map[placeholder] = value
         
         return data_map
     
     def _prepare_box_data_map(self) -> Dict[str, str]:
         """Подготавливает данные для коробки"""
-        # Берем базовые данные из ролика
         data_map = self._prepare_roll_data_map()
+        data = self.current_data or {}
         
-        data = self.current_data or {}      
-        
-        # Добавляем специфичные для коробки поля
-        data_map.update({
-            "$total": self._format_number_with_spaces(data.get('total_quantity', '')),
-            "$box_brut": data.get('box_brut', ''),
-            "$box_net": data.get('box_net', ''),
-        })
-        
-        # ДОБАВЛЯЕМ ДАННЫЕ ДЛЯ QR-КОДА
+        # Формируем QR-код
         gtin = self.product_gtin
-        total_for_qr = data.get('total_quantity', '')  # Без форматирования пробелами!
-        
+        total_for_qr = data.get('total_quantity', '')
         if gtin and total_for_qr:
-            # Формат: "GTIN:1234567890123,TOTAL:1000"
             data_map["$box_qr"] = f"GTIN:{gtin},TOTAL:{total_for_qr}"
         else:
-            # Пустая строка = QR не генерируется
             data_map["$box_qr"] = ""
         
         return data_map
@@ -860,10 +816,10 @@ class RollPreview:
             canvas_width = canvas.winfo_width()
             canvas_height = canvas.winfo_height()
             
-            # Если canvas еще не отрисован, откладываем обновление
+            # Если canvas еще не отрисован, просто выходим
+            # Следующее обновление произойдет при изменении данных
             if canvas_width <= 1 or canvas_height <= 1:
-                self.parent.after(50, lambda: self._update_canvas_preview(canvas, preview_image))
-                return
+                return  # НЕ планируем повторно!
             
             if canvas_width > 1 and canvas_height > 1:
                 # Используем ВЕСЬ доступный размер канваса
@@ -889,7 +845,7 @@ class RollPreview:
                 canvas.create_image(canvas_width//2, canvas_height//2, image=photo)
                 
         except Exception as e:
-            print(f"Ошибка обновления canvas: {e}")         
+            print(f"Ошибка обновления canvas: {e}")
             
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика для отслеживания данных"""

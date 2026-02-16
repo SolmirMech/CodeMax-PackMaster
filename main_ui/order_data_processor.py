@@ -769,14 +769,9 @@ class OrderDataProcessor:
                 # Заполняем название продукции (основное поле)
                 self.roll_module.product_text.delete("1.0", tk.END)
                 
-                # проверяем разные возможные ключи
                 product_name = ""
                 if 'name' in product_data:
                     product_name = product_data['name']
-                elif 'full_name' in product_data:  # Новый формат использует full_name
-                    product_name = product_data['full_name']
-                elif 'product_name' in product_data:  # Также может быть product_name
-                    product_name = product_data['product_name']
                     
                 self.roll_module.product_text.insert("1.0", product_name)
                 
@@ -801,32 +796,14 @@ class OrderDataProcessor:
                 
                 # Передаём GTIN в preview_module для QR-кода
                 if hasattr(self, 'preview_module') and self.preview_module:
-                    # Сохраняем GTIN в current_data preview_module
                     gtin = product_data.get('gtin', '')
-                    if gtin:
-                        self.preview_module.current_data['gtin'] = gtin
-                        self.preview_module.set_product_gtin(gtin)
-                    else:
-                        # Очищаем если нет GTIN
-                        if 'gtin' in self.preview_module.current_data:
-                            del self.preview_module.current_data['gtin']
+                    self.preview_module.set_product_gtin(gtin)
                 
                 # Сбрасываем статусные сообщения
                 self.reset_status_messages()
                 
             except Exception as e:
                 print(f"Ошибка отправки данных в модуль ролика: {e}")
-                # В случае ошибки пытаемся отправить хотя бы название
-                try:
-                    self.roll_module.product_text.delete("1.0", tk.END)
-                    # Также пытаемся найти название в разных ключах
-                    name_to_send = product_data.get('name', 
-                                                  product_data.get('full_name', 
-                                                                  product_data.get('product_name', '')))
-                    self.roll_module.product_text.insert("1.0", name_to_send)
-                    print(f"Отправлено только название: {name_to_send}")
-                except:
-                    print("Критическая ошибка при отправке данных")
                     
     def _calculate_box_capacity(self):
         """Рассчитывает, сколько роликов влезет в выбранную коробку"""
