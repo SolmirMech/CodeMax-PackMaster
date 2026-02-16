@@ -5,6 +5,11 @@ from typing import Dict, List, Tuple, Optional
 import os
 import io
 import threading
+import weakref
+from collections import OrderedDict
+import time
+import hashlib
+import json
 
 try:
     import qrcode
@@ -152,16 +157,84 @@ class PDFTemplateFiller:
         self.font_settings = None
         
         # Кэш для оптимизации
-        self._cached_page_image = None      # Кэш изображения страницы для превью
-        self._cached_print_image = None     # Кэш для печати (высокое DPI)
+        self._preview_cache = OrderedDict()  # ключ -> (weakref, timestamp)
+        self._print_cache = OrderedDict()    # ключ -> (weakref, timestamp)
+        self._max_cache_size = 3
+        self._cache_ttl = 300  # 5 минут TTL (опционально)
+        self._lock = threading.Lock()
+
         self._cached_mat = None             # Матрица трансформации
         self._placeholder_positions = {}    # Кэш позиций плейсхолдеров {placeholder: [rects]}
         self._static_text_positions = {}    # Кэш позиций статического текста
         self._page_loaded = False           # Флаг загрузки страницы
-        self._lock = threading.Lock()
         # добавляем версионность
         self._cache_version = 0
-        self._current_version = 0        
+        self._current_version = 0
+        
+    def _generate_cache_key(self, data_map: Dict[str, str], for_print: bool) -> str:
+        """Генерирует уникальный ключ кэша на основе данных и версии"""
+        # Сортируем словарь для стабильности ключа
+        sorted_data = {k: v for k, v in sorted(data_map.items()) if k != '$d'}
+        
+        # Создаем строку для хеширования
+        data_str = json.dumps(sorted_data, sort_keys=True)
+        
+        # Добавляем версию кэша и флаг печати
+        key_data = f"{self._cache_version}:{for_print}:{data_str}"
+        
+        # Возвращаем хеш
+        return hashlib.md5(key_data.encode()).hexdigest()
+
+    def _get_from_cache(self, key: str, for_print: bool) -> Optional[Image.Image]:
+        """Получает изображение из кэша если оно есть и не устарело"""
+        cache = self._print_cache if for_print else self._preview_cache
+        
+        if key not in cache:
+            return None
+        
+        weak_ref, timestamp = cache[key]
+        img = weak_ref()
+        
+        # Проверяем, жива ли еще ссылка и не истек ли TTL
+        if img is None or (time.time() - timestamp) > self._cache_ttl:
+            # Удаляем мертвую или устаревшую запись
+            del cache[key]
+            return None
+        
+        # Перемещаем в конец (LRU)
+        cache.move_to_end(key)
+        return img.copy()  # ВАЖНО: возвращаем копию!
+
+    def _put_in_cache(self, key: str, image: Image.Image, for_print: bool):
+        """Сохраняет изображение в кэш с контролем размера"""
+        cache = self._print_cache if for_print else self._preview_cache
+        
+        # Если кэш полон - удаляем самую старую запись
+        if len(cache) >= self._max_cache_size:
+            oldest_key, _ = next(iter(cache.items()))
+            del cache[oldest_key]
+        
+        # Сохраняем слабую ссылку на изображение и timestamp
+        cache[key] = (weakref.ref(image), time.time())
+        
+        # Перемещаем в конец (LRU)
+        cache.move_to_end(key)
+
+    def _cleanup_dead_refs(self, for_print: bool = None):
+        """Очищает мертвые ссылки из кэша"""
+        caches = [(self._preview_cache, False), (self._print_cache, True)]
+        
+        for cache, is_print in caches:
+            if for_print is not None and for_print != is_print:
+                continue
+                
+            dead_keys = []
+            for key, (weak_ref, timestamp) in cache.items():
+                if weak_ref() is None:
+                    dead_keys.append(key)
+            
+            for key in dead_keys:
+                del cache[key]
         
     def set_font_settings(self, font_settings: Dict):
         """Устанавливает настройки шрифтов"""
@@ -182,14 +255,7 @@ class PDFTemplateFiller:
         self._precache_page_image(for_print=False)
         self._current_version = self._cache_version
         
-        return self.doc
-        
-    def invalidate_image_cache(self):
-        """Сбрасывает только кэш изображений, сохраняя кэш позиций"""
-        self._cached_page_image = None
-        self._cached_print_image = None
-        self._cached_mat = None
-        # НЕ очищаем _placeholder_positions и _static_text_positions!
+        return self.doc      
         
     def _cache_all_positions(self):
         """Находит и кэширует позиции ВСЕХ плейсхолдеров и статического текста"""
@@ -273,19 +339,24 @@ class PDFTemplateFiller:
                 self._cached_print_image = None
                 self._current_version = self._cache_version
             
-            # Получаем базовое изображение из кэша или рендерим новое
-            if for_print:
-                if self._cached_print_image is None:
-                    base_img = self._precache_page_image(for_print=True)
-                else:
-                    # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
-                    base_img = self._cached_print_image.copy()
+            # Генерируем ключ кэша
+            cache_key = self._generate_cache_key(data_map, for_print)
+            
+            # Пытаемся получить из кэша
+            base_img = self._get_from_cache(cache_key, for_print)
+            
+            if base_img is None:
+                # Очищаем мертвые ссылки
+                self._cleanup_dead_refs(for_print)
+                
+                # Рендерим базовое изображение
+                base_img = self._precache_page_image(for_print=for_print)
+                
+                # Сохраняем в кэш (копию!)
+                self._put_in_cache(cache_key, base_img.copy(), for_print)
             else:
-                if self._cached_page_image is None:
-                    base_img = self._precache_page_image(for_print=False)
-                else:
-                    # ВАЖНО: создаем ПОЛНУЮ копию, чтобы не рисовать на кэшированном изображении
-                    base_img = self._cached_page_image.copy()
+                # Мы уже получили копию из _get_from_cache
+                pass
             
             # Если нет кэша позиций - создаем его
             if not self._placeholder_positions:
@@ -761,6 +832,5 @@ class PDFTemplateFiller:
         """Сбрасывает кэш с увеличением версии"""
         with self._lock:
             self._cache_version += 1
-            self._cached_page_image = None
-            self._cached_print_image = None
-            self._cached_mat = None
+            self._preview_cache.clear()
+            self._print_cache.clear()

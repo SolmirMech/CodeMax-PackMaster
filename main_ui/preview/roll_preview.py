@@ -310,12 +310,7 @@ class RollPreview:
             self.current_data['gtin'] = gtin
         elif 'gtin' in self.current_data:
             del self.current_data['gtin']
-        self.update_preview_displays()
-            
-    def delayed_initialization(self):
-        """Вызывается после установки всех связей"""
-        # НЕ вызываем check_templates() здесь!
-        pass
+        self.update_preview_displays()         
         
     def _on_settings_changed(self):
         """Обрабатывает изменения от координатора"""
@@ -559,9 +554,9 @@ class RollPreview:
         
         # Сбрасываем кэш PDF filler'ов
         if self.roll_pdf_filler:
-            self.roll_pdf_filler.invalidate_image_cache()
+            self.roll_pdf_filler.invalidate_cache()
         if self.box_pdf_filler:
-            self.box_pdf_filler.invalidate_image_cache()
+            self.box_pdf_filler.invalidate_cache()
         
     def open_font_settings(self):
         """Открывает окно настроек шрифтов"""
@@ -625,36 +620,17 @@ class RollPreview:
             self._update_from_connected_roll_module()
 
     def _on_roll_data_changed(self, *args):
-        """Универсальный дебаунсинг для любых изменений данных"""
-        # Если это первое обновление после смены заказа - ускоряем
-        if hasattr(self, '_waiting_for_new_order') and self._waiting_for_new_order:
-            # Укорачиваем задержку для первого обновления
-            delay = 50  # 50ms вместо 300
-            self._waiting_for_new_order = False
-        else:
-            delay = 300
-        
-        # Защита от слишком частых вызовов
+        """Немедленное обновление при изменениях"""
+        # Защита от слишком частых вызовов (но не откладываем)
         current_time = time.time()
         if hasattr(self, '_last_update_time'):
-            if current_time - self._last_update_time < 0.1:
+            if current_time - self._last_update_time < 0.05:  # 50ms
                 return
         
         self._last_update_time = current_time
         
-        # Отменяем предыдущий таймер
-        if hasattr(self, '_update_timer') and self._update_timer:
-            try:
-                self.parent.after_cancel(self._update_timer)
-            except (ValueError, AttributeError):
-                pass
-        
-        # Устанавливаем новый таймер с адаптивной задержкой
-        self._update_timer = self.parent.after(delay, self._update_from_connected_roll_module)
-
-    def set_waiting_for_new_order(self, waiting=True):
-        """Устанавливает флаг ожидания нового заказа"""
-        self._waiting_for_new_order = waiting
+        # Немедленно обновляем, без таймера
+        self._update_from_connected_roll_module()
 
     def _update_from_connected_roll_module(self):
         """Обновляет данные из подключенного модуля ролика через конфигурацию"""
