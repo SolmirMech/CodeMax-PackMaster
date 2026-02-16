@@ -64,17 +64,75 @@ class XMLDataManager:
         logging.info(f"DataManager инициализирован. XML папка: {self.xml_folder}")
         logging.info(f"БД: {self.db_path}")
         
+        self._pending_status = None  # ID отложенного сообщения
+        self._last_message = ""      # Для дублей
+        # Флаг для периодической проверки
+        self._periodic_check_running = False
+        self._start_periodic_check()
+        
+    def _start_periodic_check(self):
+        """Запускает периодическую проверку каждые 5 минут"""
+        if self._periodic_check_running:
+            return
+        
+        self._periodic_check_running = True
+        
+        def periodic_check():
+            while self._periodic_check_running:
+                time.sleep(300)  # 5 минут
+                if self._periodic_check_running:  # Проверяем ещё раз после сна
+                    self._start_background_check(silent=True)
+        
+        thread = threading.Thread(target=periodic_check, daemon=True)
+        thread.start()        
+        
     def set_status_callback(self, callback):
         """Устанавливает callback для отправки статусных сообщений в UI"""
         self.status_callback = callback
     
     def _notify_status(self, message: str):
         """Отправляет статусное сообщение в UI"""
-        if self.status_callback:
+        import threading
+        import tkinter as tk
+        
+        if not self.status_callback:
+            return
+        
+        # Если в главном потоке - вызываем напрямую
+        if threading.current_thread() is threading.main_thread():
+            self._do_status_update(message)
+            return
+        
+        # В фоновом потоке — отменяем старое сообщение и ставим новое
+        root = tk._default_root
+        if not root:
+            self._do_status_update(message)
+            return
+        
+        # Отменяем предыдущее отложенное сообщение
+        if self._pending_status:
             try:
-                self.status_callback(message)
-            except Exception as e:
-                logging.error(f"Ошибка вызова callback: {e}")
+                root.after_cancel(self._pending_status)
+            except:
+                pass
+            self._pending_status = None
+        
+        # Ставим новое с задержкой, чтобы не мешать срочным операциям
+        self._pending_status = root.after(500, lambda: self._do_status_update(message))
+
+    def _do_status_update(self, message):
+        """Реальное обновление статуса (всегда в главном потоке)"""
+        self._pending_status = None
+        
+        # Защита от дублей
+        if message == self._last_message:
+            return
+        self._last_message = message
+        
+        try:
+            self.status_callback(message)
+        except Exception as e:
+            print(f"Ошибка обновления статуса: {e}")
     
     def _setup_logging(self):
         """Настройка логгирования."""
@@ -813,7 +871,7 @@ class XMLDataManager:
                         logging.error(f"Ошибка декодирования JSON для {row['file_name']}: {e}")
                 
                 # Запускаем фоновую проверку
-                self._start_background_check()
+                self._start_background_check(silent=True)
                 
                 elapsed = (time.time() - start_time) * 1000
                 logging.debug(f"Поиск '{order_query}' выполнен за {elapsed:.1f} мс. Найдено: {len(results)}")
@@ -832,7 +890,7 @@ class XMLDataManager:
             if 'conn' in locals():
                 conn.close()
     
-    def _start_background_check(self):
+    def _start_background_check(self, silent=False):
         """Запускает фоновую проверку, если она не выполняется."""
         if not hasattr(self, '_background_running'):
             self._background_running = False
@@ -840,13 +898,17 @@ class XMLDataManager:
         if not self._background_running and self._background_lock.acquire(blocking=False):
             try:
                 self._background_running = True
-                thread = threading.Thread(target=self.background_check, daemon=True)
+                # Передаём silent в target через lambda
+                thread = threading.Thread(
+                    target=lambda: self.background_check(silent=silent), 
+                    daemon=True
+                )
                 thread.start()
             except:
                 self._background_running = False
                 self._background_lock.release()
     
-    def background_check(self) -> None:
+    def background_check(self, silent=False):
         """
         ФОНОВАЯ ПРОВЕРКА ПАПКИ XML (ОБНОВЛЕНИЕ БАЗЫ)      
         
@@ -939,28 +1001,25 @@ class XMLDataManager:
                     self._multi_customer_orders = new_multi_customer_orders
                     self._processed_files = processed_files
                     
-                    # Логирование итоговой статистики
-                    # (метод сам обрабатывает блокировку файла лога)
+                    # Логирование итоговой статистики (всегда в файл)
                     self._log_collected_statistics("обновление")
                     
-                    # Формирование сообщения для ui
-                    status_parts = []
-                    if new_emission_orders:
-                        status_parts.append(f"📅 {len(new_emission_orders)} с датой эмиссии")
-                    if new_solmark_orders:
-                        status_parts.append(f"🖨 {len(new_solmark_orders)} Solmark")
-                    if new_multi_customer_orders:
-                        status_parts.append(f"👥 {len(new_multi_customer_orders)} с многими заказчиками")
-                    
-                    if status_parts:
-                        status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
-                    else:
-                        status_msg = f"Обновлено {processed_files} файлов"
-                    
-                    self._notify_status(status_msg)
-                else:
-                    # Нет изменений - просто уведомляем
-                    self._notify_status("✅ База актуальна")
+                    # Уведомляем UI только если НЕ silent
+                    if not silent:
+                        status_parts = []
+                        if new_emission_orders:
+                            status_parts.append(f"📅 {len(new_emission_orders)} с датой эмиссии")
+                        if new_solmark_orders:
+                            status_parts.append(f"🖨 {len(new_solmark_orders)} Solmark")
+                        if new_multi_customer_orders:
+                            status_parts.append(f"👥 {len(new_multi_customer_orders)} с многими заказчиками")
+                        
+                        if status_parts:
+                            status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
+                        else:
+                            status_msg = f"Обновлено {processed_files} файлов"
+                        
+                        self._notify_status(status_msg)
             
         except sqlite3.Error as e:
             # Ошибка базы данных
