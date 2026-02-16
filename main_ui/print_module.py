@@ -114,7 +114,7 @@ class PrintModule:
         if hasattr(self, 'preview_module') and self.preview_module:
             self.preview_module.update_preview_displays()
 
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         try:
             # Загружаем свежие настройки из JSON

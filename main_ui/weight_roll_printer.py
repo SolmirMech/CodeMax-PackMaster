@@ -511,7 +511,7 @@ class RollLabelPrinter:
                 self.ros_size_var.set("")
             
             # Уведомляем всех
-            self.coordinator.notify_list_changed("rosinka_changed")
+            self.coordinator.notify_list_changed("rosinka")
             
             # Восстанавливаем сохраненные значения
             self.order_prefix.set(current_prefix)
@@ -1085,8 +1085,12 @@ class RollLabelPrinter:
             # В случае ошибки не изменяем значение quantity_var
             pass
         
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
+        # Если это уведомление о списке - игнорируем
+        if context and context.get("type") == "list_changed":
+            if context.get("list_name") == "rosinka":
+                return  # не реагируем на Росинку
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
             # 1. Обновляем префикс/суффикс номера заказа
@@ -1362,7 +1366,7 @@ class RollLabelPrinter:
             self.manufacturer_full_data_map = manufacturer_full_data_map  # Нормализованные имена → полные данные
             self.sorted_technical_specs = technical_specs  # Для обратной совместимости
             
-            # Остальная логика UI без изменений...
+            # Остальная логика UI без изменений
             current_manufacturer = manufacturer_var.get()
             current_product = product_type_var.get()
             

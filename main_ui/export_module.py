@@ -419,7 +419,7 @@ class ExportModule:
             # Открываем новое окно
             self.excel_preview_module.show_preview_window()
         
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         self.load_box_sizes()
         self.load_pallet_sizes()

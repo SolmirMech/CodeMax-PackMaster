@@ -24,13 +24,8 @@ class NameShortener:
         # Подписываемся на общие уведомления от координатора
         coordinator.subscribe(self._reload_rules)
 
-    def _reload_rules(self):
+    def _reload_rules(self, context=None):
         """Перезагружает правила при любом уведомлении от координатора"""
-        self.custom_replacements = self._load_shortening_rules()
-        print(f"Правила сокращений обновлены")
-
-    def _reload_rules(self):
-        """Перезагружает правила при уведомлении от координатора"""
         self.custom_replacements = self._load_shortening_rules()
         
     def _load_shortening_rules(self) -> Dict[str, str]:

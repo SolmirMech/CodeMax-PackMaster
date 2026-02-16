@@ -312,7 +312,7 @@ class RollPreview:
             del self.current_data['gtin']
         self.update_preview_displays()         
         
-    def _on_settings_changed(self):
+    def _on_settings_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
         try:
             # 1. Получаем состояние галочки Росинка из roll_module
@@ -334,8 +334,11 @@ class RollPreview:
             self.load_font_settings()
             self.reload_for_workshop_change()
             
-            # 4. ОБНОВЛЯЕМ ПОДПИСКИ при изменении настроек
+            # 4. Обновляем подписки при изменении настроек
             self.refresh_tracking()
+            
+            # 5. Явно обновляем превью
+            self.update_preview_displays()
             
         except Exception as e:
             print(f"Ошибка в _on_settings_changed: {e}")
@@ -693,13 +696,20 @@ class RollPreview:
         
     def reload_for_workshop_change(self):
         """Перезагружает шаблоны и настройки при смене цеха"""
-        self._update_template_paths()  # Обновляем пути к PDF шаблонам
-        self.load_font_settings()      # Перезагружаем настройки шрифтов
-        self.check_templates()         # Перезагружаем PDF filler
+        # Принудительно удаляем старые филлеры
+        if self.roll_pdf_filler:
+            self.roll_pdf_filler.close()
+            self.roll_pdf_filler = None
+        if self.box_pdf_filler:
+            self.box_pdf_filler.close()
+            self.box_pdf_filler = None
+        
+        # Вызываем существующий метод инициализации
+        self.initialize_templates()
         
         # Обновляем превью если есть данные
         if self.current_data:
-            self.update_preview_displays()        
+            self.update_preview_displays()
         
     def load_and_show_previews(self):
         """Сразу загружает и показывает превью"""

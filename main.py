@@ -208,7 +208,8 @@ class WeightOrdersApp:
         self.order_data_module.export_module = self.export_module  # только для экспорта
         
         # Отложенная инициализация preview_module
-        self.root.after(100, self.preview_module.delayed_initialization)
+        if hasattr(self.preview_module, 'initialize_templates'):
+            self.root.after(100, self.preview_module.initialize_templates)
 
     def center_window(self):
         self.root.update_idletasks()

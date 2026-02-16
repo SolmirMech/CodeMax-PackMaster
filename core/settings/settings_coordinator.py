@@ -88,17 +88,23 @@ class SettingsCoordinator:
     
     def _notify_subscribers(self):
         """Уведомляет всех подписчиков об изменениях"""
+        context = {"type": "settings_changed"}  # ← обычное изменение настроек
         for callback in self._subscribers:
             try:
-                callback()
+                callback(context)
             except Exception as e:
                 print(f"Ошибка уведомления подписчика: {e}")
                 
     def notify_list_changed(self, list_name: str):
         """Уведомляет об изменении списка"""
         print(f"Список {list_name} изменен")
-        # Пока просто уведомляем всех подписчиков
-        self._notify_subscribers()                
+        # Передаём подписчикам контекст с типом уведомления
+        context = {"type": "list_changed", "list_name": list_name}
+        for callback in self._subscribers:
+            try:
+                callback(context)  # ← теперь передаём контекст
+            except Exception as e:
+                print(f"Ошибка уведомления подписчика: {e}")
     
     def set_workshop(self, workshop: str):
         if workshop not in ["1", "2"]:

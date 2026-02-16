@@ -56,7 +56,7 @@ class OrderDataProcessor:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         # Пересчитываем вместимость коробки при изменении настроек
         if hasattr(self, 'preview_module') and self.preview_module:
@@ -596,9 +596,6 @@ class OrderDataProcessor:
                     selected_data = found_products[0]
                     self.selected_name.set(selected_data['name'])
                     self.send_to_roll_module(selected_data)
-                    # Принудительно обновляем превью
-                    if hasattr(self, 'preview_module') and self.preview_module:
-                        self.preview_module.force_preview_refresh()
                     self.parse_status.config(text=f"Найден {found_by}", foreground="green")
                     self.parent.after(5000, lambda: self.parse_status.config(text=""))
                 else:

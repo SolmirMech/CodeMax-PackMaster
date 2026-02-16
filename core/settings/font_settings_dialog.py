@@ -177,7 +177,7 @@ class FontSettingsDialog:
             self.last_status = f"❌ Ошибка сохранения: {e}"
             return False        
         
-    def _on_coordinator_changed(self):
+    def _on_coordinator_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
         if not self._initialized:
             return

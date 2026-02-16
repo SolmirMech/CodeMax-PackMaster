@@ -174,7 +174,7 @@ class LegacyExporterAdapter:
             print(f"Ошибка в новом очистителе: {e}")
             return self._legacy_fallback_clear(enable_pallet, multitype_mode)         
     
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Один метод для обновления всех настроек из координатора"""
         if not self.coordinator:
             self.has_weight = True

@@ -147,7 +147,7 @@ class ExcelPreviewModule:
                 self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
                 self.update_preview()
                 
-    def on_settings_changed(self):
+    def on_settings_changed(self, context=None):
         """Обработчик изменения любых настроек от координатора"""
         if self.coordinator and hasattr(self.coordinator, 'get_archive_status'):
             status = self.coordinator.get_archive_status()

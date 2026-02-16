@@ -479,7 +479,7 @@ class SettingsDialog:
         if hasattr(self, 'status_callback') and self.status_callback:
             self.status_callback(message, color)        
         
-    def _on_settings_changed(self):
+    def _on_settings_changed(self, context=None):
         """Обрабатывает изменения настроек от координатора"""
         
         # Обновляем UI при внешних изменениях
