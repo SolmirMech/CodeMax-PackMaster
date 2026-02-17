@@ -11,7 +11,7 @@ class FontSettingsDialog:
         return {
             "roll": {
                 "customer": {
-                    "preview": 16,
+                    "preview": 14,
                     "print": 36
                 },
                 "product": {
@@ -20,10 +20,6 @@ class FontSettingsDialog:
                 },
                 "tu_number": {
                     "preview": 12,
-                    "print": 24
-                },
-                "address": {
-                    "preview": 9,
                     "print": 24
                 },
                 "other": {
@@ -37,6 +33,10 @@ class FontSettingsDialog:
                     "max_lines": 4,
                     "font_family": "Arial",
                     "font_style": "normal"
+                },
+                "address": {
+                    "preview": 9,
+                    "print": 26
                 }
             },
             "box": {
@@ -46,10 +46,10 @@ class FontSettingsDialog:
                 },
                 "address": {
                     "preview": 9,
-                    "print": 24
+                    "print": 26
                 },
                 "customer": {
-                    "preview": 16,
+                    "preview": 14,
                     "print": 36
                 },
                 "product": {
@@ -61,20 +61,20 @@ class FontSettingsDialog:
                     "print": 50
                 },
                 "tu_number": {
-                    "preview": 8,
-                    "print": 22
+                    "preview": 10,
+                    "print": 30
                 },
                 "packer": {
                     "preview": 12,
-                    "print": 28
+                    "print": 30
                 },
                 "other": {
                     "preview": 14,
-                    "print": 36
+                    "print": 38
                 },
                 "multiline_settings": {
                     "line_width_mm": 79,
-                    "font_factor": 0.29,
+                    "font_factor": 0.28,
                     "printer_dpi": 203,
                     "max_lines": 4,
                     "font_family": "Arial",
@@ -87,7 +87,6 @@ class FontSettingsDialog:
                     "font_style": "bold"
                 }
             }
-        }
     
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
         self.parent_frame = parent_frame
