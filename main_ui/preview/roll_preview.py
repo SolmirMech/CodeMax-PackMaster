@@ -296,7 +296,6 @@ class RollPreview:
         # Проверяем настройку QR-кода
         settings = self.config_manager.load_json_settings("shared_utils.json")
         qr_enabled = settings.get("qr_data", True)
-        print(f"set_product_gtin вызван с gtin={gtin}, qr_enabled={qr_enabled}")
         
         if qr_enabled and gtin:
             self.product_gtin = gtin
@@ -323,7 +322,7 @@ class RollPreview:
             else:
                 self.weight_enabled = False
             
-            # Перезагружаем настройки шрифтов и шаблоны
+            # Перезагружаем настройки QR-кода, шрифтов и шаблоны
             self.set_product_gtin(self.original_gtin)
             self.load_font_settings()
             self.reload_for_workshop_change()
@@ -554,10 +553,6 @@ class RollPreview:
             self.roll_pdf_filler.invalidate_cache()
         if self.box_pdf_filler:
             self.box_pdf_filler.invalidate_cache()
-        
-    def open_font_settings(self):
-        """Открывает окно настроек шрифтов"""
-        FontSettingsDialog(self.parent, self.config_manager, self)
 
     def _setup_data_tracking(self):
         """Настраивает отслеживание только активных переменных"""
@@ -722,19 +717,7 @@ class RollPreview:
             self.box_canvas_frame.config(relief="solid", borderwidth=2)
             self.box_canvas_frame.configure(style="Selected.TFrame")
             
-            self.box_canvas.focus_set()
-            
-    def _create_placeholder(self, canvas, text):
-        """Создает текст-заглушку на canvas (только для ошибок)"""
-        canvas.delete("all")
-        canvas.create_text(
-            canvas.winfo_width()//2, 
-            canvas.winfo_height()//2,
-            text=text,
-            font=("Arial", 9),
-            fill="gray",
-            justify=tk.CENTER
-        )
+            self.box_canvas.focus_set()         
     
     def _prepare_roll_data_map(self) -> Dict[str, str]:
         """Подготавливает данные для ролика из self.current_data"""
