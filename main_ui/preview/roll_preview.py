@@ -242,6 +242,7 @@ class RollPreview:
         self.rosinka_enabled = False
         self.weight_enabled = False
         self.product_gtin = ""
+        self.original_gtin = ""
         self.preview_timer_id = None  # Добавляем таймер
         self.last_total_value = ""    # Для отслеживания изменений        
         
@@ -291,16 +292,23 @@ class RollPreview:
 
     def set_product_gtin(self, gtin):
         """Сохраняет GTIN продукта для QR-кода"""
-        self.product_gtin = gtin
-        self.current_data.pop('gtin', None)  # всегда удаляем, если есть
-        if gtin:
-            self.current_data['gtin'] = gtin  # если есть gtin - добавляем обратно
-        self.update_preview_displays()
+        self.original_gtin = gtin
+        # Проверяем настройку QR-кода
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        qr_enabled = settings.get("qr_data", True)
+        print(f"set_product_gtin вызван с gtin={gtin}, qr_enabled={qr_enabled}")
+        
+        if qr_enabled and gtin:
+            self.product_gtin = gtin
+            self.current_data['gtin'] = gtin
+        else:
+            self.product_gtin = ""
+            self.current_data.pop('gtin', None)      
         
     def _on_settings_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
         try:
-            # 1. Получаем состояние галочки Росинка из roll_module
+            # Получаем состояние галочки Росинка из roll_module
             if hasattr(self, 'connected_roll_module') and self.connected_roll_module:
                 if hasattr(self.connected_roll_module, 'rosinka_var'):
                     self.rosinka_enabled = self.connected_roll_module.rosinka_var.get()
@@ -309,20 +317,21 @@ class RollPreview:
             else:
                 self.rosinka_enabled = False
             
-            # 2. Получаем статус веса из координатора
+            # Получаем статус веса из координатора
             if self.coordinator:
                 self.weight_enabled = self.coordinator.get_weight_status()
             else:
                 self.weight_enabled = False
             
-            # 3. Перезагружаем настройки шрифтов и шаблоны
+            # Перезагружаем настройки шрифтов и шаблоны
+            self.set_product_gtin(self.original_gtin)
             self.load_font_settings()
             self.reload_for_workshop_change()
             
-            # 4. Обновляем подписки при изменении настроек
+            # Обновляем подписки при изменении настроек
             self.refresh_tracking()
             
-            # 5. Явно обновляем превью
+            # Явно обновляем превью
             self.update_preview_displays()
             
         except Exception as e:

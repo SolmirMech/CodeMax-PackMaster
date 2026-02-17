@@ -362,6 +362,8 @@ class RollLabelPrinter:
         entry_number = ttk.Entry(data_frame, textvariable=self.order_number, width=7)
         entry_number.grid(row=4, column=1, padx=(42, 0), pady=5, sticky="w")
         entry_number.bind("<Return>", lambda e: self.on_order_enter_pressed(e))
+        entry_number.bind("<Down>", lambda e: self.quantity_entry.focus_set())
+        entry_number.bind("<FocusIn>", lambda e: entry_number.select_range(0, tk.END))
         self.order_entry = entry_number
         
         # Добавляем комбобокс выбора заказа (скрыт изначально)
@@ -397,6 +399,10 @@ class RollLabelPrinter:
         # Кол-во этикеток в одном ролике
         quantity_entry = ttk.Entry(data_frame, textvariable=self.quantity_var, width=15)
         quantity_entry.grid(row=5, column=1, padx=5, pady=2, sticky="w")
+        quantity_entry.bind("<Up>", lambda e: self.order_entry.focus_set())
+        quantity_entry.bind("<FocusIn>", lambda e: quantity_entry.select_range(0, tk.END))
+        self.quantity_entry = quantity_entry
+        
         # Кол-во роликов
         rolls_entry = ttk.Entry(data_frame, textvariable=self.rolls_count_var, width=15)
         rolls_entry.grid(row=5, column=1, padx=(115, 0), pady=2, sticky="w")

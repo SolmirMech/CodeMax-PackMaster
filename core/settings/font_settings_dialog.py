@@ -87,7 +87,8 @@ class FontSettingsDialog:
                     "font_style": "bold"
                 }
             }
-    
+        }
+        
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
         self.parent_frame = parent_frame
         self.config_manager = config_manager

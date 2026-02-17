@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, BooleanVar
 import win32print
 import win32ui
 import os
@@ -242,25 +242,37 @@ class SettingsDialog:
         # 4. РАЗДЕЛ: Дополнительные элементы
         elements_frame = ttk.LabelFrame(content_frame, text="Дата и другие редкие настройки", padding=5)
         elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
-        
+
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
         elements_status = settings.get("elements_status", "Скрыть")
-        self.elements_status_var = tk.StringVar(value=elements_status)      
-        
+        self.elements_status_var = tk.StringVar(value=elements_status)
+
+        # Строка 0: Radiobutton
         ttk.Radiobutton(
             elements_frame, 
             text="Скрыть", 
             variable=self.elements_status_var, 
             value="Скрыть"
-        ).pack(side=tk.LEFT, padx=(10, 5))
-        
+        ).grid(row=0, column=0, padx=(10, 5), pady=2, sticky="w")
+
         ttk.Radiobutton(
             elements_frame, 
             text="Показать", 
             variable=self.elements_status_var, 
             value="Показать"
-        ).pack(side=tk.LEFT, padx=(5, 10))
+        ).grid(row=0, column=1, padx=(5, 10), pady=2, sticky="w")
+
+        # Строка 1: Галочка QR-кода
+        self.qr_var = BooleanVar(value=settings.get("qr_data", True))
+
+        qr_check = ttk.Checkbutton(
+            elements_frame,
+            text="Печать QR-кода",
+            variable=self.qr_var,
+            command=self._on_qr_toggled
+        )
+        qr_check.grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=(5, 5))
         
         # --- Строка статуса для сообщений ---
         self.message_status_var = tk.StringVar(value="")
@@ -293,6 +305,11 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+        
+    def _on_qr_toggled(self):
+        """Обработчик изменения галочки QR-кода"""
+        if hasattr(self, 'coordinator') and self.coordinator:
+            self.coordinator._notify_subscribers()
         
     def open_data_folder(self):
         """Открывает папку данных в проводнике"""
@@ -432,7 +449,9 @@ class SettingsDialog:
             shared_settings["archive_status"] = self.archive_status_var.get()
             
             # Сохраняем статус дополнительных элементов
-            shared_settings["elements_status"] = self.elements_status_var.get()            
+            shared_settings["elements_status"] = self.elements_status_var.get()
+            
+            shared_settings["qr_data"] = self.qr_var.get()
 
             # Сохраняем список резчиков
             new_cutters = []
