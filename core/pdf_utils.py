@@ -424,7 +424,7 @@ class PDFTemplateFiller:
         img_data = pix.tobytes("ppm")
         img = Image.open(io.BytesIO(img_data))
         
-        # СОЗДАЕМ КОПИЮ ДЛЯ КЭША, чтобы избежать наложения при множественных вызовах
+        # Создаем копию для кэша, чтобы избежать наложения при множественных вызовах
         img_copy = img.copy()
         
         if for_print:
@@ -591,7 +591,7 @@ class PDFTemplateFiller:
             qr_x = x0 + (rect_width - qr_size_pixels) // 2
             qr_y = y0 + (rect_height - qr_size_pixels) // 2
             
-            # ОЧИЩАЕМ ТОЛЬКО ОБЛАСТЬ QR, а не весь плейсхолдер!
+            # Очищаем только область QR, а не весь плейсхолдер!
             draw.rectangle([qr_x, qr_y, qr_x + qr_size_pixels, qr_y + qr_size_pixels], fill='white')
             
             # Вставляем QR-код

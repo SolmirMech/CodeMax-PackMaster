@@ -5,8 +5,6 @@ import re
 import sys
 import shutil
 import xml.etree.ElementTree as ET
-from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
-from main_ui.preview.excel_preview_module import ExcelPreviewModule
 from main_ui.second_ui.comment_manager import CommentManager
 from core.parse.name_shortener import NameShortener
 
@@ -33,11 +31,6 @@ class OrderDataProcessor:
         # Ссылки на другие модули
         self.roll_module = None
         self.preview_module = None
-        self.excel_preview_module = ExcelPreviewModule(
-            self.parent, 
-            self.coordinator,
-            config_manager=self.config_manager
-        )
         
         self.load_initial_settings()
         self.detail_num_search = StringVar(value="")

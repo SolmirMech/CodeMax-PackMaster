@@ -335,7 +335,7 @@ class PrintModule:
             self.connected_roll_module.rolls_count_var.set("1")
             self.connected_roll_module.calculate_total_quantity()
             
-            # ПРИНУДИТЕЛЬНО обновляем данные в preview_module
+            # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
             
             # Готовим данные для ролика (rolls_count = 1)
@@ -349,9 +349,10 @@ class PrintModule:
             # === Печать коробки (rolls_count = copies) ===
             # Меняем rolls_count на copies для коробки
             self.connected_roll_module.rolls_count_var.set(str(copies))
+            # Пересчитываем общее количество мимо таймера
             self.connected_roll_module.force_recalculate_total()
             
-            # ПРИНУДИТЕЛЬНО обновляем данные в preview_module
+            # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
             
             # Готовим данные для коробки (rolls_count = copies)

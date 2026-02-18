@@ -47,6 +47,12 @@ class XMLDataManager:
         self._multi_customer_orders = []       # Заказы с множественными заказчиками
         self._processed_files = 0          # Счетчик обработанных файлов
         
+        # Атрибуты для управления потоками
+        self._readers_count = 0             # Счётчик активных читателей
+        self._readers_lock = threading.RLock()  # Блокировка для счётчика
+        self._write_lock = threading.RLock()     # Блокировка для записи
+        self._update_scheduled = False       # Флаг отложенного обновления
+        
         # Настройка логгирования
         self.log_file = config_manager.data_dir / "data_manager.log"
         self._setup_logging()
@@ -89,7 +95,7 @@ class XMLDataManager:
         
         def periodic_check():
             while self._periodic_check_running:
-                time.sleep(300)  # 5 минут
+                time.sleep(900)  # 15 минут
                 if self._periodic_check_running:  # Проверяем ещё раз после сна
                     self._start_background_check(silent=True)
         
@@ -797,6 +803,10 @@ class XMLDataManager:
         """
         start_time = time.time()
         
+        # Увеличиваем счётчик читателей
+        with self._readers_lock:
+            self._readers_count += 1
+        
         try:
             with self._lock:
                 conn = sqlite3.connect(self.db_path)
@@ -895,6 +905,27 @@ class XMLDataManager:
         finally:
             if 'conn' in locals():
                 conn.close()
+            
+            # Уменьшаем счётчик читателей и проверяем отложенное обновление
+            with self._readers_lock:
+                self._readers_count -= 1
+                # После уменьшения счётчика проверяем, не пора ли обновить
+                if self._update_scheduled and self._readers_count == 0:
+                    # Запускаем в отдельном потоке, чтобы не задерживать ответ
+                    thread = threading.Thread(target=self._try_scheduled_update, daemon=True)
+                    thread.start()
+                
+    def _try_scheduled_update(self):
+        """Пытается выполнить отложенное обновление"""
+        with self._readers_lock:
+            if not self._update_scheduled:
+                return
+            if self._readers_count > 0:
+                return  # Всё ещё есть читатели
+        
+        # Нет читателей и есть отложенное обновление - запускаем
+        self._update_scheduled = False
+        self._start_background_check(silent=True)
     
     def _start_background_check(self, silent=False):
         """Запускает фоновую проверку, если она не выполняется."""
@@ -934,136 +965,155 @@ class XMLDataManager:
         - При ошибках БД не падает, а уведомляет пользователя
         - Статистика логируется только при наличии изменений
         """
-        try:
-            # Проверка доступности источника
-            if not self._check_xml_source_available():
-                self._notify_status("⚠️ Источник XML недоступен")
+        # Проверяем, есть ли активные читатели
+        with self._readers_lock:
+            if self._readers_count > 0:
+                # Есть чтения - откладываем обновление
+                self._update_scheduled = True
+                logging.info(f"Обновление отложено: {self._readers_count} активных чтений")
+                
+                # Можно показать сообщение в UI, если это явный запрос
+                if not silent:
+                    self._notify_status("⏳ Обновление отложено: база используется")
                 return
             
-            with self._lock:  # Блокировка для потокобезопасности
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
+            # Нет читателей - можем обновлять
+            self._update_scheduled = False
+        
+        # Захватываем блокировку записи
+        with self._write_lock:
+            try:
+                # Проверка доступности источника
+                if not self._check_xml_source_available():
+                    self._notify_status("⚠️ Источник XML недоступен")
+                    return
                 
-                # Получение текущего состояния бд
-                cursor.execute("SELECT file_name, file_hash, last_modified FROM orders")
-                db_files = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
-                
-                # Инициализация статистики (только для новых/изменённых файлов)
-                new_emission_orders = set()          # Заказы с датой эмиссии
-                new_solmark_orders = set()           # Solmark заказы (ID 321)
-                new_multi_customer_orders = []       # Заказы с множественными заказчиками
-                processed_files = 0                  # Счётчик обработанных файлов
-                
-                # Сканирование файловой системы
-                xml_files = list(self.xml_folder.glob("*.xml"))
-                
-                for file_path in xml_files:
-                    file_name = file_path.name
+                with self._lock:  # Блокировка для потокобезопасности
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
                     
-                    try:
-                        # Пропускаем если файл недоступен
-                        if not file_path.exists():
-                            continue
+                    # Получение текущего состояния бд
+                    cursor.execute("SELECT file_name, file_hash, last_modified FROM orders")
+                    db_files = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
+                    
+                    # Инициализация статистики (только для новых/изменённых файлов)
+                    new_emission_orders = set()          # Заказы с датой эмиссии
+                    new_solmark_orders = set()           # Solmark заказы (ID 321)
+                    new_multi_customer_orders = []       # Заказы с множественными заказчиками
+                    processed_files = 0                  # Счётчик обработанных файлов
+                    
+                    # Сканирование файловой системы
+                    xml_files = list(self.xml_folder.glob("*.xml"))
+                    
+                    for file_path in xml_files:
+                        file_name = file_path.name
                         
-                        # Получаем метаданные файла
-                        file_hash = self._calculate_file_hash(file_path)
-                        last_modified = file_path.stat().st_mtime
-                        
-                        # Определение типа изменения
-                        needs_processing = False
-                        
-                        if file_name not in db_files:
-                            # СЛУЧАЙ 1: Новый файл (отсутствует в БД)
-                            needs_processing = True
-                        else:
-                            # СЛУЧАЙ 2: Изменённый файл (разный хэш или дата)
-                            db_hash, db_mtime = db_files[file_name]
-                            if file_hash != db_hash or abs(last_modified - db_mtime) > 1:
-                                needs_processing = True
-                        
-                        # Обработка файла (если требуется)
-                        if needs_processing:
-                            # Парсинг XML
-                            parsed_data = self._parse_xml_file(file_path)
-                            if not parsed_data:
-                                continue  # Пропускаем невалидные файлы
+                        try:
+                            # Пропускаем если файл недоступен
+                            if not file_path.exists():
+                                continue
                             
-                            # Сохранение в БД
-                            if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
-                                processed_files += 1
+                            # Получаем метаданные файла
+                            file_hash = self._calculate_file_hash(file_path)
+                            last_modified = file_path.stat().st_mtime
+                            
+                            # Определение типа изменения
+                            needs_processing = False
+                            
+                            if file_name not in db_files:
+                                # СЛУЧАЙ 1: Новый файл (отсутствует в БД)
+                                needs_processing = True
+                            else:
+                                # СЛУЧАЙ 2: Изменённый файл (разный хэш или дата)
+                                db_hash, db_mtime = db_files[file_name]
+                                if file_hash != db_hash or abs(last_modified - db_mtime) > 1:
+                                    needs_processing = True
+                            
+                            # Обработка файла (если требуется)
+                            if needs_processing:
+                                # Парсинг XML
+                                parsed_data = self._parse_xml_file(file_path)
+                                if not parsed_data:
+                                    continue  # Пропускаем невалидные файлы
                                 
-                                # Сбор статистики для обработанного файла
-                                self._collect_statistics_for_file(
-                                    parsed_data=parsed_data,
-                                    emission_set=new_emission_orders,
-                                    solmark_set=new_solmark_orders,
-                                    multi_customer_list=new_multi_customer_orders
-                                )
-                    
-                    except (PermissionError, FileNotFoundError) as e:
-                        # Файл недоступен или удалён во время обработки
-                        continue  # Пропускаем без паники
-                    except Exception as e:
-                        # Любая другая ошибка при обработке файла
-                        continue  # Пропускаем проблемный файл
-                
-                # Фиксация изменений в бд
-                conn.commit()
-                
-                # Обработка результатов
-                if processed_files > 0:
-                    # Сохраняем статистику для логирования
-                    self._emission_orders = new_emission_orders
-                    self._solmark_orders = new_solmark_orders
-                    self._multi_customer_orders = new_multi_customer_orders
-                    self._processed_files = processed_files
-                    
-                    # Логирование итоговой статистики (всегда в файл)
-                    self._log_collected_statistics("обновление")
-                    
-                    # Уведомляем UI только если НЕ silent
-                    if not silent:
-                        status_parts = []
-                        if new_emission_orders:
-                            status_parts.append(f"📅 {len(new_emission_orders)} с датой эмиссии")
-                        if new_solmark_orders:
-                            status_parts.append(f"🖨 {len(new_solmark_orders)} Solmark")
-                        if new_multi_customer_orders:
-                            status_parts.append(f"👥 {len(new_multi_customer_orders)} с многими заказчиками")
+                                # Сохранение в БД
+                                if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
+                                    processed_files += 1
+                                    
+                                    # Сбор статистики для обработанного файла
+                                    self._collect_statistics_for_file(
+                                        parsed_data=parsed_data,
+                                        emission_set=new_emission_orders,
+                                        solmark_set=new_solmark_orders,
+                                        multi_customer_list=new_multi_customer_orders
+                                    )
                         
-                        if status_parts:
-                            status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
-                        else:
-                            status_msg = f"Обновлено {processed_files} файлов"
-                        
-                        self._notify_status(status_msg)
-            
-        except sqlite3.Error as e:
-            # Ошибка базы данных
-            self._notify_status("⚠️ Ошибка обновления базы данных")
-            
-        except Exception as e:
-            # Непредвиденная ошибка
-            self._notify_status("⚠️ Ошибка при проверке файлов")
-            
-        finally:
-            # Гарантированная очистка ресурсов
-            if 'conn' in locals():
-                try:
-                    conn.close()
-                except:
-                    pass
+                        except (PermissionError, FileNotFoundError) as e:
+                            # Файл недоступен или удалён во время обработки
+                            continue  # Пропускаем без паники
+                        except Exception as e:
+                            # Любая другая ошибка при обработке файла
+                            continue  # Пропускаем проблемный файл
                     
-                if not silent and self.status_callback:
-                    self._notify_status("✅ Проверка обновлений завершена")
-            
-            # Сброс флага выполнения
-            self._background_running = False
-            if hasattr(self, '_background_lock'):
-                try:
-                    self._background_lock.release()
-                except:
-                    pass
+                    # Фиксация изменений в бд
+                    conn.commit()
+                    
+                    # Обработка результатов
+                    if processed_files > 0:
+                        # Сохраняем статистику для логирования
+                        self._emission_orders = new_emission_orders
+                        self._solmark_orders = new_solmark_orders
+                        self._multi_customer_orders = new_multi_customer_orders
+                        self._processed_files = processed_files
+                        
+                        # Логирование итоговой статистики (всегда в файл)
+                        self._log_collected_statistics("обновление")
+                        
+                        # Уведомляем UI только если НЕ silent
+                        if not silent:
+                            status_parts = []
+                            if new_emission_orders:
+                                status_parts.append(f"📅 {len(new_emission_orders)} с датой эмиссии")
+                            if new_solmark_orders:
+                                status_parts.append(f"🖨 {len(new_solmark_orders)} Solmark")
+                            if new_multi_customer_orders:
+                                status_parts.append(f"👥 {len(new_multi_customer_orders)} с многими заказчиками")
+                            
+                            if status_parts:
+                                status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
+                            else:
+                                status_msg = f"Обновлено {processed_files} файлов"
+                            
+                            self._notify_status(status_msg)
+                
+            except sqlite3.Error as e:
+                # Ошибка базы данных
+                logging.error(f"SQLite ошибка в background_check: {e}")
+                self._notify_status("⚠️ Ошибка обновления базы данных")
+                
+            except Exception as e:
+                # Непредвиденная ошибка
+                logging.error(f"Непредвиденная ошибка в background_check: {e}")
+                self._notify_status("⚠️ Ошибка при проверке файлов")
+                
+            finally:
+                # Гарантированная очистка ресурсов
+                if 'conn' in locals():
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                    
+                    if not silent and self.status_callback:
+                        self._notify_status("✅ Проверка обновлений завершена")
+                
+                # Сброс флага выполнения
+                self._background_running = False
+                if hasattr(self, '_background_lock'):
+                    try:
+                        self._background_lock.release()
+                    except:
+                        pass
     
     def get_stats(self) -> Dict[str, Any]:
         """
