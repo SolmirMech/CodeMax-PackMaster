@@ -335,6 +335,9 @@ class PrintModule:
             self.connected_roll_module.rolls_count_var.set("1")
             self.connected_roll_module.calculate_total_quantity()
             
+            # ПРИНУДИТЕЛЬНО обновляем данные в preview_module
+            self.preview_module._update_from_connected_roll_module()
+            
             # Готовим данные для ролика (rolls_count = 1)
             data_map = self.preview_module._prepare_roll_data_map()
             print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
@@ -348,6 +351,9 @@ class PrintModule:
             self.connected_roll_module.rolls_count_var.set(str(copies))
             self.connected_roll_module.calculate_total_quantity()
             
+            # ПРИНУДИТЕЛЬНО обновляем данные в preview_module
+            self.preview_module._update_from_connected_roll_module()
+            
             # Готовим данные для коробки (rolls_count = copies)
             box_data_map = self.preview_module._prepare_box_data_map()
             box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map)
@@ -358,6 +364,7 @@ class PrintModule:
             # === Восстанавливаем оригинальное значение ===
             self.connected_roll_module.rolls_count_var.set(original_rolls_count)
             self.connected_roll_module.calculate_total_quantity()
+            self.preview_module._update_from_connected_roll_module()
             
             # === Статус завершения ===
             self.set_status(f"✅ Печать завершена: {copies} роликов + 1 коробка", "green")
@@ -367,6 +374,8 @@ class PrintModule:
             if hasattr(self, 'connected_roll_module') and 'original_rolls_count' in locals():
                 self.connected_roll_module.rolls_count_var.set(original_rolls_count)
                 self.connected_roll_module.calculate_total_quantity()
+                if hasattr(self, 'preview_module'):
+                    self.preview_module._update_from_connected_roll_module()
             
             self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")
 
