@@ -1564,6 +1564,21 @@ class RollLabelPrinter:
                 
             except Exception as e:
                 print(f"Ошибка загрузки веса коробки: {e}")
+                
+    def force_recalculate_total(self):
+        """Принудительный пересчёт общего количества (без таймера)"""
+        try:
+            rolls_count = int(self.rolls_count_var.get() or 0)
+            quantity_per_roll = int(self.quantity_var.get() or 0)
+            
+            if rolls_count == 0 or quantity_per_roll == 0:
+                self.total_quantity_var.set("")
+                return
+                
+            total = rolls_count * quantity_per_roll
+            self.total_quantity_var.set(str(total))
+        except (ValueError, TypeError):
+            self.total_quantity_var.set("")
         
     def calculate_total_quantity(self, *args):
         """Рассчитывает общее количество: ролики × этикетки в ролике"""
