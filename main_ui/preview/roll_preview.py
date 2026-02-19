@@ -241,6 +241,7 @@ class RollPreview:
         # Инициализируем состояния
         self.rosinka_enabled = False
         self.weight_enabled = False
+        self._updating_paths = False
         self.product_gtin = ""
         self.original_gtin = ""
         self.preview_timer_id = None  # Добавляем таймер
@@ -429,22 +430,44 @@ class RollPreview:
         
     def _update_template_paths(self):
         """Обновляет пути к шаблонам в зависимости от настроек"""
-        workshop = self.coordinator.get_workshop()
+        # Защита от рекурсии
+        if hasattr(self, '_updating_paths') and self._updating_paths:
+            return
+        self._updating_paths = True
         
-        # Определяем базовый шаблон в зависимости от цеха
-        if workshop == "2":
-            base_template = "roll_2_cex.pdf"
-        else:
-            base_template = "roll.pdf"
-        
-        # Если включена Росинка - используем rosinka.pdf
-        if hasattr(self, 'rosinka_enabled') and self.rosinka_enabled:
-            self.roll_template_path = self.config_manager.get_asset_path("rosinka.pdf")
-        else:
-            self.roll_template_path = self.config_manager.get_asset_path(base_template)
-        
-        # Коробка остается без изменений
-        self.box_template_path = self.config_manager.get_asset_path("box.pdf")
+        try:
+            workshop = self.coordinator.get_workshop()
+            
+            # Определяем базовый шаблон в зависимости от цеха
+            if workshop == "2":
+                base_template = "roll_2_cex.pdf"
+            else:
+                base_template = "roll.pdf"
+            
+            # Получаем заказчика из current_data
+            customer = ""
+            if (hasattr(self, 'current_data') and 
+                self.current_data and 
+                'customer' in self.current_data):
+                customer = self.current_data.get('customer', '').lower()
+            
+            # Приоритет 1: Росинка (по галочке)
+            if hasattr(self, 'rosinka_enabled') and self.rosinka_enabled:
+                self.roll_template_path = self.config_manager.get_asset_path("rosinka.pdf")
+                self.box_template_path = self.config_manager.get_asset_path("box.pdf")
+            
+            # Приоритет 2: Пермалко (по заказчику, если не Росинка)
+            elif customer and "пермалко" in customer:
+                self.roll_template_path = self.config_manager.get_asset_path("permalko_roll.pdf")
+                self.box_template_path = self.config_manager.get_asset_path("permalko_box.pdf")
+            
+            # Приоритет 3: Обычные шаблоны по цеху
+            else:
+                self.roll_template_path = self.config_manager.get_asset_path(base_template)
+                self.box_template_path = self.config_manager.get_asset_path("box.pdf")         
+            
+        finally:
+            self._updating_paths = False
 
     def reload_templates(self):
         """Перезагружает шаблоны (вызывается при смене цеха)"""
@@ -654,6 +677,11 @@ class RollPreview:
             
             # Обновляем текущие данные
             self.current_data = preview_data
+            # Проверяем, не сменился ли заказчик (для Пермалко)
+            old_roll_path = self.roll_template_path
+            self._update_template_paths()  # обновляем пути
+            if old_roll_path != self.roll_template_path:
+                self.reload_templates()
             self.update_preview_displays()
             
         except Exception as e:
