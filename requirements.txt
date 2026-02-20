@@ -1,0 +1,16 @@
+# Автоматически сгенерировано CodeMax Import Analyzer
+# Python 3.12
+# Project: CodeMax-PackMaster
+
+pillow==12.0.0
+PyMuPDF==1.26.6
+chardet>=5.0
+openpyxl==3.1.2
+psutil>=5.8
+pywin32==306
+qrcode==8.2
+pdf2image==1.17.0
+pdfrw==0.4
+lxml==5.2.1
+matplotlib==3.9.2
+pyinstaller==6.14.1
