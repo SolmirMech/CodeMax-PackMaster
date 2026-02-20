@@ -25,6 +25,50 @@ class ArchiveManager:
         if coordinator and hasattr(coordinator, 'subscribe'):
             coordinator.subscribe(self.on_settings_changed)
         self.excel_path = None  # Будет определяться динамически
+        self.clean_old_archive_records(3)  # автоочистка при запуске
+        
+    def clean_old_archive_records(self, max_age_years=3):
+        """Удаляет записи старше указанного количества лет"""
+        try:
+            archive = self.config.get_pallet_archive()
+            if not archive or "pallets" not in archive:
+                return False
+            
+            # Текущая дата
+            now = datetime.now()
+            
+            # Фильтруем записи
+            original_count = len(archive["pallets"])
+            archive["pallets"] = [
+                pallet for pallet in archive["pallets"] 
+                if self._is_record_younger_than(pallet, max_age_years, now)
+            ]
+            new_count = len(archive["pallets"])
+            
+            # Если что-то удалили - сохраняем
+            if new_count < original_count:
+                self.config.save_pallet_archive(archive)
+                print(f"[INFO] Очистка архива: удалено {original_count - new_count} записей старше {max_age_years} лет")
+                
+            return True
+            
+        except Exception as e:
+            print(f"[ERROR] Ошибка очистки архива: {e}")
+            return False
+
+    def _is_record_younger_than(self, record, max_age_years, now):
+        """Проверяет, что запись не старше max_age_years"""
+        extraction_date = record.get("extraction_date")
+        if not extraction_date:
+            return True  # если нет даты, оставляем
+        
+        try:
+            # Парсим дату из строки
+            record_date = datetime.strptime(extraction_date, "%Y-%m-%d %H:%M:%S")
+            age = now - record_date
+            return age.days < max_age_years * 365
+        except:
+            return True  # если не удалось распарсить, оставляем
         
     def on_settings_changed(self, event_type=None, data=None):
         """Обработчик событий от координатора для обновления пути к файлу"""

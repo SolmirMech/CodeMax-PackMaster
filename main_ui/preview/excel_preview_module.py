@@ -37,7 +37,49 @@ class ExcelPreviewModule:
             # Получаем текущий статус
             self.archive_enabled = (coordinator.get_archive_status() == "on")
         else:
-            self.archive_enabled = True  # по умолчанию включено            
+            self.archive_enabled = True  # по умолчанию включено
+            
+    def _ensure_excel_files_exist(self):
+        """Проверяет наличие Excel файлов и копирует из assets при необходимости"""
+        try:
+            # Загружаем настройки
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            excel_folder = settings.get("weight_orders_xlsx", "")
+            
+            # Если путь не указан - используем папку data
+            if not excel_folder or not os.path.exists(excel_folder):
+                excel_folder = str(self.config_manager.data_dir)
+                settings["weight_orders_xlsx"] = excel_folder
+                self.config_manager.save_json_settings("shared_utils.json", settings)
+            
+            # Проверяем наличие обоих файлов
+            files_to_check = [
+                ("weight_orders.xlsx", "weight_orders.xlsx"),
+                ("weight_orders_2.xlsx", "weight_orders_2.xlsx")
+            ]
+            
+            files_copied = False
+            for assets_filename, target_filename in files_to_check:
+                target_file = os.path.join(excel_folder, target_filename)
+                
+                # Если файл отсутствует - копируем из assets
+                if not os.path.exists(target_file):
+                    assets_file = self.config_manager.get_asset_path(assets_filename)
+                    if os.path.exists(assets_file):
+                        import shutil
+                        shutil.copy2(assets_file, target_file)
+                        files_copied = True
+            
+            if files_copied:
+                # Обновляем статус в интерфейсе если окно открыто
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(
+                        text="✓ Файлы Excel восстановлены", 
+                        foreground="green"
+                    )
+                    
+        except Exception as e:
+            print(f"[ERROR] Ошибка проверки Excel файлов: {e}")
             
     def _get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
         """Определяет лист для предпросмотра на основе контекста"""
@@ -1102,6 +1144,8 @@ class ExcelPreviewModule:
         if self.preview_canvas:
             self.preview_canvas.delete("all")
             self.preview_canvas.config(scrollregion=(0, 0, 1, 1))
+            
+        self._ensure_excel_files_exist()            
         
         self.excel_path = self._get_excel_path()
         if self.excel_path and os.path.exists(self.excel_path):
