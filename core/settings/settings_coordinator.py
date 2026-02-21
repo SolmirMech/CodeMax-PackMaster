@@ -70,7 +70,7 @@ class SettingsCoordinator:
         
         # Всегда обновляем и уведомляем (старая логика)
         self._has_weight = has_weight
-        self._notify_subscribers()
+        self.notify_subscribers()
         
     def get_weight_status(self):
         """Возвращает статус наличия веса"""
@@ -86,7 +86,7 @@ class SettingsCoordinator:
         if callback in self._subscribers:
             self._subscribers.remove(callback)
     
-    def _notify_subscribers(self):
+    def notify_subscribers(self):
         """Уведомляет всех подписчиков об изменениях"""
         context = {"type": "settings_changed"}  # ← обычное изменение настроек
         for callback in self._subscribers:
@@ -119,7 +119,7 @@ class SettingsCoordinator:
                 self._auto_sync_template_with_workshop()
             
             self._save_workshop_setting()
-            self._notify_subscribers()
+            self.notify_subscribers()
             
     def _is_template_synced_with_workshop(self) -> bool:
         """Проверяет синхронизацию шаблона с цехом"""
@@ -138,7 +138,7 @@ class SettingsCoordinator:
             
             # Сохраняем настройки
             self._save_font_template_setting()
-            self._notify_subscribers()
+            self.notify_subscribers()
     
     def get_workshop(self) -> str:
         """Возвращает текущий цех"""
@@ -167,7 +167,7 @@ class SettingsCoordinator:
             
             if new_status != getattr(self, '_current_archive_status', 'on'):
                 self._current_archive_status = new_status
-                self._notify_subscribers()
+                self.notify_subscribers()
         except Exception as e:
             print(f"Ошибка обновления статуса архивации: {e}")                       
     

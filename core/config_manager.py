@@ -1,8 +1,8 @@
+import json
 import os
 import sys
-import configparser
-import json
 from pathlib import Path
+
 
 class ConfigManager:
     def __init__(self):
@@ -23,7 +23,23 @@ class ConfigManager:
         # Список резчиков по умолчанию
         self.default_cutters = ["Некрасов", "Смирнов", "Шамшурин"]
         # Список упаковщиков по умолчанию
-        self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]     
+        self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]
+
+    @staticmethod
+    def get_asset_path(filename):
+        """Возвращает полный путь к файлу в папке assets для бинарника и исходника"""
+        if hasattr(sys, '_MEIPASS'):
+            # Режим бинарника - путь: CodeMax-CutMaster\_internal\assets
+            base_path = os.path.dirname(sys.executable)
+            assets_file = os.path.join(base_path, "_internal", "assets", filename)
+        else:
+            # Режим разработки - assets в той же папке, что и проект
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            # Поднимаемся на один уровень вверх от core к корню проекта
+            project_root = os.path.dirname(current_dir)
+            assets_file = os.path.join(project_root, "assets", filename)
+
+        return assets_file
 
     def get_preview_printers(self):
         """Возвращает сохраненные принтеры для предпросмотра Excel"""
@@ -56,13 +72,14 @@ class ConfigManager:
         except Exception as e:
             print(f"Ошибка сохранения принтеров: {e}")
             return False
-        
-    def get_system_printers(self):
+
+    @staticmethod
+    def get_system_printers():
         """Возвращает список системных принтеров"""
         try:
             import win32print
-            printers = win32print.EnumPrinters(2)  # PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS
-            return [p[2] for p in printers]  # Имя принтера
+            printers = win32print.EnumPrinters(2)
+            return [p[2] for p in printers]
         except Exception as e:
             print(f"Ошибка получения списка принтеров: {e}")
             return []
@@ -99,21 +116,6 @@ class ConfigManager:
         except Exception as e:
             print(f"Ошибка добавления в архив: {e}")
             return False
-        
-    def get_asset_path(self, filename):
-        """Возвращает полный путь к файлу в папке assets для бинарника и исходника"""
-        if hasattr(sys, '_MEIPASS'):
-            # Режим бинарника - путь: CodeMax-CutMaster\_internal\assets
-            base_path = os.path.dirname(sys.executable)
-            assets_file = os.path.join(base_path, "_internal", "assets", filename)
-        else:
-            # Режим разработки - assets в той же папке что и проект
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            # Поднимаемся на один уровень вверх от core к корню проекта
-            project_root = os.path.dirname(current_dir)
-            assets_file = os.path.join(project_root, "assets", filename)
-        
-        return assets_file
         
     def get_font_settings(self):
         """Загружает настройки шрифтов: сначала из data, если нет - копирует из assets"""
@@ -338,7 +340,8 @@ class ConfigManager:
         settings = {"orders": orders_list}
         return self.save_json_settings("taper_settings.json", settings)
 
-    def get_taper_settings_from_folder(self, folder_path):
+    @staticmethod
+    def get_taper_settings_from_folder(folder_path):
         """Загружает настройки натяжения из указанной папки"""
         if not folder_path:
             return []
@@ -353,7 +356,8 @@ class ConfigManager:
                 print(f"Ошибка загрузки настроек из {taper_path}: {e}")
         return []
 
-    def save_taper_settings_to_folder(self, folder_path, orders_list):
+    @staticmethod
+    def save_taper_settings_to_folder(folder_path, orders_list):
         """Сохраняет настройки натяжения в указанную папку"""
         if not folder_path:
             return False
@@ -446,7 +450,7 @@ class ConfigManager:
                     settings[section]["printer"] = printer_name
                     updated = True
             else:
-                # Если секции нет, создаем ее с принтером по умолчанию
+                # Если секции нет, создаем ее с принтером по умолчанию,
                 # но сохраняем другие существующие настройки секции
                 if section not in settings:
                     settings[section] = {}

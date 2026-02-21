@@ -1,10 +1,11 @@
+import os
+import shutil
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, BooleanVar
+
 import win32print
-import win32ui
-import os
-import sys
-import shutil
+
 
 def get_default_printer():
     return win32print.GetDefaultPrinter()
@@ -304,7 +305,7 @@ class SettingsDialog:
     def _on_qr_toggled(self):
         """Обработчик изменения галочки QR-кода"""
         if hasattr(self, 'coordinator') and self.coordinator:
-            self.coordinator._notify_subscribers()
+            self.coordinator.notify_subscribers()
         
     def open_data_folder(self):
         """Открывает папку данных в проводнике"""
@@ -413,6 +414,7 @@ class SettingsDialog:
         if self.parent_manager:
             self.parent_manager.save_all_and_close()
 
+    @property
     def save_settings(self):
         """Сохраняет настройки этой вкладки"""
         try:
@@ -426,12 +428,6 @@ class SettingsDialog:
             all_settings = self.config_manager.load_json_settings("print_settings.json")
             all_settings["weight_box_print"] = print_settings
             self.config_manager.save_json_settings("print_settings.json", all_settings)
-
-            # Сохраняем производителя
-            new_manufacturer = self.manufacturer_var.get().strip()
-            if new_manufacturer:
-                # 1. Сохраняем в JSON
-                self.config_manager.save_manufacturer(new_manufacturer)
 
             # Сохраняем настройки номера заказа
             shared_settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -475,7 +471,7 @@ class SettingsDialog:
             self.config_manager.save_json_settings("shared_utils.json", shared_settings)
 
             self.coordinator.refresh_archive_status()
-            self.coordinator._notify_subscribers()
+            self.coordinator.notify_subscribers()
 
             self.last_status = "✅ Общие настройки успешно сохранены!"
             return True
@@ -550,7 +546,7 @@ class SettingsDialog:
             self.update_folder_status()
             # Уведомляем подписчиков об изменении XML папки
             if hasattr(self, 'coordinator') and self.coordinator:
-                self.coordinator._notify_subscribers()            
+                self.coordinator.notify_subscribers()
 
     def save_excel_folder_path(self):
         """Сохраняет путь к папке с Excel файлом в настройки"""
@@ -561,7 +557,7 @@ class SettingsDialog:
             
             # Можно добавить нотификацию
             if hasattr(self, 'coordinator') and self.coordinator:
-                self.coordinator._notify_subscribers()
+                self.coordinator.notify_subscribers()
                 
         except Exception as e:
             print(f"Ошибка сохранения пути к папке Excel: {e}")

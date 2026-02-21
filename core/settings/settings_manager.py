@@ -105,8 +105,8 @@ class SettingsManager:
             
             if current_tab == 0:  # Общие настройки
                 # Сохраняем обе колонки - они сами сохраняют в JSON
-                success_general = self.general_dialog.save_settings()
-                success_lists = self.lists_dialog.save_settings()
+                success_general = self.general_dialog.save_settings
+                success_lists = self.lists_dialog.save_settings
                 
                 if success_general and success_lists:
                     self.update_status("✅ Все настройки сохранены!", "green")
@@ -119,7 +119,7 @@ class SettingsManager:
                         status_message.append(self.lists_dialog.last_status)
                     self.update_status(" | ".join(status_message), "red")
             else:  # Настройки шрифтов
-                success = self.font_dialog.save_settings()
+                success = self.font_dialog.save_settings
                 if success:
                     self.update_status("✅ Настройки шрифтов сохранены!", "green")
                     self.close()

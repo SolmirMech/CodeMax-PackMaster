@@ -3,15 +3,15 @@
 Ускоряет поиск в 100+ раз за счет использования SQLite базы данных.
 """
 
-import sqlite3
-import json
 import hashlib
+import json
 import logging
-import time
+import sqlite3
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
 
 # Импорт существующего парсера
 from core.parse.xml_order_parser import parse_xml
@@ -23,16 +23,18 @@ class XMLDataManager:
     Прозрачно заменяет прямой парсинг XML на поиск из БД.
     """
     
-    def __init__(self, config_manager, coordinator=None):
+    def __init__(self, config_manager, coordinator=None, root=None):
         """
         Инициализация через существующий ConfigManager.
         
         Args:
             config_manager: Экземпляр ConfigManager для получения путей
         """
+        self._background_running = None
         self.config = config_manager
         self.coordinator = coordinator
         self.status_callback = None
+        self.root = root
         
         # Получаем путь к XML заказам
         xml_path = config_manager.get_weight_data_base_path()
@@ -105,36 +107,37 @@ class XMLDataManager:
     def set_status_callback(self, callback):
         """Устанавливает callback для отправки статусных сообщений в UI"""
         self.status_callback = callback
-    
+
     def _notify_status(self, message: str):
         """Отправляет статусное сообщение в UI"""
         import threading
-        import tkinter as tk
-        
+
         if not self.status_callback:
             return
-        
+
         # Если в главном потоке - вызываем напрямую
         if threading.current_thread() is threading.main_thread():
             self._do_status_update(message)
             return
-        
-        # В фоновом потоке — отменяем старое сообщение и ставим новое
-        root = tk._default_root
-        if not root:
+
+        # В фоновом потоке — используем сохраненный root
+        if self.root:  # ← используем self.root вместо создания нового
+            # Отменяем предыдущее отложенное сообщение
+            if self._pending_status:
+                try:
+                    self.root.after_cancel(self._pending_status)
+                except Exception:
+                    pass
+                self._pending_status = None
+
+            # Ставим новое с задержкой
+            self._pending_status = self.root.after(
+                500,
+                lambda: self._do_status_update(message)
+            )
+        else:
+            # Если root нет - вызываем напрямую (запасной вариант)
             self._do_status_update(message)
-            return
-        
-        # Отменяем предыдущее отложенное сообщение
-        if self._pending_status:
-            try:
-                root.after_cancel(self._pending_status)
-            except:
-                pass
-            self._pending_status = None
-        
-        # Ставим новое с задержкой, чтобы не мешать срочным операциям
-        self._pending_status = root.after(500, lambda: self._do_status_update(message))
 
     def _do_status_update(self, message):
         """Реальное обновление статуса (всегда в главном потоке)"""
@@ -300,7 +303,7 @@ class XMLDataManager:
             parsed_data = parse_xml(content)
             
             # Собираем статистику
-            self._analyze_and_log_statistics(parsed_data, file_path.name)
+            self._analyze_and_log_statistics(parsed_data)
             
             # Удаляем служебные поля перед сохранением в БД
             if '_customer_info' in parsed_data:
@@ -316,14 +319,13 @@ class XMLDataManager:
             logging.error(f"Ошибка парсинга файла {file_path}: {e}")
             return None
             
-    def _analyze_and_log_statistics(self, parsed_data: Dict[str, Any], file_name: str):
+    def _analyze_and_log_statistics(self, parsed_data: Dict[str, Any]):
         """
         Анализирует данные и собирает статистику.
         НЕ ЛОГИРУЕТ промежуточные результаты, только собирает.
         
         Args:
             parsed_data: Распарсенные данные заказа
-            file_name: Имя файла (только для внутреннего учета)
         """
         order_number = parsed_data.get('order_number', '')
         if not order_number:
@@ -477,7 +479,8 @@ class XMLDataManager:
             # Возвращаем просто номера заказов в случае ошибки
             return sorted(order_numbers)            
         
-    def _log_compact_list(self, title: str, items: list, items_per_line: int = 10):
+    @staticmethod
+    def _log_compact_list(title: str, items: list, items_per_line: int = 10):
         """
         Логирует список в компактном формате.
         
@@ -501,7 +504,8 @@ class XMLDataManager:
         # Пустая строка после списка
         logging.info("")
     
-    def _calculate_file_hash(self, file_path: Path) -> str:
+    @staticmethod
+    def _calculate_file_hash(file_path: Path) -> str:
         """Вычисляет MD5 хэш файла для отслеживания изменений."""
         try:
             file_content = file_path.read_bytes()
@@ -510,8 +514,9 @@ class XMLDataManager:
             logging.error(f"Ошибка вычисления хэша для {file_path}: {e}")
             return ""
     
-    def _save_order_to_db(self, conn: sqlite3.Connection, file_path: Path, 
-                         parsed_data: Dict[str, Any], file_hash: str) -> bool:
+    @staticmethod
+    def _save_order_to_db(conn: sqlite3.Connection, file_path: Path,
+                          parsed_data: Dict[str, Any], file_hash: str) -> bool:
         """
         Сохраняет данные заказа в БД.
         
@@ -605,17 +610,18 @@ class XMLDataManager:
         except Exception as e:
             logging.error(f"Ошибка сохранения {file_path} в БД: {e}")
             return False
-    
+
     def initial_scan(self) -> None:
         """
         ПЕРВИЧНОЕ СКАНИРОВАНИЕ
         Вызывается при запуске программы (можно в фоне)
         Заполняет БД при первом запуске
         """
+
         def scan_in_background():
             try:
                 logging.info("Начато первичное сканирование папки XML")
-                
+
                 # Проверяем есть ли данные в бд
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
@@ -623,34 +629,33 @@ class XMLDataManager:
                     cursor.execute("SELECT COUNT(*) FROM orders")
                     count = cursor.fetchone()[0]
                     conn.close()
-                
+
                 if count > 0:
                     logging.info(f"БД уже содержит {count} записей. Пропускаем полное сканирование.")
                     self._notify_status(f"База загружена ({count} записей)")
                     return
-                
+
                 self._notify_status("Проверка доступности источника XML...")
-                
+
                 # Проверяем доступность папки с таймаутом
                 if not self._check_xml_source_available():
                     self._notify_status("⚠️ Источник XML недоступен")
                     logging.error(f"Папка XML недоступна: {self.xml_folder}")
                     return
-                
-                self._notify_status("Сканирование источника XML...")
-                
+
                 # Считаем файлы для прогресса
                 xml_files = list(self.xml_folder.glob("*.xml"))
                 total_files = len(xml_files)
                 logging.info(f"Найдено XML файлов: {total_files}")
-                
+
                 if total_files == 0:
                     logging.warning("В папке XML не найдено файлов")
                     self._notify_status("⚠️ В источнике нет XML файлов")
                     return
-                
-                self._notify_status(f"Обработка {total_files} файлов...")
-                
+
+                # Сообщение в уи
+                self._notify_status(f"🔄 Ожидайте, идёт обновление базы ({total_files} файлов)...")
+
                 # Очищаем БД перед полным сканированием
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
@@ -660,28 +665,28 @@ class XMLDataManager:
                     cursor.execute("DELETE FROM sheets")
                     conn.commit()
                     conn.close()
-                
+
                 processed = 0
                 errors = 0
-                batch_size = 50  # Отправляем статус каждые N файлов
-                
+                # batch_size больше не нужен, убираем
+
                 # Инициализируем статистику перед сканированием
                 self._emission_orders = set()
                 self._solmark_orders = set()
                 self._multi_customer_orders = []
                 self._processed_files = 0
-                
-                for i, file_path in enumerate(xml_files):
+
+                for file_path in xml_files:  # ← убрали enumerate и batch_size
                     try:
                         # Парсим файл
                         parsed_data = self._parse_xml_file(file_path)
                         if not parsed_data:
                             errors += 1
                             continue
-                        
+
                         # Вычисляем хэш
                         file_hash = self._calculate_file_hash(file_path)
-                        
+
                         # Сохраняем в БД
                         with self._lock:
                             conn = sqlite3.connect(self.db_path)
@@ -689,37 +694,35 @@ class XMLDataManager:
                                 processed += 1
                             conn.commit()
                             conn.close()
-                        
-                        # Отправляем промежуточный статус
-                        if (i + 1) % batch_size == 0 or (i + 1) == total_files:
-                            self._notify_status(f"Загружено {i + 1}/{total_files} файлов...")
-                    
+
                     except Exception as e:
                         errors += 1
                         logging.error(f"Ошибка обработки {file_path.name}: {e}")
-                        
+
                 # Финальное логирование статистики
                 self._log_collected_statistics("первичное сканирование")
-                
+
+                # Финальное сообщение
                 if errors > 0:
                     self._notify_status(f"✅ База создана ({processed} заказов, {errors} ошибок)")
                 else:
                     self._notify_status(f"✅ База создана ({processed} заказов)")
-                
+
                 logging.info(f"Первичное сканирование завершено. Успешно: {processed}, Ошибок: {errors}")
-                
+
             except Exception as e:
                 logging.error(f"Ошибка при первичном сканировании: {e}")
                 self._notify_status(f"❌ Ошибка сканирования: {e}")
-        
+
         # Запускаем в фоновом потоке
         thread = threading.Thread(target=scan_in_background, daemon=True)
         thread.start()
         
-    def _collect_statistics_for_file(self, parsed_data: Dict[str, Any],
-                                    emission_set: set,
-                                    solmark_set: set,
-                                    multi_customer_list: list):
+    @staticmethod
+    def _collect_statistics_for_file(parsed_data: Dict[str, Any],
+                                     emission_set: set,
+                                     solmark_set: set,
+                                     multi_customer_list: list):
         """
         Собирает статистику для одного файла в указанные коллекции.
         

@@ -55,10 +55,21 @@ def check_demo_mode():
     return True
 
 class WeightOrdersApp:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self, parent):
+        self.root = parent
         self.root.title("Мастер упаковки CodeMax-PackMaster")
         self.root.geometry("1500x900")
+
+        # Объявляем все атрибуты модулей
+        self.roll_module = None
+        self.order_data_module = None
+        self.preview_module = None
+        self.print_module = None
+        self.export_module = None
+        self.style = None
+        self.coordinator = None
+        self.config_manager = None
+        self.data_manager = None
         
         self.coordinator = SettingsCoordinator()
         
@@ -70,13 +81,17 @@ class WeightOrdersApp:
         self.config_manager = ConfigManager()
         # Инициализация XMLDataManager (менеджер создания БД)
         from core.data_manager import XMLDataManager
-        self.data_manager = XMLDataManager(self.config_manager, coordinator=self.coordinator)        
+        self.data_manager = XMLDataManager(
+            self.config_manager,
+            coordinator=self.coordinator,
+            root=self.root
+        )
         
         self.create_ui()
         self.center_window()
         self.root.after(200, self.data_manager.initial_scan) # Запуск фонового сканирования
         root.after(100, self.set_initial_focus)
-        
+
     def set_initial_focus(self):
         """Устанавливает фокус на поле номера заказа при запуске"""
         if hasattr(self, 'roll_module'):
