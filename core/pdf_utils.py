@@ -12,7 +12,6 @@ import hashlib
 import json
 
 try:
-    import qrcode
     from qrcode.image.styledpil import StyledPilImage
     from qrcode.image.styles.moduledrawers import SquareModuleDrawer
     from qrcode.image.styles.colormasks import SolidFillColorMask

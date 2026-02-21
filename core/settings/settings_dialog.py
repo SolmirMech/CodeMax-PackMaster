@@ -163,17 +163,12 @@ class SettingsDialog:
         )
         self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
-        # РАЗДЕЛ: ИЗГОТОВИТЕЛЬ
-        manufacturer_frame = ttk.LabelFrame(content_frame, text="Изготовитель", padding=5)
+        # РАЗДЕЛ: Папки и разное
+        manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
         manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
 
-        # Загружаем производителя из JSON
+        # Загружаем из JSON
         shared_settings = self.config_manager.load_json_settings("shared_utils.json")
-        saved_manufacturer = shared_settings.get("manufacturer", "")
-
-        self.manufacturer_var = tk.StringVar(value=saved_manufacturer)
-        manufacturer_entry = ttk.Entry(manufacturer_frame, textvariable=self.manufacturer_var, width=36)
-        manufacturer_entry.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")
 
         # Префикс заказа
         order_settings = shared_settings.get("order_number", {})

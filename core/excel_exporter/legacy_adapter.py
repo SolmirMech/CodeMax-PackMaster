@@ -7,7 +7,7 @@ import os
 from typing import Dict, Any, Optional
 
 from .data_provider import ExportDataProvider
-from .cell_mappers import CellMappingRegistry, SheetMapping
+from .cell_mappers import CellMappingRegistry
 from .exporter_core import SmartExporter
 
 

@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import shutil
-import xml.etree.ElementTree as ET
 from main_ui.second_ui.comment_manager import CommentManager
 from core.parse.name_shortener import NameShortener
 

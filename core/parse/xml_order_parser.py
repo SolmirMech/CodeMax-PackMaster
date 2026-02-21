@@ -28,17 +28,160 @@ class XMLOrderParser:
     def __init__(self, custom_replacements=None):
         pass
         
+    def _is_old_format(self, root: ET.Element) -> bool:
+        """Определяет, является ли XML старым форматом (с parent_sheet внутри order)."""
+        # Старый формат имеет структуру: export/order/parent_sheet
+        order = root.find('.//order')
+        if order is not None:
+            parent_sheet = order.find('.//parent_sheet')
+            if parent_sheet is not None:
+                return True
+        return False
+
+    def _is_new_format(self, root: ET.Element) -> bool:
+        """Определяет, является ли XML новым внешним форматом."""
+        # Проверяем характерные теги нового формата
+        if root.tag == 'ExportOrder':  # или другой корневой тег
+            return True
+        
+        # Или проверяем наличие новых элементов
+        if root.find('.//PrintSheets') is not None:
+            return True
+        
+        return False
+        
     def parse(self, xml_content: str) -> Dict[str, Any]:
         """
-        Главный метод парсинга XML (только новый формат).
+        Главный метод парсинга XML (автоопределение формата).
         """
         try:
-            return self._parse_new_format(xml_content)
+            root = ET.fromstring(xml_content)
+            
+            # Определяем формат
+            if self._is_old_format(root):
+                return self._parse_old_format(xml_content)  # переименованный метод
+            elif self._is_new_format(root):
+                return self._parse_new_external_format(xml_content)  # новый метод
+            else:
+                # По умолчанию пробуем старый формат
+                return self._parse_old_format(xml_content)
+                
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
+            
+    def _parse_new_external_format(self, xml_content: str) -> Dict[str, Any]:
+        """Парсит новый "красивый" формат и транслирует его в структуру старого."""
+        
+        # Парсим новый XML
+        new_root = ET.fromstring(xml_content)
+        
+        # Создаем структуру, которую ожидает _parse_new_format
+        # Самый простой способ: создать временный XML в старом формате
+        old_style_root = ET.Element('export')
+        order_elem = ET.SubElement(old_style_root, 'order')
+        operations_elem = ET.SubElement(old_style_root, 'ОперацииЗаказа')
+        
+        # 1. Заполняем базовые данные заказа
+        order_info = new_root.find('.//OrderInfo')
+        if order_info is not None:
+            self._copy_element(order_info, 'OrderNumber', order_elem, 'НомерЗаказа')
+            self._copy_element(order_info, 'Customer', order_elem, 'Заказчик')
+            self._copy_element(order_info, 'Manufacturer', order_elem, 'Исполнитель')
+            self._copy_element(order_info, 'TechnicalConditions', order_elem, 'ТУ')
+        
+        # 2. Создаем parent_sheet и product
+        # Собираем маппинг ID -> название оттиска и ID -> продукты
+        sheet_name_map = {}
+        products_by_sheet = {}
+        
+        for sheet_elem in new_root.findall('.//PrintSheet'):
+            sheet_id = sheet_elem.get('InternalId')
+            sheet_name = self._get_text(sheet_elem, 'SheetName')
+            
+            if sheet_id and sheet_name:
+                sheet_name_map[sheet_id] = sheet_name
+                
+                # Создаем parent_sheet
+                parent_sheet = ET.SubElement(order_elem, 'parent_sheet')
+                ET.SubElement(parent_sheet, 'id_order_sheet').text = sheet_id
+                ET.SubElement(parent_sheet, 'НаименОттиска').text = sheet_name
+                
+                # Добавляем продукты
+                for prod_elem in sheet_elem.findall('.//Product'):
+                    product = ET.SubElement(parent_sheet, 'product')
+                    ET.SubElement(product, 'id_order_sheet').text = sheet_id
+                    ET.SubElement(product, 'НомерДетали').text = self._get_text(prod_elem, 'Article')
+                    ET.SubElement(product, 'НаименДетали').text = self._get_text(prod_elem, 'Name')
+                    ET.SubElement(product, 'ТиражДетали').text = self._get_text(prod_elem, 'PrintRun')
+                    ET.SubElement(product, 'КолвоРучьев').text = self._get_text(prod_elem, 'NumberOfLanes')
+        
+        # 3. Создаем операции
+        for cutting_op in new_root.findall('.//CuttingOperation'):
+            sheet_id = cutting_op.get('PrintSheetId')
+            sheet_name = sheet_name_map.get(sheet_id, '')
+            
+            if sheet_name:
+                op_elem = ET.SubElement(operations_elem, 'Операция')
+                op_elem.set('ВнутреннийИдентификатор', '31')  # Цех 1
+                op_elem.set('НаименованиеЭлементаОперации', sheet_name)
+                op_elem.set('Выработка', cutting_op.get('OutputMeters', ''))
+                
+                props = ET.SubElement(op_elem, 'РеквизитыОперации')
+                
+                # Маппинг свойств
+                self._add_property(props, '8516', self._get_text(cutting_op, 'NumberOfLanes'))  # Кол-во ручьев
+                self._add_property(props, '8517', self._get_text(cutting_op, 'LaneWidth'))
+                self._add_property(props, '8518', self._get_text(cutting_op, 'CoreDiameter'))
+                self._add_property(props, '11511', self._get_text(cutting_op, 'WindingPattern'))
+                self._add_property(props, '8585', self._get_text(cutting_op, 'LabelLengthWithGap'))
+                
+                comment = self._get_text(cutting_op, 'Comment')
+                if comment:
+                    self._add_property(props, '65000', comment)
+        
+        for packaging_op in new_root.findall('.//PackagingOperation'):
+            product_article = packaging_op.get('ProductArticle')
+            
+            # Нужно найти продукт по артикулу, чтобы получить его название
+            product_name = self._find_product_name(new_root, product_article)
+            
+            if product_name:
+                op_elem = ET.SubElement(operations_elem, 'Операция')
+                op_elem.set('ВнутреннийИдентификатор', '62')  # Упаковка
+                op_elem.set('НаименованиеЭлементаОперации', f"{product_article}, {product_name}")
+                
+                props = ET.SubElement(op_elem, 'РеквизитыОперации')
+                comment = self._get_text(packaging_op, 'Comment')
+                if comment:
+                    self._add_property(props, '65000', comment)
+        
+        # Преобразуем созданную структуру в строку и передаем существующему парсеру
+        old_xml_string = ET.tostring(old_style_root, encoding='unicode')
+        return self._parse_old_format(old_xml_string)
+        
+    def _copy_element(self, source: ET.Element, source_tag: str, 
+                      target: ET.Element, target_tag: str) -> None:
+        """Копирует текст из одного элемента в другой."""
+        src_elem = source.find(source_tag)
+        if src_elem is not None and src_elem.text:
+            ET.SubElement(target, target_tag).text = src_elem.text.strip()
+
+    def _add_property(self, parent: ET.Element, code: str, value: str) -> None:
+        """Добавляет свойство с указанным кодом."""
+        if value:  # Добавляем только если значение не пустое
+            prop = ET.SubElement(parent, 'Свойство')
+            prop.set('Код', code)
+            prop.set('Значение', value)
+
+    def _find_product_name(self, root: ET.Element, article: str) -> str:
+        """Ищет название продукта по артикулу."""
+        for product in root.findall('.//Product'):
+            if self._get_text(product, 'Article') == article:
+                return self._get_text(product, 'Name')
+        return ""
     
-    def _parse_new_format(self, xml_content: str) -> Dict[str, Any]:
-        """Парсит новый формат XML (с <ОперацииЗаказа>)."""
+    def _parse_old_format(self, xml_content: str) -> Dict[str, Any]:
+        """Парсит старый (внутренний) формат XML (с <ОперацииЗаказа>)."""
         try:
             root = ET.fromstring(xml_content)
             
