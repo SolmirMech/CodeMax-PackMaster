@@ -89,6 +89,7 @@ class FontSettingsDialog:
         }
         
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
+        self.main_frame = None
         self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.preview_printer = preview_printer
@@ -647,7 +648,7 @@ class FontSettingsDialog:
                     self.font_settings["box"]["multiline_settings"][key] = var.get()
                 else:
                     self.font_settings["box"]["multiline_settings"][key] = int(var.get())
-            
+
             # Сохраняем через ConfigManager
             all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
             all_settings[self.current_template] = {

@@ -1,15 +1,17 @@
 # core/pdf_utils.py
-import fitz  # PyMuPDF
-from PIL import Image, ImageDraw, ImageFont
-from typing import Dict, List, Tuple, Optional
-import os
+import hashlib
 import io
+import json
+import os
 import threading
+import time
 import weakref
 from collections import OrderedDict
-import time
-import hashlib
-import json
+from typing import Dict, List, Optional
+
+import fitz  # PyMuPDF
+import qrcode
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     from qrcode.image.styledpil import StyledPilImage
@@ -150,6 +152,8 @@ class PDFTemplateFiller:
     }    
     
     def __init__(self, template_path: str):
+        self._cached_print_image = None
+        self._cached_page_image = None
         self.template_path = template_path
         self.doc = None
         self.zoom_level = 1.5
@@ -322,7 +326,7 @@ class PDFTemplateFiller:
         
         return positions
 
-    def render_page_with_data(self, page_num: int, data_map: Dict[str, str], for_print: bool = False) -> Image.Image:
+    def render_page_with_data(self, data_map: Dict[str, str], for_print: bool = False) -> Image.Image:
         """Рендерит страницу PDF с подставленными данными (оптимизированная версия)"""
         with self._lock:
             if not self.doc:
@@ -438,7 +442,7 @@ class PDFTemplateFiller:
         try:
             # Если это qr-код - обрабатываем особо
             if field_type == "box_qr":
-                self._draw_qr_code(draw, rect, text, mat, for_print)
+                self._draw_qr_code(draw, rect, text, mat)
                 return
 
             # Если текст пустой - очищаем область и выходим
@@ -456,7 +460,7 @@ class PDFTemplateFiller:
             # Определяем размер шрифта из настроек или используем значения по умолчанию
             if self.font_settings:
                 font_size = self._get_font_size_from_settings(setting_field_type, for_print)
-                font_style = self._get_font_style_from_settings(setting_field_type, for_print)
+                font_style = self._get_font_style_from_settings(setting_field_type)
             else:
                 # Значения по умолчанию
                 if field_type in ['customer', 'product']:
@@ -469,9 +473,8 @@ class PDFTemplateFiller:
             if field_type == "product" and self.font_settings:
                 wrap_settings = self.font_settings.get("multiline_settings", {})
                 if wrap_settings:
-                    lines = self._prepare_text_lines(text, font_size, wrap_settings, for_print)
-                    font_style = 'bold' if for_print else 'normal'
-                    self._draw_multiline_text(draw, rect, lines, mat, font_size, font_style)
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings)
+                    self._draw_multiline_text(draw, rect, lines, mat, font_size)
                     return
 
             # Для остальных полей - стандартная однострочная отрисовка
@@ -503,7 +506,7 @@ class PDFTemplateFiller:
         except Exception as e:
             print(f"Ошибка замены текста {field_type}: {e}")
             
-    def _get_font_style_from_settings(self, field_type: str, for_print: bool) -> str:
+    def _get_font_style_from_settings(self, field_type: str) -> str:
         """Получает стиль шрифта из настроек"""
         if not self.font_settings:
             return 'normal'
@@ -514,7 +517,8 @@ class PDFTemplateFiller:
         
         return 'normal'
             
-    def _draw_qr_code(self, draw, rect, qr_data_str, mat, for_print):
+    @staticmethod
+    def _draw_qr_code(draw, rect, qr_data_str, mat):
         """Рисует QR-код в указанной области если есть GTIN и total"""
         try:
             if not qr_data_str or not HAS_QRCODE:
@@ -594,6 +598,7 @@ class PDFTemplateFiller:
             draw.rectangle([qr_x, qr_y, qr_x + qr_size_pixels, qr_y + qr_size_pixels], fill='white')
             
             # Вставляем QR-код
+            # noinspection PyProtectedMember
             draw._image.paste(qr_img, (int(qr_x), int(qr_y)))
             
         except Exception as e:
@@ -606,7 +611,8 @@ class PDFTemplateFiller:
             except:
                 pass
             
-    def _format_display_text(self, field_type: str, text: str) -> str:
+    @staticmethod
+    def _format_display_text(field_type: str, text: str) -> str:
         """Форматирует текст для отображения с учетом настроек поля"""
         formatting = FIELD_FORMATTING.get(field_type, FIELD_FORMATTING['default'])
         
@@ -622,7 +628,8 @@ class PDFTemplateFiller:
             
         return display_text
     
-    def _get_text_alignment_x(self, field_type: str, x0: float, rect_width: float, text_width: float) -> float:
+    @staticmethod
+    def _get_text_alignment_x(field_type: str, x0: float, rect_width: float, text_width: float) -> float:
         """Возвращает X-координату для выравнивания текста"""
         formatting = FIELD_FORMATTING.get(field_type, FIELD_FORMATTING['default'])
         align = formatting.get('align', 'center')
@@ -651,7 +658,8 @@ class PDFTemplateFiller:
                     x1, y1 = transformed_rect.x1, transformed_rect.y1
                     draw.rectangle([x0, y0, x1, y1], fill='white')
         
-    def _prepare_text_lines(self, text: str, font_size: int, wrap_settings: dict, for_print: bool) -> List[str]:
+    @staticmethod
+    def _prepare_text_lines(text: str, font_size: int, wrap_settings: dict) -> List[str]:
         """Разбивает текст на строки с учетом настроек переноса"""
         # Получаем настройки
         dpi = wrap_settings.get("printer_dpi", 203)
@@ -710,7 +718,7 @@ class PDFTemplateFiller:
 
         return lines
             
-    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int, font_style: str = 'normal'):
+    def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int):
         """Рисует многострочный текст"""
         transformed_rect = rect * mat
         x0, y0 = transformed_rect.x0, transformed_rect.y0
@@ -762,7 +770,8 @@ class PDFTemplateFiller:
         # Если поле не найдено, используем настройку "other"
         return self.font_settings.get("other", {}).get(setting_type, 18)
     
-    def _get_font(self, font_size: int, style: str = 'normal', font_family: str = "Arial"):
+    @staticmethod
+    def _get_font(font_size: int, style: str = 'normal', font_family: str = "Arial"):
         """Создает шрифт с настраиваемыми параметрами"""
         try:
             font_files = {
@@ -809,11 +818,11 @@ class PDFTemplateFiller:
     
     def generate_preview(self, data_map: Dict[str, str]) -> Image.Image:
         """Генерирует изображение для предпросмотра"""
-        return self.render_page_with_data(0, data_map, for_print=False)
+        return self.render_page_with_data(data_map, for_print=False)
     
     def generate_print_image(self, data_map: Dict[str, str]) -> Image.Image:
         """Генерирует изображение для печати"""
-        return self.render_page_with_data(0, data_map, for_print=True)
+        return self.render_page_with_data(data_map, for_print=True)
     
     def close(self):
         """Закрывает документ"""

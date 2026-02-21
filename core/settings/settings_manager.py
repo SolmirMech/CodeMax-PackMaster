@@ -119,7 +119,7 @@ class SettingsManager:
                         status_message.append(self.lists_dialog.last_status)
                     self.update_status(" | ".join(status_message), "red")
             else:  # Настройки шрифтов
-                success = self.font_dialog.save_settings
+                success = self.font_dialog.save_settings()
                 if success:
                     self.update_status("✅ Настройки шрифтов сохранены!", "green")
                     self.close()

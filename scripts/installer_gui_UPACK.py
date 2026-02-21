@@ -1,12 +1,13 @@
+import os
+import shutil
+import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import os
-import subprocess
-import sys
-import shutil
+
 
 class InstallerGUI:
     def __init__(self):
+        self.clean_build = None
         self.root = tk.Tk()
         self.root.title("Установщик CodeMax-PackMaster")
         self.root.geometry("500x300")
@@ -60,7 +61,8 @@ class InstallerGUI:
         if folder:
             self.project_path.set(folder)
     
-    def get_requirements(self, project_path):
+    @staticmethod
+    def get_requirements(project_path):
         """Читает зависимости из requirements.txt"""
         requirements_path = os.path.join(project_path, "requirements.txt")
         dependencies = []
@@ -78,7 +80,7 @@ class InstallerGUI:
                 print(f"Ошибка чтения requirements.txt: {e}")
         
         return dependencies
-            
+
     def build_exe(self):
         project_path = self.project_path.get()
         if not project_path or not os.path.exists(project_path):
@@ -90,12 +92,10 @@ class InstallerGUI:
         os.makedirs(installer_dir, exist_ok=True)
 
         try:
-            anaconda_dir = os.path.dirname(self.anaconda_python)
-            dlls_dir = os.path.join(anaconda_dir, "DLLs")
             # Настройки зависимостей проекта
             dependencies = self.get_requirements(project_path)
             cmd = [
-                self.anaconda_python, "-c", 
+                self.anaconda_python, "-c",
                 "import sys; sys.setrecursionlimit(5000); from PyInstaller.__main__ import run; run()",
                 "--clean",
                 "--distpath", installer_dir,
@@ -104,9 +104,9 @@ class InstallerGUI:
                 "--name", "CodeMax-PackMaster",
                 "--noconsole",
                 "--exclude", "matplotlib",
-                "--exclude", "pandas", 
+                "--exclude", "pandas",
                 "--exclude", "sphinx",
-                "--exclude", "bokeh", 
+                "--exclude", "bokeh",
                 "--exclude", "dask",
                 "--exclude", "tensorflow",
                 "--exclude", "torch",
@@ -115,7 +115,7 @@ class InstallerGUI:
                 "--exclude", "jupyter",
                 "--exclude", "IPython",
                 "--exclude", "PyQt5",
-                "--exclude", "PyQt6", 
+                "--exclude", "PyQt6",
                 "--exclude", "PySide2",
                 "--exclude", "PySide6",
                 "--exclude", "qtpy",
@@ -139,14 +139,14 @@ class InstallerGUI:
                     break
 
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate()
+            process.communicate()  # Переменные не нужны, так как не используются
 
             if process.returncode == 0:
                 self.cleanup_after_build(installer_dir)
-                messagebox.showinfo("Успех", 
-                    f"EXE успешно собран!\n"
-                    f"Папка: {installer_dir}\n"
-                    f"Запускаемый файл: CodeMax-PackMaster.exe")
+                messagebox.showinfo("Успех",
+                                    f"EXE успешно собран!\n"
+                                    f"Папка: {installer_dir}\n"
+                                    f"Запускаемый файл: CodeMax-PackMaster.exe")
 
                 try:
                     os.startfile(installer_dir)
@@ -159,8 +159,11 @@ class InstallerGUI:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось запустить PyInstaller: {str(e)}")
             
-    def cleanup_after_build(self, installer_dir):
-        """Удаляем временные файлы после сборки"""
+    @staticmethod
+    def cleanup_after_build(installer_dir):
+        """Удаляем временные файлы после сборки
+        :param installer_dir:
+        """
         temp_build_dir = os.path.join(installer_dir, "_temp_build")
         spec_file = os.path.join(installer_dir, "CodeMax-PackMaster.spec")
         
