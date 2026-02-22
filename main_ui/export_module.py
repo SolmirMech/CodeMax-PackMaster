@@ -3,10 +3,18 @@ from tkinter import ttk, StringVar
 import os
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 
+
+# noinspection PyUnusedLocal
 class ExportModule:
     """Модуль управления экспортом в Excel"""
     
     def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
+        self.excel_preview_module = None
+        self.pallet_num_entry = None
+        self.pallet_label = None
+        self.pallet_sizes_combo = None
+        self.box_sizes_combo = None
+        self.export_status_label = None
         self.parent = parent
         self.preview_module = preview_module
         self.coordinator = coordinator
@@ -228,7 +236,7 @@ class ExportModule:
 
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""
-        if not hasattr(self, 'excel_preview_module'):
+        if self.excel_preview_module is None:
             from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
@@ -242,7 +250,7 @@ class ExportModule:
             workshop = self.coordinator.get_workshop()
         
         # Устанавливаем контекст многовидового режима
-        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+        self.excel_preview_module.sheet_name = self.excel_preview_module.get_sheet_for_preview(
             workshop, enable_pallet=False, multitype_mode=True
         )
         
@@ -351,7 +359,7 @@ class ExportModule:
         
     def show_box_preview(self):
         """Открывает предпросмотр для коробки"""
-        if not hasattr(self, 'excel_preview_module'):
+        if self.excel_preview_module is None:
             from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
@@ -365,7 +373,7 @@ class ExportModule:
             workshop = self.coordinator.get_workshop()
         
         # Устанавливаем контекст коробки перед открытием окна
-        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+        self.excel_preview_module.sheet_name = self.excel_preview_module.get_sheet_for_preview(
             workshop, enable_pallet=False, multitype_mode=False
         )
         
@@ -386,7 +394,7 @@ class ExportModule:
         
     def show_pallet_preview(self):
         """Открывает предпросмотр для поддона"""
-        if not hasattr(self, 'excel_preview_module'):
+        if self.excel_preview_module is None:
             from main_ui.preview.excel_preview_module import ExcelPreviewModule
             self.excel_preview_module = ExcelPreviewModule(
                 self.parent, 
@@ -400,7 +408,7 @@ class ExportModule:
             workshop = self.coordinator.get_workshop()
         
         # Устанавливаем контекст поддона перед открытием окна
-        self.excel_preview_module.sheet_name = self.excel_preview_module._get_sheet_for_preview(
+        self.excel_preview_module.sheet_name = self.excel_preview_module.get_sheet_for_preview(
             workshop, enable_pallet=True, multitype_mode=False
         )
         
@@ -418,7 +426,8 @@ class ExportModule:
         else:
             # Открываем новое окно
             self.excel_preview_module.show_preview_window()
-        
+
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         self.load_box_sizes()

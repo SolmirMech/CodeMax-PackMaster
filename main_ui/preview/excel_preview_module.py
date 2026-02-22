@@ -1,7 +1,6 @@
+import os
 import tkinter as tk
 from tkinter import ttk
-import os
-from PIL import Image, ImageDraw
 
 
 class ExcelPreviewModule:
@@ -81,7 +80,7 @@ class ExcelPreviewModule:
         except Exception as e:
             print(f"[ERROR] Ошибка проверки Excel файлов: {e}")
             
-    def _get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
+    def get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
         """Определяет лист для предпросмотра на основе контекста"""
         if workshop == "1":
             if multitype_mode:
@@ -160,7 +159,7 @@ class ExcelPreviewModule:
             multitype_mode = data.get('multitype_mode', False)
             
             # Определяем лист
-            self.sheet_name = self._get_sheet_for_preview(
+            self.sheet_name = self.get_sheet_for_preview(
                 workshop, enable_pallet, multitype_mode
             )
             
@@ -178,7 +177,7 @@ class ExcelPreviewModule:
             enable_pallet = data.get('enable_pallet', False)
             multitype_mode = data.get('multitype_mode', False)
             
-            self.sheet_name = self._get_sheet_for_preview(
+            self.sheet_name = self.get_sheet_for_preview(
                 workshop, enable_pallet, multitype_mode
             )
             
@@ -1134,7 +1133,7 @@ class ExcelPreviewModule:
             workshop = "1"
             if hasattr(self, 'coordinator') and self.coordinator:
                 workshop = self.coordinator.get_workshop()
-            self.sheet_name = self._get_sheet_for_preview(workshop, False, False)
+            self.sheet_name = self.get_sheet_for_preview(workshop, False, False)
         
         # Сбрасываем флаг увеличения
         if hasattr(self, '_already_scaled'):
@@ -1166,6 +1165,6 @@ class ExcelPreviewModule:
             self.preview_window = None
             self.preview_canvas = None
             
-            # Очищаем tk_image чтобы избежать утечек памяти
+            # Очищаем tk_image, чтобы избежать утечек памяти
             if hasattr(self, 'tk_image'):
                 del self.tk_image

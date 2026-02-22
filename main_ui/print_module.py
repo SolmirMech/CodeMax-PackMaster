@@ -1,17 +1,26 @@
 import tkinter as tk
 from tkinter import ttk, StringVar
+
 import win32print
 import win32ui
-from PIL import Image, ImageTk
+from PIL import Image
+
 from core.settings.font_settings_dialog import FontSettingsDialog
+
 
 def get_default_printer():
     return win32print.GetDefaultPrinter()
 
+
+# noinspection PyNoneFunctionAssignment,PyProtectedMember
 class PrintModule:
     """Модуль управления печатью этикеток"""
     
     def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
+        self.original_product_name = None
+        self.order_data_module = None
+        self._settings_manager = None
+        self.print_status_label = None
         self.parent = parent
         self.preview_module = preview_module
         self.coordinator = coordinator
@@ -114,6 +123,7 @@ class PrintModule:
         if hasattr(self, 'preview_module') and self.preview_module:
             self.preview_module.update_preview_displays()
 
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         try:
@@ -159,7 +169,7 @@ class PrintModule:
         """Запускает печать всего тиража из уже распарсенных данных"""
         try:
             # Берем список из order_data_processor через существующие связи
-            if (hasattr(self, 'order_data_module') and self.order_data_module):
+            if hasattr(self, 'order_data_module') and self.order_data_module:
                 filtered_data = getattr(self.order_data_module, 'filtered_parsed_data', [])
                 
                 if not filtered_data:
@@ -228,14 +238,14 @@ class PrintModule:
                 self.preview_module.connected_roll_module.date_emission_var.set("")          
             
             # Ждем обновления данных перед печатью
-            self.parent.after(100, lambda: self.print_current_item(current_product_data, stream_count))
+            self.parent.after(100, lambda: self.print_current_item(stream_count))
             
         except Exception as e:
             self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
 
-    def print_current_item(self, product_data, stream_count):
+    def print_current_item(self, stream_count):
         """Печатает текущий элемент после обновления данных"""
         try:
             # Получаем множитель из copies_var (то, что ввел пользователь)
@@ -298,6 +308,7 @@ class PrintModule:
         
     def print_rolls_with_box(self):
         """Печатает N копий ролика и одну коробку с N роликами"""
+        original_rolls_count = None
         try:
             # === Проверка полей ===
             required_fields = [
@@ -508,7 +519,8 @@ class PrintModule:
         for i in range(copies):
             self._print_image_gdi(print_image, printer_name)
 
-    def _parse_range(self, range_str):
+    @staticmethod
+    def _parse_range(range_str):
         """Парсит диапазон типа '1-5' в список чисел [1,2,3,4,5]"""
         try:
             if '-' in range_str:
@@ -581,6 +593,7 @@ class PrintModule:
     def _print_image_gdi(self, img: Image.Image, printer_name: str):
         """Печатает изображение через GDI"""
         try:
+            # noinspection PyUnresolvedReferences
             hdc = win32ui.CreateDC()
             hdc.CreatePrinterDC(printer_name)
 
@@ -635,8 +648,10 @@ class PrintModule:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.connected_roll_module = roll_module
-        
-    def _validate_required_fields(self, field_vars):
+
+    # noinspection PyUnusedLocal
+    @staticmethod
+    def _validate_required_fields(field_vars):
         """
         Проверяет список полей на пустоту.
         field_vars: список кортежей (var, field_name, widget)
