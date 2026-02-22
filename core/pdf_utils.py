@@ -10,12 +10,16 @@ from collections import OrderedDict
 from typing import Dict, List, Optional
 
 import fitz  # PyMuPDF
+# noinspection PyPackageRequirements
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 try:
+    # noinspection PyPackageRequirements
     from qrcode.image.styledpil import StyledPilImage
+    # noinspection PyPackageRequirements
     from qrcode.image.styles.moduledrawers import SquareModuleDrawer
+    # noinspection PyPackageRequirements
     from qrcode.image.styles.colormasks import SolidFillColorMask
     HAS_QRCODE = True
 except ImportError:
