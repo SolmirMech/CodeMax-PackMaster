@@ -2,9 +2,8 @@
 Модуль управления комментариями и их отображением.
 """
 
-import tkinter as tk
-from tkinter import ttk
 import re
+import tkinter as tk
 
 
 class CommentManager:
@@ -24,7 +23,7 @@ class CommentManager:
         self.packaging_comment_var = tk.StringVar(value="")
         self.aggregation_status_var = tk.StringVar(value="")      
         
-    def _get_special_requirements(self):
+    def get_special_requirements(self):
         """Получает особые требования для текущего заказчика."""
         if not self.customer_var:
             return ""
@@ -82,7 +81,8 @@ class CommentManager:
             print(f"Ошибка загрузки особых требований: {e}")
             return ""
 
-    def _clean_company_name(self, name):
+    @staticmethod
+    def _clean_company_name(name):
         """Очищает название компании от организационно-правовых форм и лишних символов."""
         if not name:
             return name
@@ -117,7 +117,7 @@ class CommentManager:
         self.aggregation_status_var.set(aggregation_status)
         
         # Проверяем наличие особых требований
-        special_requirements = self._get_special_requirements()
+        special_requirements = self.get_special_requirements()
         
         # Проверяем, есть ли статус агрегации и он ли "Да"
         has_aggregation_yes = aggregation_status and aggregation_status.strip().lower() == "да"

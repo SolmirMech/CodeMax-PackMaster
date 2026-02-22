@@ -10,15 +10,23 @@ def mm_to_pixels(mm):
 def get_default_printer():
     return win32print.GetDefaultPrinter()
 
+
+# noinspection PyNoneFunctionAssignment
 def create_printer_dc(printer_name):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
     return hdc
 
+
+# noinspection PyTypeChecker,PyUnusedLocal
 class WeightOrdersPrinter:
     """Принтер этикеток для втулок."""
     
     def __init__(self, parent, config_manager=None):
+        self.settings_vars = None
+        self.printer_var = None
+        self._status_after_id = None
+        self.status_label = None
         self.parent = parent
         self.config_manager = config_manager
         self.settings_file = "print_settings.json"
@@ -187,7 +195,7 @@ class WeightOrdersPrinter:
         self.status_label.config(foreground=color)
         
         # Очищаем через 5 секунд
-        if hasattr(self, '_status_after_id'):
+        if self._status_after_id is not None:
             self.parent.after_cancel(self._status_after_id)
         self._status_after_id = self.parent.after(5000, lambda: self.status_var.set(""))
 
@@ -208,8 +216,9 @@ class WeightOrdersPrinter:
             self.cutter_menubutton.menu.add_command(
                 label=cutter,
                 command=lambda c=cutter: self.set_cutter(c)
-            )        
-            
+            )
+
+    # noinspection PyUnusedLocal
     def calculate_net_weight(self, *args):
         """Автоматически рассчитывает вес нетто"""
         try:
@@ -361,6 +370,7 @@ class WeightOrdersPrinter:
         except Exception as e:
             self.show_status(f"❌ Ошибка при печати: {str(e)}", "red")
 
+    # noinspection PyNoneFunctionAssignment
     def _print_double_label(self, data):
         hdc = create_printer_dc(self.settings["printer"])
         hdc.StartDoc("Этикетки Заказы с весом")

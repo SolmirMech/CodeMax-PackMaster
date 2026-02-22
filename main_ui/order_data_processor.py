@@ -1,16 +1,25 @@
-import tkinter as tk
-from tkinter import ttk, StringVar, BooleanVar, filedialog, messagebox
 import os
 import re
-import sys
-import shutil
-from main_ui.second_ui.comment_manager import CommentManager
-from core.parse.name_shortener import NameShortener
+import tkinter as tk
+from tkinter import ttk, StringVar
 
+from core.parse.name_shortener import NameShortener
+from main_ui.second_ui.comment_manager import CommentManager
+
+
+# noinspection PyTypeChecker,SpellCheckingInspection
 class OrderDataProcessor:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
     
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
+        self.comment_text = None
+        self.comment_label_frame = None
+        self.aggregation_frame = None
+        self.data_manager_status_label = None
+        self.name_combobox = None
+        self.current_order = None
+        self.filtered_parsed_data = None
+        self.parse_status = None
         self.parent = parent
         self.config_manager = config_manager
         self.data_manager = data_manager
@@ -22,6 +31,8 @@ class OrderDataProcessor:
         self.parsed_data = []  # Список данных
         self.parsed_names_list = []
         self.selected_name = StringVar(value="")  # Выбранное название
+        self.cached_order_number = ""
+        self.cached_order_data = None
         
         # Переменные для Excel
         self.excel_file_path = None
@@ -47,11 +58,12 @@ class OrderDataProcessor:
         )
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
-            
+
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         # Пересчитываем вместимость коробки при изменении настроек
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             # Получаем текущий текст тиража
             current_text = self.preview_module.tirazh_label.cget("text")
             
@@ -78,7 +90,7 @@ class OrderDataProcessor:
             if new_folder_path != self.folder_path.get():
                 self.folder_path.set(new_folder_path)
                 # Сбрасываем статус папки
-                if hasattr(self, 'parse_status'):
+                if self.parse_status is not None:
                     if new_folder_path:
                         folder_name = os.path.basename(new_folder_path)
                         self.parse_status.config(text=f"Папка: {folder_name}", foreground="blue")
@@ -193,66 +205,68 @@ class OrderDataProcessor:
         
         # Инициализируем статусы
         self.reset_status_messages()
-        
+
     def _display_comments(self, comments, operations):
         """Отображает комментарии в интерфейсе"""
         cutting_comment = comments.get('cutting_comment', '')
         packaging_comment = comments.get('packaging_comment', '')
         aggregation_status = operations.get('aggregation_status', '')
-        
-        # Устанавливаем комментарии в CommentManager
+
+        # Устанавливаем комментарии в CommentManager и получаем результат проверок
         result = self.comment_manager.set_comments(
             cutting_comment=cutting_comment,
             packaging_comment=packaging_comment,
             aggregation_status=aggregation_status
         )
-        
+
         # Обновляем Text виджет
         self.comment_text.config(state="normal")
         self.comment_text.delete("1.0", tk.END)
-        
+
         # Формируем текст комментариев
         comment_text = ""
-        
+
         if cutting_comment:
             comment_text += "📐 КОММЕНТАРИЙ РЕЗКИ:\n"
             comment_text += f"{cutting_comment}\n\n"
-        
+
         if packaging_comment:
             comment_text += "📦 КОММЕНТАРИЙ УПАКОВКИ:\n"
             comment_text += f"{packaging_comment}\n"
-        
-        # Проверяем особые требования
-        special_requirements = self.comment_manager._get_special_requirements()
+
+        # Проверяем особые требования через CommentManager
+        special_requirements = self.comment_manager.get_special_requirements()
         if special_requirements:
             comment_text += "\n🚨 Особые требования:\n"
             comment_text += f"{special_requirements}\n"
-        
+
         # Вставляем текст если есть
         if comment_text:
             self.comment_text.insert("1.0", comment_text.strip())
             self.comment_text.config(state="disabled")
-            
-            # Показываем блок комментариев
-            self.comment_label_frame.grid()
-            
-            # Обновляем заголовок с треугольником
-            current_title = self.comment_label_frame.cget("text")
-            if "⚠" not in current_title:
-                self.comment_label_frame.config(text="⚠ " + current_title)
-            
-            # Запускаем мигание
-            self._blink_comment_title(blink_count=3)
+
+            # ИСПОЛЬЗУЕМ result['has_comments'] вместо повторной проверки
+            if result['has_comments']:
+                # Показываем блок комментариев
+                self.comment_label_frame.grid()
+
+                # Обновляем заголовок с треугольником
+                current_title = self.comment_label_frame.cget("text")
+                if "⚠" not in current_title:
+                    self.comment_label_frame.config(text="⚠ " + current_title)
+
+                # Запускаем мигание
+                self._blink_comment_title(blink_count=3)
         else:
             # Скрываем блок если нет комментариев
             self.comment_label_frame.grid_remove()
-        
-        # Обрабатываем статус агрегации
-        if aggregation_status and aggregation_status.strip().lower() == "да":
+
+        # ИСПОЛЬЗУЕМ result['has_aggregation'] вместо повторной проверки
+        if result['has_aggregation']:
             self._show_aggregation_status()
         else:
             self._hide_aggregation_status()
-    
+            
     def _blink_comment_title(self, blink_count=3):
         """Мигает треугольником в заголовке 2-3 раза"""
         current_title = self.comment_label_frame.cget("text")
@@ -363,14 +377,14 @@ class OrderDataProcessor:
         
         # 5. Проверяем, был ли уже выбран заказ
         current_order = self.roll_module.order_number.get().strip()
-        has_cached_data = hasattr(self, 'cached_order_data') and self.cached_order_data
+        has_cached_data = self.cached_order_data is not None and self.cached_order_data
         
         if not current_order:
             # Если номер заказа пустой - ничего не делаем
             self.parse_status.config(text="Сначала введите номер заказа", foreground="red")
             return "break"
         
-        if not has_cached_data or not hasattr(self, 'cached_order_number') or self.cached_order_number != current_order:
+        if not has_cached_data or self.cached_order_number is None or self.cached_order_number != current_order:
             # Заказ еще не загружен - запускаем поиск
             if event:
                 self.roll_module.on_order_enter_pressed(event)
@@ -388,7 +402,8 @@ class OrderDataProcessor:
         
         return "break"
         
-    def _extract_gtin_from_input(self, text):
+    @staticmethod
+    def _extract_gtin_from_input(text):
         """Извлекает GTIN из введённого текста"""
         if not text:
             return None
@@ -420,7 +435,7 @@ class OrderDataProcessor:
         Находит detail_num по GTIN в parsed_data
         Возвращает последние 3 цифры detail_num или None если не найден
         """
-        if not hasattr(self, 'parsed_data') or not self.parsed_data:
+        if not self.parsed_data:
             return None
         
         for product in self.parsed_data:
@@ -507,7 +522,6 @@ class OrderDataProcessor:
         self.roll_module.date_emission_var.set("")      
         
         # Получаем номер заказа из roll_module
-        order_num = ""
         if self.roll_module and hasattr(self.roll_module, 'order_number'):
             order_num = self.roll_module.order_number.get().strip()
                     
@@ -519,7 +533,7 @@ class OrderDataProcessor:
             self.parse_status.config(text="Введите номер заказа", foreground="red")
             return
             
-        if not hasattr(self, 'current_order'):
+        if self.current_order is None:
             self.current_order = ""
         
         if order_num != self.current_order:
@@ -542,7 +556,6 @@ class OrderDataProcessor:
         
         # Ищем конкретный вид или тираж
         search_digits = self.detail_num_search.get().strip()
-        search_digits_numeric = re.sub(r'\D', '', search_digits)  # Убираем всё, кроме цифр
         
         # проверяем минимальную длину
         if search_digits and len(search_digits) < 3:
@@ -551,12 +564,12 @@ class OrderDataProcessor:
                 foreground="orange"
             )
             return
-        
+
+        found_products = []
+        found_by = ""
         # нужно правильно обработать parsed_data после использования нового парсера
         if search_digits:
             if search_digits:
-                found_products = []
-                found_by = ""
                 
                 # Нормализуем поиск (оставляем только цифры)
                 search_digits_numeric = re.sub(r'\D', '', search_digits)
@@ -632,7 +645,8 @@ class OrderDataProcessor:
             self.parent.after(120, lambda: self.name_combobox.focus_set())
             self.parent.after(140, lambda: self.name_combobox.event_generate('<Down>'))
             
-    def _add_gtin_suffix(self, name: str, gtin: str) -> str:
+    @staticmethod
+    def _add_gtin_suffix(name: str, gtin: str) -> str:
         """
         Добавляет суффикс "джитXXXX" к названию, предварительно очищая его от полного GTIN.      
         
@@ -683,10 +697,10 @@ class OrderDataProcessor:
     def parse_xml_for_product_names(self, order_number):
         """Парсит XML файлы для поиска названий продуктов и дополнительных данных"""
         # Используем кэш из roll_module, если данные уже получены
-        if (hasattr(self, 'cached_order_data') and 
-            self.cached_order_data and 
-            hasattr(self, 'cached_order_number') and 
-            self.cached_order_number == order_number):
+        if (self.cached_order_data is not None and
+                self.cached_order_data and
+                self.cached_order_number is not None and
+                self.cached_order_number == order_number):
             
             results = self.cached_order_data
         else:
@@ -695,7 +709,7 @@ class OrderDataProcessor:
         
         # Проверяем галочку из roll_module
         shorten_enabled = False
-        if hasattr(self, 'roll_module') and hasattr(self.roll_module, 'shorten_text_var'):
+        if self.roll_module is not None and hasattr(self.roll_module, 'shorten_text_var'):
             shorten_enabled = self.roll_module.shorten_text_var.get()
         
         product_data = []
@@ -707,7 +721,7 @@ class OrderDataProcessor:
                 
                 # Сокращаем если включено
                 display_name = product_name
-                if shorten_enabled and hasattr(self, 'name_shortener'):
+                if shorten_enabled and self.name_shortener is not None:
                     display_name = self.name_shortener.shorten_name(product_name)
                 
                 # Добавляем джит если есть
@@ -736,7 +750,8 @@ class OrderDataProcessor:
                     product_data.append(product_dict)
         
         return product_data
-            
+
+    # noinspection PyUnusedLocal
     def on_name_selected(self, event):
         """Обрабатывает выбор названия из комбобокса и отправляет все данные"""
         selected_name = self.selected_name.get()
@@ -787,7 +802,7 @@ class OrderDataProcessor:
                 )
                 
                 # Передаём GTIN в preview_module для QR-кода
-                if hasattr(self, 'preview_module') and self.preview_module:
+                if self.preview_module is not None:
                     gtin = product_data.get('gtin', '')
                     self.preview_module.set_product_gtin(gtin)
                 
@@ -799,7 +814,7 @@ class OrderDataProcessor:
                     
     def _calculate_box_capacity(self):
         """Рассчитывает, сколько роликов влезет в выбранную коробку"""
-        if not hasattr(self, 'roll_module') or not self.roll_module:
+        if self.roll_module is None:
             return None
         
         try:

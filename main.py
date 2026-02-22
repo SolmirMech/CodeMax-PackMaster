@@ -54,6 +54,8 @@ def check_demo_mode():
     
     return True
 
+
+# noinspection PyTypeChecker
 class WeightOrdersApp:
     def __init__(self, parent):
         self.root = parent
@@ -90,6 +92,7 @@ class WeightOrdersApp:
         self.create_ui()
         self.center_window()
         self.root.after(200, self.data_manager.initial_scan) # Запуск фонового сканирования
+        # noinspection PyArgumentList,PyTypeChecker
         root.after(100, self.set_initial_focus)
 
     def set_initial_focus(self):
