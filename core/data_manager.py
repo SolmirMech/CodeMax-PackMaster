@@ -613,7 +613,7 @@ class XMLDataManager:
 
     def initial_scan(self) -> None:
         """
-        ПЕРВИЧНОЕ СКАНИРОВАНИЕ
+        ПЕРВИЧНОЕ СКАНИРОВАНИЕ.
         Вызывается при запуске программы (можно в фоне)
         Заполняет БД при первом запуске
         """
@@ -637,7 +637,7 @@ class XMLDataManager:
 
                 self._notify_status("Проверка доступности источника XML...")
 
-                # Проверяем доступность папки с таймаутом
+                # Проверяем доступность папки с тайм-аутом
                 if not self._check_xml_source_available():
                     self._notify_status("⚠️ Источник XML недоступен")
                     logging.error(f"Папка XML недоступна: {self.xml_folder}")
@@ -761,7 +761,7 @@ class XMLDataManager:
     
     def _check_xml_source_available(self) -> bool:
         """
-        Проверяет доступность источника XML с таймаутом.
+        Проверяет доступность источника XML с тайм-аутом.
         
         Returns:
             True если источник доступен, False если недоступен
@@ -775,7 +775,7 @@ class XMLDataManager:
             except:
                 return False
         
-        # Создаём поток с таймаутом
+        # Создаём поток с тайм-аутом
         result = [None]
         
         def run_check():
@@ -793,8 +793,8 @@ class XMLDataManager:
     
     def search_combined(self, order_query: str, sheet_query: str = None) -> List[Dict[str, Any]]:
         """
-        ОСНОВНОЙ МЕТОД ДЛЯ UI
-        Ищет заказы по номеру + фильтр по оттиску
+        ОСНОВНОЙ МЕТОД ДЛЯ UI.
+        Ищет заказы по номеру + фильтр по оттиску.
         Возвращает список словарей в ТОЧНОМ формате parse_xml()
         
         Args:
@@ -932,7 +932,7 @@ class XMLDataManager:
     
     def _start_background_check(self, silent=False):
         """Запускает фоновую проверку, если она не выполняется."""
-        if not hasattr(self, '_background_running'):
+        if self._background_running is None:
             self._background_running = False
         
         if not self._background_running and self._background_lock.acquire(blocking=False):

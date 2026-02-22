@@ -120,7 +120,7 @@ class PrintModule:
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module (RollPreview)"""
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             self.preview_module.update_preview_displays()
 
     # noinspection PyUnusedLocal
@@ -150,7 +150,7 @@ class PrintModule:
     def open_settings_manager(self):
         """Открывает единое окно настроек с вкладками"""
         from core.settings.settings_manager import SettingsManager
-        if not hasattr(self, '_settings_manager'):
+        if self._settings_manager is None:
             self._settings_manager = SettingsManager(self.parent, self, config_manager=self.config_manager, coordinator=self.coordinator)
             # Передаем колбэк для статуса
             self._settings_manager.set_status_callback(self.set_status)
@@ -158,7 +158,7 @@ class PrintModule:
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""
-        if hasattr(self, 'print_status_label'):
+        if self.print_status_label is not None:
             self.print_status_label.config(text=message, foreground=color)
             self.parent.after(5000, lambda: self.print_status_label.config(text=""))
             
@@ -169,7 +169,7 @@ class PrintModule:
         """Запускает печать всего тиража из уже распарсенных данных"""
         try:
             # Берем список из order_data_processor через существующие связи
-            if hasattr(self, 'order_data_module') and self.order_data_module:
+            if self.order_data_module is not None:
                 filtered_data = getattr(self.order_data_module, 'filtered_parsed_data', [])
                 
                 if not filtered_data:
@@ -211,7 +211,7 @@ class PrintModule:
         """Печатает следующий вид в тираже с учетом количества stream"""
         if not self.is_batch_printing or self.current_batch_index >= len(self.batch_print_data):
             # Завершение печати
-            if hasattr(self, 'original_product_name'):
+            if self.original_product_name is not None:
                 self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
                 self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)          
             
@@ -383,10 +383,10 @@ class PrintModule:
             
         except Exception as e:
             # Восстанавливаем в случае ошибки
-            if hasattr(self, 'connected_roll_module') and 'original_rolls_count' in locals():
+            if self.connected_roll_module is not None and 'original_rolls_count' in locals():
                 self.connected_roll_module.rolls_count_var.set(original_rolls_count)
                 self.connected_roll_module.calculate_total_quantity()
-                if hasattr(self, 'preview_module'):
+                if self.preview_module is not None:
                     self.preview_module._update_from_connected_roll_module()
             
             self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")

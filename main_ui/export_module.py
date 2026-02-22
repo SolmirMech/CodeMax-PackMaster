@@ -255,9 +255,10 @@ class ExportModule:
         )
         
         # Обновляем заголовок окна если оно уже открыто
-        if (hasattr(self.excel_preview_module, 'preview_window') and 
-            self.excel_preview_module.preview_window is not None and 
-            self.excel_preview_module.preview_window.winfo_exists()):
+        if (self.excel_preview_module is not None and
+                hasattr(self.excel_preview_module, 'preview_window') and
+                self.excel_preview_module.preview_window is not None and
+                self.excel_preview_module.preview_window.winfo_exists()):
             
             self.excel_preview_module.preview_window.title(
                 f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
@@ -378,9 +379,10 @@ class ExportModule:
         )
         
         # Обновляем заголовок окна если оно уже открыто
-        if (hasattr(self.excel_preview_module, 'preview_window') and 
-            self.excel_preview_module.preview_window is not None and 
-            self.excel_preview_module.preview_window.winfo_exists()):
+        if (self.excel_preview_module is not None and
+                hasattr(self.excel_preview_module, 'preview_window') and
+                self.excel_preview_module.preview_window is not None and
+                self.excel_preview_module.preview_window.winfo_exists()):
             
             self.excel_preview_module.preview_window.title(
                 f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
@@ -413,9 +415,10 @@ class ExportModule:
         )
         
         # Обновляем заголовок окна если оно уже открыто
-        if (hasattr(self.excel_preview_module, 'preview_window') and 
-            self.excel_preview_module.preview_window is not None and 
-            self.excel_preview_module.preview_window.winfo_exists()):
+        if (self.excel_preview_module is not None and
+                hasattr(self.excel_preview_module, 'preview_window') and
+                self.excel_preview_module.preview_window is not None and
+                self.excel_preview_module.preview_window.winfo_exists()):
             
             self.excel_preview_module.preview_window.title(
                 f"Предпросмотр Excel - {self.excel_preview_module.sheet_name}"
@@ -440,7 +443,7 @@ class ExportModule:
         workshop = self.coordinator.get_workshop()
         
         # Управление видимостью
-        if hasattr(self, 'pallet_label') and hasattr(self, 'pallet_num_entry'):
+        if self.pallet_label is not None and self.pallet_num_entry is not None:
             if workshop == "1":
                 self.pallet_label.grid_remove()
                 self.pallet_num_entry.grid_remove()
@@ -477,7 +480,7 @@ class ExportModule:
             weight_box = settings.get("weight_box", {})
             box_sizes = list(weight_box.keys())
             
-            if hasattr(self, 'box_sizes_combo') and self.box_sizes_combo:
+            if self.box_sizes_combo is not None:
                 self.box_sizes_combo['values'] = box_sizes
                 if box_sizes and not self.box_size_var.get():
                     self.box_size_var.set(box_sizes[0])
@@ -526,7 +529,7 @@ class ExportModule:
             pallet_sizes = list(weight_pallet.keys())
             
             # Проверяем, что комбобокс уже создан
-            if hasattr(self, 'pallet_sizes_combo'):
+            if self.pallet_sizes_combo is not None:
                 self.pallet_sizes_combo['values'] = pallet_sizes
                 if pallet_sizes:
                     self.pallet_size_var.set(pallet_sizes[0])

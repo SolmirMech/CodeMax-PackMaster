@@ -89,8 +89,9 @@ class SettingsManager:
         # Привязки клавиш на главное окно
         self.window.bind('<Return>', self.save_all_and_close)
         self.window.bind('<Escape>', self.close)
-        self.window.focus_set()      
+        self.window.focus_set()
 
+    # noinspection PyUnusedLocal
     def save_all_and_close(self, event=None):
         """Сохраняет настройки из активной вкладки"""
         # Получаем активную вкладку из notebook
@@ -125,7 +126,8 @@ class SettingsManager:
                     self.close()
                 else:
                     self.update_status(self.font_dialog.last_status, "red")
-            
+
+    # noinspection PyUnusedLocal
     def close(self, event=None):
         """Закрывает окно настроек"""
         if self.window:

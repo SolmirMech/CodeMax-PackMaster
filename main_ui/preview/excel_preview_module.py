@@ -3,10 +3,15 @@ import tkinter as tk
 from tkinter import ttk
 
 
+# noinspection PyUnboundLocalVariable
 class ExcelPreviewModule:
     """Модуль предпросмотра Excel файла"""
     
     def __init__(self, parent, coordinator=None, config_manager=None):
+        self.zoom_var = None
+        self.top_offset_var = None
+        self.tk_image = None
+        self.status_label = None
         self.parent = parent
         self.coordinator = coordinator
         self.config_manager = config_manager
@@ -29,9 +34,7 @@ class ExcelPreviewModule:
         # Подписка на координатор
         if coordinator and hasattr(coordinator, 'subscribe'):
             coordinator.subscribe(self.on_excel_exported)
-        # Инициализация статуса архивации
-        if coordinator and hasattr(coordinator, 'subscribe'):
-            # Подписываемся на уведомления координатора
+            # Инициализация статуса архивации
             coordinator.subscribe(self.on_settings_changed)
             # Получаем текущий статус
             self.archive_enabled = (coordinator.get_archive_status() == "on")
@@ -71,7 +74,7 @@ class ExcelPreviewModule:
             
             if files_copied:
                 # Обновляем статус в интерфейсе если окно открыто
-                if hasattr(self, 'status_label'):
+                if self.status_label is not None:
                     self.status_label.config(
                         text="✓ Файлы Excel восстановлены", 
                         foreground="green"
@@ -88,7 +91,7 @@ class ExcelPreviewModule:
             elif enable_pallet:
                 # Проверяем наличие веса через координатор
                 has_weight = True
-                if hasattr(self, 'coordinator') and self.coordinator:
+                if self.coordinator is not None:
                     has_weight = self.coordinator.get_weight_status()
                 
                 # Если нет веса и включен режим паллеты - показываем лист "БезВеса"
@@ -106,7 +109,8 @@ class ExcelPreviewModule:
             else:
                 return "Поддон"
             
-    def _get_system_printers(self):
+    @staticmethod
+    def _get_system_printers():
         try:
             import win32print
             printers = win32print.EnumPrinters(2)
@@ -128,7 +132,7 @@ class ExcelPreviewModule:
             
             # Определяем цех
             workshop = "1"
-            if hasattr(self, 'coordinator') and self.coordinator:
+            if self.coordinator is not None:
                 workshop = self.coordinator.get_workshop()
             
             # Выбираем файл в зависимости от цеха
@@ -143,9 +147,7 @@ class ExcelPreviewModule:
             
     def reload_window(self):
         """Перезагружает окно предпросмотра"""
-        if (hasattr(self, 'preview_window') and 
-            self.preview_window is not None and 
-            self.preview_window.winfo_exists()):
+        if self.preview_window is not None and self.preview_window.winfo_exists():
             
             self.preview_window.destroy()
             self.show_preview_window()
@@ -164,9 +166,7 @@ class ExcelPreviewModule:
             )
             
             # Обновляем заголовок окна если оно открыто
-            if (hasattr(self, 'preview_window') and 
-                self.preview_window is not None and 
-                self.preview_window.winfo_exists()):
+            if self.preview_window is not None and self.preview_window.winfo_exists():
                 
                 self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
                 self.update_preview()
@@ -180,14 +180,13 @@ class ExcelPreviewModule:
             self.sheet_name = self.get_sheet_for_preview(
                 workshop, enable_pallet, multitype_mode
             )
-            
-            if (hasattr(self, 'preview_window') and 
-                self.preview_window is not None and 
-                self.preview_window.winfo_exists()):
+
+            if self.preview_window is not None and self.preview_window.winfo_exists():
                 
                 self.preview_window.title(f"Предпросмотр Excel - {self.sheet_name}")
                 self.update_preview()
-                
+
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменения любых настроек от координатора"""
         if self.coordinator and hasattr(self.coordinator, 'get_archive_status'):
@@ -195,18 +194,19 @@ class ExcelPreviewModule:
             self.archive_enabled = (status == "on")
             has_weight = self.coordinator.get_weight_status()
 
+    # noinspection PyPackageRequirements,PyUnusedImports
     def excel_to_image_simple(self, excel_path, sheet_name):
         """Скриншот области печати Excel"""
+        import win32com.client
+        import pythoncom
+        from PIL import ImageGrab
+        import time
+        import win32gui
+        import win32api
+        # все эти импорты нужны для вызываемых функций
         pythoncom_initialized = False
         excel = None
         try:
-            import win32com.client
-            import pythoncom
-            from PIL import ImageGrab
-            import time
-            import win32gui
-            import win32api
-            
             pythoncom.CoInitialize()
             pythoncom_initialized = True
             
@@ -320,9 +320,10 @@ class ExcelPreviewModule:
             # Устанавливаем зум
             excel.ActiveWindow.Zoom = zoom_level
             
-        except Exception as e:
+        except Exception:
             excel.ActiveWindow.Zoom = 90  # fallback
 
+    # noinspection PyPackageRequirements,PyUnusedLocal
     def _capture_excel_screenshot(self, excel, sheet_name):
         """Делает скриншот окна Excel"""
         try:
@@ -374,7 +375,8 @@ class ExcelPreviewModule:
         except Exception as e:
             print(f"Ошибка захвата скриншота: {e}")
             return None
-            
+
+    # noinspection PyPackageRequirements,PyUnusedLocal
     def _get_print_area_pixel_bounds(self, excel, worksheet, excel_hwnd):
         """Возвращает границы области печати в пикселях экрана"""
         try:
@@ -434,14 +436,15 @@ class ExcelPreviewModule:
             table_right = table_left + width_px
             table_bottom = table_top + height_px         
             
-            return (table_left, table_top, table_right, table_bottom)
+            return table_left, table_top, table_right, table_bottom
             
         except Exception as e:
             print(f"Ошибка расчета границ области печати: {e}")
             import traceback
             traceback.print_exc()
             return None
-            
+
+    # noinspection PyPackageRequirements
     def _calculate_screenshot_coordinates(self, excel_hwnd):
         """Рассчитывает координаты для скриншота"""
         try:
@@ -480,9 +483,9 @@ class ExcelPreviewModule:
             table_right = min(screen_width, table_right)
             table_bottom = min(screen_height, table_bottom)
                         
-            return (table_left, table_top, table_right, table_bottom)
+            return table_left, table_top, table_right, table_bottom
             
-        except Exception as e:
+        except Exception:
             return None
 
     def _close_excel(self, excel):
@@ -519,7 +522,8 @@ class ExcelPreviewModule:
             # Принудительное завершение процессов
             self._kill_excel_processes()
             
-    def _kill_excel_processes(self):
+    @staticmethod
+    def _kill_excel_processes():
         """Принудительно завершает процессы Excel"""
         try:
             import psutil
@@ -617,12 +621,11 @@ class ExcelPreviewModule:
                 font=('Arial', 10)
             )
 
+    # noinspection PyUnusedLocal
     def show_preview_window(self):
         """Открывает окно предпросмотра"""
         # Если окно уже открыто - поднимаем его
-        if (hasattr(self, 'preview_window') and 
-            self.preview_window is not None and 
-            self.preview_window.winfo_exists()):
+        if self.preview_window is not None and self.preview_window.winfo_exists():
             
             self.preview_window.lift()
             self.preview_window.focus_force()
@@ -836,7 +839,8 @@ class ExcelPreviewModule:
         except Exception as e:
             self.status_label.config(text=f"❌ {str(e)[:40]}", foreground="red")
             
-    def _get_context_from_sheet_name(self, sheet_name):
+    @staticmethod
+    def _get_context_from_sheet_name(sheet_name):
         """Определяет параметры архивации по названию листа"""
         if sheet_name == "Лист для коробки":
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": False}
@@ -864,7 +868,7 @@ class ExcelPreviewModule:
             
             if success:
                 # Временно показываем статус
-                if hasattr(self, 'status_label'):
+                if self.status_label is not None:
                     self.status_label.config(
                         text="Настройки печати сохранены", 
                         foreground="green"
@@ -872,7 +876,7 @@ class ExcelPreviewModule:
                     # Возвращаем исходный статус через 3 секунды
                     self.preview_window.after(3000, self._restore_status)
             else:
-                if hasattr(self, 'status_label'):
+                if self.status_label is not None:
                     self.status_label.config(
                         text="Ошибка сохранения настроек", 
                         foreground="red"
@@ -880,7 +884,7 @@ class ExcelPreviewModule:
                     
         except Exception as e:
             print(f"Ошибка сохранения принтеров: {e}")
-            if hasattr(self, 'status_label'):
+            if self.status_label is not None:
                 self.status_label.config(
                     text=f"Ошибка: {str(e)[:30]}", 
                     foreground="red"
@@ -888,7 +892,7 @@ class ExcelPreviewModule:
     
     def _restore_status(self):
         """Восстанавливает исходный статус если нет ошибок"""
-        if hasattr(self, 'status_label'):
+        if self.status_label is not None:
             current_text = self.status_label.cget("text")
             # Восстанавливаем только если это был временный статус сохранения
             if "Настройки печати сохранены" in current_text:
@@ -987,6 +991,7 @@ class ExcelPreviewModule:
                     ws.Activate()
                     
                     # Настраиваем область печати
+                    # noinspection PyUnusedLocal
                     print_area = None
                     try:
                         print_area_str = ws.PageSetup.PrintArea
@@ -999,13 +1004,13 @@ class ExcelPreviewModule:
                     
                     print_area.Select()
                     time.sleep(0.5)
-                    
+
                     # Печатаем на текущем принтере по умолчанию
                     import time
-                    for i in range(copies):
+                    for copy_num in range(copies):
                         ws.PrintOut(ActivePrinter=printer_name)
-                        if i < copies - 1:  # Не ждать после последней копии
-                            time.sleep(0.5)  # Полсекунды на обработку
+                        if copy_num < copies - 1:
+                            time.sleep(0.5)
                     
                     # Закрываем Excel для этого принтера
                     wb.Close(SaveChanges=False)
@@ -1024,13 +1029,12 @@ class ExcelPreviewModule:
                     continue
                 finally:
                     # Гарантированное закрытие
-                    if wb:
+                    if wb is not None:  # теперь безопасно
                         try:
                             wb.Close(SaveChanges=False)
                         except:
                             pass
-                    
-                    if excel:
+                    if excel is not None:
                         try:
                             excel.Quit()
                         except:
@@ -1069,17 +1073,16 @@ class ExcelPreviewModule:
             
         finally:
             # Гарантированное закрытие
-            try:
-                if wb:
+            if wb is not None:  # теперь безопасно
+                try:
                     wb.Close(SaveChanges=False)
-            except:
-                pass
-            
-            try:
-                if excel:
+                except:
+                    pass
+            if excel is not None:
+                try:
                     excel.Quit()
-            except:
-                pass
+                except:
+                    pass
             
             # Явно удаляем объекты
             try:
@@ -1131,7 +1134,7 @@ class ExcelPreviewModule:
         # Если sheet_name не установлен, используем лист для коробки цеха 1 как fallback
         if self.sheet_name is None:
             workshop = "1"
-            if hasattr(self, 'coordinator') and self.coordinator:
+            if self.coordinator is not None:
                 workshop = self.coordinator.get_workshop()
             self.sheet_name = self.get_sheet_for_preview(workshop, False, False)
         
@@ -1155,8 +1158,7 @@ class ExcelPreviewModule:
 
     def on_close_preview(self):
         """Обработчик закрытия окна предпросмотра"""
-        if (hasattr(self, 'preview_window') and 
-            self.preview_window is not None):
+        if self.preview_window is not None and self.preview_window.winfo_exists():
             
             # Уничтожаем окно
             self.preview_window.destroy()
