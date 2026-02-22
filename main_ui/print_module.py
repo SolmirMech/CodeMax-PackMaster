@@ -473,7 +473,7 @@ class PrintModule:
                 self.connected_roll_module.roll_num_var.set(roll)
                 
                 # Обновляем превью и печатаем
-                self.preview_module.update_preview_displays()
+                self.preview_module._update_from_connected_roll_module()
                 self._print_standard_label(copies)             
             
             # Восстанавливаем оригинальные данные
@@ -485,6 +485,7 @@ class PrintModule:
                 text=f"Автопечать завершена: {total_combinations} комбинаций × {copies} копий", 
                 foreground="green"
             )
+            self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
             
         except Exception as e:
             self.preview_module.status_label.config(text=f"Ошибка автопечати: {e}", foreground="red")
@@ -494,6 +495,7 @@ class PrintModule:
         printer_name = self._find_printer()
         if not printer_name:
             self.preview_module.status_label.config(text="Принтер не найден!", foreground="red")
+            self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
             return
         
         if self.selected_preview == "roll":
