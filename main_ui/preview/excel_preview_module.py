@@ -838,13 +838,15 @@ class ExcelPreviewModule:
                 
         except Exception as e:
             self.status_label.config(text=f"❌ {str(e)[:40]}", foreground="red")
-            
+
     @staticmethod
     def _get_context_from_sheet_name(sheet_name):
         """Определяет параметры архивации по названию листа"""
         if sheet_name == "Лист для коробки":
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": False}
         elif sheet_name == "Лист для паллеты":
+            return {"workshop": "1", "enable_pallet": True, "multitype_mode": False}
+        elif sheet_name == "БезВеса":
             return {"workshop": "1", "enable_pallet": True, "multitype_mode": False}
         elif sheet_name == "Лист много видов":
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}

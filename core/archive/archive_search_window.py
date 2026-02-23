@@ -1,19 +1,28 @@
 # core/archive/archive_search_window.py
 import tkinter as tk
-from tkinter import ttk, StringVar
+from tkinter import ttk, StringVar, messagebox
 import os
 from core.archive.archive_manager import ArchiveManager
 
+
+# noinspection PyTypeChecker
 class ArchiveSearchWindow:
     """Окно поиска и восстановления архивных поддонов"""
     
     def __init__(self, parent, order_processor, config_manager=None):
+        self.status_var = None
+        self.delete_btn = None
+        self.restore_btn = None
+        self.tree = None
+        self.product_var = None
+        self.pallet_var = None
+        self.order_var = None
+        self.window = None
         self.parent = parent
         self.order_processor = order_processor
         
         self.config_manager = config_manager
-        config = self.config_manager
-        self.archive_manager = ArchiveManager(config)
+        self.archive_manager = ArchiveManager(config_manager)
         
         self.selected_pallet = None
         self.create_window()
@@ -214,41 +223,48 @@ class ArchiveSearchWindow:
             
         except Exception as e:
             self.status_var.set(f"Ошибка поиска: {str(e)}")
-            
+
+    # noinspection SpellCheckingInspection
     def _get_all_archives(self):
         """Получает все архивы для отображения"""
         archive = self.archive_manager.config.get_pallet_archive()
         archives = archive.get("pallets", [])
-        
+
         result = []
         for archive_data in archives:
             basic_fields = archive_data.get("basic_fields", {})
             workshop = archive_data.get("workshop", "1")
             archive_type = archive_data.get("archive_type", "box")
             sheet_name = archive_data.get("sheet_name", "")
-            
+
             # Определяем тип для отображения
             type_display = self._get_archive_type_display(workshop, archive_type)
-            
+
             if workshop == "1":
-                order_num = basic_fields.get("D8", "—")
+                # Для noweight номер заказа в E9, дата в E37
+                if archive_type == "noweight":
+                    order_num = basic_fields.get("E9", "—")
+                    date = basic_fields.get("E37", "—")  # ← дата для noweight
+                else:
+                    order_num = basic_fields.get("D8", "—")
+                    date = basic_fields.get("F37", "—")  # ← дата для остальных листов цеха 1
+
                 product = basic_fields.get("D10", "—")
-                date = basic_fields.get("F37", "—")
                 pallet_num = "—"
             else:
                 order_num = basic_fields.get("D6", "—")
                 product = basic_fields.get("D8", "—")
                 date = basic_fields.get("D37", "—")
                 pallet_num = basic_fields.get("D5", "—")
-            
+
             product_preview = str(product)[:50] + "..." if len(str(product)) > 50 else str(product)
-            
+
             # Формируем строку для отображения с информацией о листе
             if pallet_num != "—":
                 display = f"{order_num} | №{pallet_num} | {date} | {type_display} | {product_preview}"
             else:
                 display = f"{order_num} | {date} | {type_display} | {product_preview}"
-            
+
             result.append({
                 "display": display,
                 "archive_data": archive_data,
@@ -260,26 +276,30 @@ class ArchiveSearchWindow:
                 "workshop": workshop,
                 "type_display": type_display
             })
-        
+
         return result
 
-    def _get_archive_type_display(self, workshop, archive_type):
+    # noinspection SpellCheckingInspection
+    @staticmethod
+    def _get_archive_type_display(workshop, archive_type):
         """Возвращает понятное название типа архива"""
         if workshop == "1":
             if archive_type == "box":
                 return "Коробка (цех 1)"
             elif archive_type == "pallet":
                 return "Поддон (цех 1)"
+            elif archive_type == "noweight":
+                return "Без веса (цех 1)"
             elif archive_type == "multitype":
                 return "Много видов (цех 1)"
         else:  # workshop == "2"
             if archive_type == "box":
                 return "Поддон (цех 2)"
-            elif archive_type == "pallet":
+            elif archive_type == "pallet_list":
                 return "Список поддонов (цех 2)"
             elif archive_type == "multitype":
                 return "Много видов (цех 2)"
-        
+
         return f"{archive_type} (цех {workshop})"
 
     def _search_archives(self, order="", pallet="", product=""):
@@ -314,7 +334,8 @@ class ArchiveSearchWindow:
         self.pallet_var.set("")
         self.product_var.set("")
         self.status_var.set("Поля очищены")
-    
+
+    # noinspection PyUnusedLocal
     def on_pallet_selected(self, event):
         """Обрабатывает выбор поддона в таблице"""
         selection = self.tree.selection()
@@ -357,7 +378,7 @@ class ArchiveSearchWindow:
             workshop = archive_data.get("workshop", "2")
             
             # Получаем правильный путь к файлу Excel для этого цеха
-            excel_path = self.archive_manager._get_excel_path(workshop)
+            excel_path = self.archive_manager.get_excel_path(workshop)
             
             # Проверяем существование файла
             if not excel_path or not os.path.exists(excel_path):
@@ -384,7 +405,7 @@ class ArchiveSearchWindow:
                     )
                     
                     if response:
-                        assets_file = config.get_asset_path(filename)
+                        assets_file = self.config_manager.get_asset_path(filename)
                         
                         if os.path.exists(assets_file):
                             import shutil

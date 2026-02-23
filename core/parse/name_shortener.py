@@ -3,17 +3,9 @@
 Содержит логику из dm_processor_right.shorthen_name()
 """
 
-import re
 import os
-import json
+import re
 from typing import Dict
-
-# Импортируем ConfigManager для доступа к настройкам
-try:
-    from core.config_manager import ConfigManager
-except ImportError:
-    # Для случая, если модуль запускается отдельно
-    ConfigManager = None
 
 
 class NameShortener:
@@ -24,6 +16,7 @@ class NameShortener:
         # Подписываемся на общие уведомления от координатора
         coordinator.subscribe(self._reload_rules)
 
+    # noinspection PyUnusedLocal
     def _reload_rules(self, context=None):
         """Перезагружает правила при любом уведомлении от координатора"""
         self.custom_replacements = self._load_shortening_rules()
@@ -93,6 +86,7 @@ class NameShortener:
         text = re.sub(r"\d+[*хx]\d+", "", text)  # Удаляем размеры
         text = text.replace("-", " ")
 
+        # noinspection SpellCheckingInspection
         replacements = {
             "негазированная": "негаз",
             "газированная": "газ",

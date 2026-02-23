@@ -4,8 +4,12 @@
 Определяет КАКИЕ данные в КАКИЕ ячейки помещать.
 Полностью декларативный, не содержит логики экспорта.
 """
+# noinspection PyUnusedImports
+# Эти импорты нужны в дальнейших модулях
 from typing import Dict, List, Any, Optional, Tuple
 
+# noinspection PyUnusedImports
+# Эти импорты нужны в дальнейших модулях
 from .cell_mappers_models import (
     DataType, HorizontalAlignment, VerticalAlignment,
     CellFormat, CellMapping, DynamicSection, SheetMapping
@@ -28,6 +32,7 @@ from .cell_mappers_data import (
 )
 
 
+# noinspection GrazieInspection,SpellCheckingInspection
 class CellMappingRegistry:
     """
     Реестр всех маппингов по цехам и типам листов.
@@ -336,6 +341,8 @@ def get_workshop1_pallet_mapping() -> SheetMapping:
     """Краткая функция для получения маппинга поддона 1 цеха"""
     return CellMappingRegistry.get_workshop1_pallet_mapping()
 
+
+# noinspection SpellCheckingInspection
 def get_workshop1_noweight_mapping() -> SheetMapping:
     """Краткая функция для получения маппинга без веса 1 цеха"""
     return CellMappingRegistry.get_workshop1_noweight_mapping()
