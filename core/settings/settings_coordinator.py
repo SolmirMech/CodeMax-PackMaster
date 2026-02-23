@@ -1,7 +1,8 @@
 # settings_coordinator.py
-import os
 from typing import Callable
+
 from core.config_manager import ConfigManager
+
 
 class SettingsCoordinator:
     """Координатор настроек цеха и шаблонов шрифтов"""
@@ -15,6 +16,9 @@ class SettingsCoordinator:
         return cls._instance
     
     def __init__(self):
+        self._current_archive_status = None
+        self._current_font_template = None
+        self._current_workshop = None
         if self._initialized:
             return
             
@@ -49,16 +53,18 @@ class SettingsCoordinator:
                 self._save_font_template_setting()
                 
         except Exception as e:
-            print(f"Ошибка загрузки начальных настроек: {e}") 
+            print(f"Ошибка загрузки начальных настроек: {e}")
 
-    def _save_font_template_setting(self):
+    def _save_font_template_setting(self) -> bool:
         """Сохраняет настройку шаблона шрифтов"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json") or {}
             settings["last_font_template"] = self._current_font_template
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
+            return success  # ← возвращаем результат
         except Exception as e:
             print(f"Ошибка сохранения шаблона шрифтов: {e}")
+            return False  # ← возвращаем False при ошибке
             
     def check_weight_status(self, roll_module):
         """Проверяет наличие веса и уведомляет подписчиков"""
@@ -148,7 +154,8 @@ class SettingsCoordinator:
         """Возвращает текущий шаблон шрифтов"""
         return self._current_font_template
     
-    def get_workshop_template_mapping(self) -> dict:
+    @staticmethod
+    def get_workshop_template_mapping() -> dict:
         """Возвращает соответствие цехов и шаблонов"""
         return {
             "1": "1_цех",
@@ -169,14 +176,16 @@ class SettingsCoordinator:
                 self._current_archive_status = new_status
                 self.notify_subscribers()
         except Exception as e:
-            print(f"Ошибка обновления статуса архивации: {e}")                       
-    
-    def _save_workshop_setting(self):
+            print(f"Ошибка обновления статуса архивации: {e}")
+
+    def _save_workshop_setting(self) -> bool:
         """Сохраняет настройку цеха"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json") or {}
             settings["workshop"] = self._current_workshop
             success = self.config_manager.save_json_settings("shared_utils.json", settings)
+            return success
         except Exception as e:
             print(f"Ошибка сохранения цеха: {e}")
+            return False
     

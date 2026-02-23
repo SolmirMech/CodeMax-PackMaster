@@ -11,24 +11,57 @@ def get_default_printer():
     return win32print.GetDefaultPrinter()
 
 
+# noinspection SpellCheckingInspection,PyTypeChecker
 class SettingsDialog:
     """Диалог настроек"""
+
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.coordinator = coordinator
         self.parent_manager = None
         self.last_status = ""
-        
-        # Инициализация переменных
-        self.xml_folder_path = tk.StringVar(value="")
-        self.excel_folder_path = ""
-        self.status_var = tk.StringVar(value="")
-        self.workshop_var = tk.StringVar(value="1")
-        self.archive_status_var = tk.StringVar(value="on")
-        self.paper_width_var = tk.StringVar(value="")
-        self.paper_height_var = tk.StringVar(value="")
+
+        # Инициализация UI элементов (будут созданы в create_ui)
         self.main_frame = None
+        self.message_status_label = None
+
+        # === НАСТРОЙКИ ПЕЧАТИ ===
+        self.printer_var = tk.StringVar(value="")  # Выбранный принтер
+
+        # === СПИСКИ СОТРУДНИКОВ ===
+        self.cutter_entries = []  # Поля ввода резчиков
+        self.packer_entries = []  # Поля ввода упаковщиков
+
+        # === НАСТРОЙКИ ЦЕХА И РАЗМЕРОВ ===
+        self.workshop_var = tk.StringVar(value="1")  # Выбор цеха
+        self.paper_width_var = tk.StringVar(value="")  # Ширина этикетки
+        self.paper_height_var = tk.StringVar(value="")  # Высота этикетки
+        self.size_label = None  # Метка с размером этикетки
+
+        # === ПУТИ К ПАПКАМ ===
+        self.xml_folder_path = tk.StringVar(value="")  # Папка для XML
+        self.excel_folder_path = ""  # Папка для Excel
+
+        # === НАСТРОЙКИ НОМЕРА ЗАКАЗА ===
+        self.settings_prefix_var = tk.StringVar(value="")  # Префикс (Ф)
+        self.settings_suffix_var = tk.StringVar(value="")  # Суффикс (/5)
+
+        # === ДОПОЛНИТЕЛЬНЫЕ ЭЛЕМЕНТЫ ===
+        self.elements_status_var = tk.StringVar(value="Скрыть")  # Показать/скрыть доп. элементы
+        self.qr_var = tk.BooleanVar(value=True)  # Печать QR-кода
+
+        # === СТАТУСЫ И СООБЩЕНИЯ ===
+        self.status_var = tk.StringVar(value="")  # Статусная строка с путями
+        self.message_status_var = tk.StringVar(value="")  # Временные сообщения
+        self.status_callback = None  # Колбэк для обновления статуса
+
+        # === АРХИВАЦИЯ ===
+        self.archive_status_var = tk.StringVar(value="on")  # Вкл/выкл архивацию
+
+        # === ОКНО ВТУЛКИ ===
+        self.weight_orders_window = None  # Ссылка на окно втулки
+        self.weight_orders_module = None  # Модуль втулки
 
     def set_parent_manager(self, manager):
         """Устанавливает ссылку на родительский менеджер"""
@@ -304,7 +337,7 @@ class SettingsDialog:
         
     def _on_qr_toggled(self):
         """Обработчик изменения галочки QR-кода"""
-        if hasattr(self, 'coordinator') and self.coordinator:
+        if self.coordinator is not None:
             self.coordinator.notify_subscribers()
         
     def open_data_folder(self):
@@ -337,16 +370,17 @@ class SettingsDialog:
             else:
                 self.show_message(f"Папка шаблонов не найдена: {assets_dir}", "red")
         except Exception as e:
-            self.show_message(f"Ошибка открытия папки шаблонов: {str(e)}", "red")        
-        
+            self.show_message(f"Ошибка открытия папки шаблонов: {str(e)}", "red")
+
+    # noinspection PyUnusedLocal
     def clear_message_after_delay(self, delay_ms=5000):
         """Очищает сообщение через указанное время"""
-        if hasattr(self, 'message_status_var') and self.message_status_var:
+        if self.message_status_var is not None:
             self.message_status_var.set("")
 
     def show_message(self, message, color="blue"):
         """Показывает сообщение в строке статуса и очищает через 5 секунд"""
-        if hasattr(self, 'message_status_var') and self.message_status_var:
+        if self.message_status_var is not None:
             self.message_status_var.set(message)
             # Настраиваем цвет
             if color == "blue":
@@ -362,7 +396,7 @@ class SettingsDialog:
     def open_weight_orders_window(self):
         """Открывает окно для работы с втулками"""
         # Проверяем, есть ли уже открытое окно
-        if hasattr(self, 'weight_orders_window') and self.weight_orders_window and self.weight_orders_window.winfo_exists():
+        if self.weight_orders_window is not None and self.weight_orders_window.winfo_exists():
             self.weight_orders_window.lift()
             return
 
@@ -486,9 +520,10 @@ class SettingsDialog:
         
     def update_status(self, message, color="green"):
         """Обновляет статус через колбэк"""
-        if hasattr(self, 'status_callback') and self.status_callback:
-            self.status_callback(message, color)        
-        
+        if self.status_callback is not None:
+            self.status_callback(message, color)
+
+    # noinspection PyUnusedLocal
     def _on_settings_changed(self, context=None):
         """Обрабатывает изменения настроек от координатора"""
         
@@ -499,6 +534,7 @@ class SettingsDialog:
             self.workshop_var.set(workshop)
             self._update_paper_sizes()
 
+    # noinspection PyUnusedLocal
     def _on_workshop_changed(self, *args):
         """Обрабатывает изменение выбора цеха"""
         self._update_paper_sizes()
@@ -545,7 +581,7 @@ class SettingsDialog:
             self.config_manager.save_json_settings("shared_utils.json", settings)
             self.update_folder_status()
             # Уведомляем подписчиков об изменении XML папки
-            if hasattr(self, 'coordinator') and self.coordinator:
+            if self.coordinator is not None:
                 self.coordinator.notify_subscribers()
 
     def save_excel_folder_path(self):
@@ -556,7 +592,7 @@ class SettingsDialog:
             self.config_manager.save_json_settings("shared_utils.json", settings)
             
             # Можно добавить нотификацию
-            if hasattr(self, 'coordinator') and self.coordinator:
+            if self.coordinator is not None:
                 self.coordinator.notify_subscribers()
                 
         except Exception as e:

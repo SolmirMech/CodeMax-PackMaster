@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 
+
+# noinspection SpellCheckingInspection,PyTypeChecker
 class FontSettingsDialog:
     """Окно настроек размеров шрифтов"""
     
@@ -155,28 +157,29 @@ class FontSettingsDialog:
         try:
             # Сохраняем настройки шрифтов
             success = self._save_font_settings()
-            
+
             if success:
                 # Сохраняем выбранный шаблон в настройки приложения
                 self.coordinator.set_font_template(self.current_template)
-                
+
                 # Обновляем превью
                 self.preview_printer.update_font_settings(self.font_settings)
                 self.preview_printer.update_preview_displays()
-                
+
                 self.last_status = "✅ Настройки шрифтов сохранены"
                 return True
             else:
                 self.last_status = "❌ Не удалось сохранить настройки шрифтов"
                 return False
-                
-        except ValueError as e:
+
+        except ValueError:
             self.last_status = "❌ Ошибка: Некорректные значения в настройках"
             return False
-        except Exception as e:
-            self.last_status = f"❌ Ошибка сохранения: {e}"
-            return False        
-        
+        except Exception as _:
+            self.last_status = f"❌ Ошибка сохранения"
+            return False
+
+    # noinspection PyUnusedLocal
     def _on_coordinator_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
         if not self._initialized:
@@ -267,7 +270,7 @@ class FontSettingsDialog:
         
     def update_template_list(self):
         """Обновляет список шаблонов в комбобоксе"""
-        # Загружаем текущие настройки чтобы получить список шаблонов
+        # Загружаем текущие настройки, чтобы получить список шаблонов
         all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
         
         # Если файл пустой, создаем дефолтный шаблон
@@ -354,7 +357,8 @@ class FontSettingsDialog:
             self.show_status(f"Шаблон '{template_name}' сохранен", "info")
         else:
             self.show_status("Не удалось сохранить шаблон", "error")
-            
+
+    # noinspection PyUnusedLocal
     def on_template_changed(self, event):
         """При изменении выбора шаблона в комбобоксе"""
         new_template = self.template_var.get()

@@ -6,6 +6,7 @@ from .lists_settings_dialog import ListsSettingsDialog
 from .font_settings_dialog import FontSettingsDialog
 
 
+# noinspection SpellCheckingInspection,PyTypeChecker
 class SettingsManager:
     def __init__(self, parent, preview_export_module, config_manager=None, coordinator=None):
         self.parent = parent
