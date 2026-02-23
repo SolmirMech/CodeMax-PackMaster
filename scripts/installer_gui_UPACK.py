@@ -194,7 +194,7 @@ class InstallerGUI:
         self.status_label.config(text="✅ Сборка успешно завершена!")
 
         # Закрываем окно через 5 секунд
-        self.root.after(5000, self.root.destroy)
+        self.root.after(3000, self.root.destroy)
 
     def show_error(self, error_text):
         """Показывает ошибку в интерфейсе"""

@@ -1,10 +1,10 @@
 ; CodeMax-CutMaster.iss
 [Setup]
 AppName=CodeMax-PackMaster
-AppVersion=1.0
-AppVerName=CodeMax-PackMaster 1.0
+AppVersion=1.1
+AppVerName=CodeMax-PackMaster 1.1
 AppPublisher=SolmirMech
-AppCopyright=Copyright © 2025 SolmirMech. Все права защищены.
+AppCopyright=Copyright © 2026 SolmirMech. Все права защищены.
 DefaultDirName={pf}\CodeMax-PackMaster
 DefaultGroupName=CodeMax-PackMaster
 OutputBaseFilename=CodeMax-PackMaster_Setup
