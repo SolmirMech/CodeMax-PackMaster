@@ -1,14 +1,14 @@
+import os
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image, ImageTk
-from core.pdf_utils import PDFTemplateFiller
-from core.settings.font_settings_dialog import FontSettingsDialog
-import os
-import json
-from datetime import datetime
-import time
 from typing import Dict
 
+from PIL import Image, ImageTk
+
+from core.pdf_utils import PDFTemplateFiller
+from core.settings.font_settings_dialog import FontSettingsDialog
+
+# noinspection SpellCheckingInspection
 TRACKING_CONFIG = {
     # Основные данные (всегда отслеживаются)
     'BASIC': {
@@ -70,6 +70,7 @@ TRACKING_CONFIG = {
 }
 
 # Добавляем конфигурацию данных для превью
+# noinspection SpellCheckingInspection
 DATA_MAPPING_CONFIG = {
     # Основные данные
     'BASIC': {
@@ -220,6 +221,8 @@ DATA_MAPPING_CONFIG = {
     }
 }
 
+
+# noinspection PyTypeChecker, SpellCheckingInspection
 class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
@@ -227,26 +230,40 @@ class RollPreview:
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
-        self._update_template_paths()
-        self.box_template_path = self.config_manager.get_asset_path("box.pdf")
-        
+
+        # Данные (нужны для _update_template_paths)
         self.current_data = {}
-        self.roll_pdf_filler = None
-        self.box_pdf_filler = None
-        self.selected_preview = "roll"  # "roll" или "box"
-        self.font_settings = None
-        
-        self.connected_roll_module = None
-        self._active_tracking_vars = []
-        # Инициализируем состояния
         self.rosinka_enabled = False
         self.weight_enabled = False
         self._updating_paths = False
         self.product_gtin = ""
         self.original_gtin = ""
-        self.preview_timer_id = None  # Добавляем таймер
-        self.last_total_value = ""    # Для отслеживания изменений        
-        
+
+        # PDF и шаблоны
+        self._update_template_paths()
+        self.box_template_path = self.config_manager.get_asset_path("box.pdf")
+
+        # Остальные атрибуты
+        self.roll_pdf_filler = None
+        self.box_pdf_filler = None
+        self.selected_preview = "roll"
+        self.font_settings = None
+
+        self.connected_roll_module = None
+        self._active_tracking_vars = []
+        self.last_total_value = ""
+
+        # UI элементы и таймеры
+        self._update_timer = None
+        self.preview_timer_id = None
+        self.roll_canvas_frame = None
+        self.roll_canvas = None
+        self.box_canvas_frame = None
+        self.box_canvas = None
+        self.status_label = None
+        self.tirazh_label = None
+        self.print_module = None
+
         self.create_preview_ui()
         self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -284,7 +301,7 @@ class RollPreview:
             
     def cancel_update_timer(self):
         """Безопасно отменяет таймер обновления"""
-        if hasattr(self, '_update_timer') and self._update_timer:
+        if self._update_timer is not None:
             try:
                 self.parent.after_cancel(self._update_timer)
             except:
@@ -303,13 +320,14 @@ class RollPreview:
             self.current_data['gtin'] = gtin
         else:
             self.product_gtin = ""
-            self.current_data.pop('gtin', None)      
-        
+            self.current_data.pop('gtin', None)
+
+    # noinspection PyUnusedLocal
     def _on_settings_changed(self, context=None):
         """Обрабатывает изменения от координатора"""
         try:
             # Получаем состояние галочки Росинка из roll_module
-            if hasattr(self, 'connected_roll_module') and self.connected_roll_module:
+            if self.connected_roll_module is not None:
                 if hasattr(self.connected_roll_module, 'rosinka_var'):
                     self.rosinka_enabled = self.connected_roll_module.rosinka_var.get()
                 else:
@@ -407,7 +425,7 @@ class RollPreview:
         
     def _cleanup_tracking(self):
         """Очищает все активные подписки на переменные"""
-        if hasattr(self, '_active_tracking_vars'):
+        if self._active_tracking_vars is not None:
             for var_name, var_obj, trace_id in self._active_tracking_vars:
                 try:
                     if var_name == 'product_text':
@@ -431,7 +449,7 @@ class RollPreview:
     def _update_template_paths(self):
         """Обновляет пути к шаблонам в зависимости от настроек"""
         # Защита от рекурсии
-        if hasattr(self, '_updating_paths') and self._updating_paths:
+        if getattr(self, '_updating_paths', False):
             return
         self._updating_paths = True
         
@@ -446,13 +464,11 @@ class RollPreview:
             
             # Получаем заказчика из current_data
             customer = ""
-            if (hasattr(self, 'current_data') and 
-                self.current_data and 
-                'customer' in self.current_data):
+            if self.current_data and 'customer' in self.current_data:
                 customer = self.current_data.get('customer', '').lower()
             
             # Приоритет 1: Росинка (по галочке)
-            if hasattr(self, 'rosinka_enabled') and self.rosinka_enabled:
+            if self.rosinka_enabled:  # проверяет, равно ли True
                 self.roll_template_path = self.config_manager.get_asset_path("rosinka.pdf")
                 self.box_template_path = self.config_manager.get_asset_path("box.pdf")
             
@@ -492,7 +508,7 @@ class RollPreview:
         
     def print_selected_preview(self):
         """Печатает выбранное превью через print_module"""
-        if hasattr(self, 'print_module') and self.print_module:
+        if self.print_module is not None:
             self.print_module.print_label()
         else:
             self.status_label.config(text="Модуль печати не подключен", foreground="red")
@@ -581,10 +597,9 @@ class RollPreview:
         """Настраивает отслеживание только активных переменных"""
         if not self.connected_roll_module:
             return
-        
+
         # Инициализируем список активных подписок
-        if not hasattr(self, '_active_tracking_vars'):
-            self._active_tracking_vars = []
+        self._active_tracking_vars = []
         
         roll_module = self.connected_roll_module
         
@@ -598,12 +613,15 @@ class RollPreview:
                 # Проверяем условие (если есть)
                 should_track = True
                 if condition is not None:
-                    try:
-                        # Условия проверяются на self (RollPreview), а не на roll_module!
-                        should_track = condition(self)
-                    except Exception as e:
-                        print(f"Ошибка проверки условия для {var_name}: {e}")
-                        should_track = False
+                    if callable(condition):
+                        try:
+                            should_track = condition(self)
+                        except Exception as e:
+                            print(f"Ошибка проверки условия для {var_name}: {e}")
+                            should_track = False
+                    else:
+                        # Если condition не callable, используем его как булево значение
+                        should_track = bool(condition)
                 
                 if should_track:
                     # Получаем объект переменной из roll_module
@@ -627,6 +645,7 @@ class RollPreview:
         except Exception as e:
             print(f"Ошибка привязки к product_text: {e}")
 
+    # noinspection PyUnusedLocal
     def _on_product_text_modified(self, event=None):
         """Обрабатывает изменение текста изделия"""
         if (self.connected_roll_module and 
@@ -634,6 +653,7 @@ class RollPreview:
             self.connected_roll_module.product_text.edit_modified(False)
             self._update_from_connected_roll_module()
 
+    # noinspection PyUnusedLocal
     def _on_roll_data_changed(self, *args):
         """Немедленное обновление при изменениях"""
         # Отменяем предыдущий таймер
@@ -730,7 +750,7 @@ class RollPreview:
         self.selected_preview = preview_type
         
         # Синхронизируем выбор с preview_export модулем
-        if hasattr(self, 'print_module') and self.print_module:
+        if self.print_module is not None:
             self.print_module.selected_preview = preview_type
         
         # Визуальное выделение выбранного превью красной рамкой
@@ -802,7 +822,8 @@ class RollPreview:
         
         return data_map
         
-    def _format_number_with_spaces(self, number_str):
+    @staticmethod
+    def _format_number_with_spaces(number_str):
         """Форматирует число с пробелами между тысячами"""
         if not number_str or not str(number_str).strip():
             return ""
@@ -830,7 +851,8 @@ class RollPreview:
         except Exception as e:
             self.status_label.config(text=f"Ошибка обновления: {e}", foreground="red")
     
-    def _update_canvas_preview(self, canvas, preview_image):
+    @staticmethod
+    def _update_canvas_preview(canvas, preview_image):
         """Обновляет конкретное превью на canvas"""
         try:
             canvas_width = canvas.winfo_width()

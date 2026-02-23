@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-
+# noinspection SpellCheckingInspection
 class ConfigManager:
     def __init__(self):
         # Базовые пути

@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Any
 from core.parse.xml_order_parser import parse_xml
 
 
+# noinspection SpellCheckingInspection,PyTypeChecker
 class XMLDataManager:
     """
     Кэширующий менеджер данных для работы с XML-файлами заказов.
@@ -961,7 +962,7 @@ class XMLDataManager:
     
     def background_check(self, silent=False):
         """
-        ФОНОВАЯ ПРОВЕРКА ПАПКИ XML (ОБНОВЛЕНИЕ БАЗЫ)      
+        ФОНОВАЯ ПРОВЕРКА ПАПКИ XML (ОБНОВЛЕНИЕ БАЗЫ)
         
         Примечания:
         - Использует блокировку для потокобезопасности

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-# noinspection PyUnboundLocalVariable
+# noinspection PyUnboundLocalVariable,PyTypeChecker, SpellCheckingInspection
 class ExcelPreviewModule:
     """Модуль предпросмотра Excel файла"""
     

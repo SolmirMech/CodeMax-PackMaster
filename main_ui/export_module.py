@@ -4,7 +4,7 @@ import os
 from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOrdersExporter
 
 
-# noinspection PyUnusedLocal
+# noinspection PyUnusedLocal,PyTypeChecker, SpellCheckingInspection
 class ExportModule:
     """Модуль управления экспортом в Excel"""
     

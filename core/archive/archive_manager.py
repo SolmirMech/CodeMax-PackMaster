@@ -19,7 +19,7 @@ class ArchiveManager:
     }    
     
     def __init__(self, config_manager=None, coordinator=None, exporter=None):
-        self.config = config_manager or ConfigManager()
+        self.config = config_manager
         self.coordinator = coordinator
         self.exporter = exporter
         if coordinator and hasattr(coordinator, 'subscribe'):

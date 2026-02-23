@@ -93,6 +93,7 @@ FIELD_FORMATTING = {
 }
 
 # Добавляем список всех плейсхолдеров в начало класса
+# noinspection SpellCheckingInspection
 ALL_PLACEHOLDERS = [
     "$customer", "$product", "$onum", "$date", "$packer",
     "$brutto", "$netto", "$rol", "$tr", "$sx", "dia",
@@ -102,7 +103,7 @@ ALL_PLACEHOLDERS = [
     "$box_qr",
 ]
 
-
+# noinspection SpellCheckingInspection
 class PDFTemplateFiller:
     """Класс для заполнения PDF шаблонов с плейсхолдерами"""
     

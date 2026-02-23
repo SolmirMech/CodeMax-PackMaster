@@ -12,7 +12,7 @@ def get_default_printer():
     return win32print.GetDefaultPrinter()
 
 
-# noinspection PyNoneFunctionAssignment,PyProtectedMember
+# noinspection PyNoneFunctionAssignment,PyProtectedMember, SpellCheckingInspection
 class PrintModule:
     """Модуль управления печатью этикеток"""
     
