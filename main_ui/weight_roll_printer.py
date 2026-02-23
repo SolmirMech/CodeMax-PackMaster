@@ -6,86 +6,189 @@ from datetime import datetime
 from tkinter import ttk, StringVar, BooleanVar
 
 
-# noinspection SpellCheckingInspection,PyTypeChecker
+# noinspection SpellCheckingInspection,PyTypeChecker,PyUnusedLocal,PyProtectedMember
 class RollLabelPrinter:
     """Управление заказами с весом"""
+
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
-        self.last_tu_count = None
+        # ========== БАЗОВЫЕ СВЯЗИ ==========
         self.parent = parent
         self.config_manager = config_manager
         self.data_manager = data_manager
-        self.config_manager.ensure_packaging_tu_exists()
         self.coordinator = coordinator
 
+        # ========== ПОДКЛЮЧАЕМЫЕ МОДУЛИ ==========
         self.order_data_module = None
         self.preview_module = None
-        
-        order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
-        self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
-        self.order_suffix = StringVar(value=order_settings.get("suffix", "/5"))        
-        
-        # Переменные интерфейса и данных
-        self.show_manufacturer_var = BooleanVar(value=False)  # Показывать производителя
-        self.show_manufacturer_var.trace_add("write", self._on_producer_visibility_changed)
-        # Выбор производителя
+
+        # ========== ПЕРЕМЕННЫЕ ИНТЕРФЕЙСА (StringVar/BooleanVar) ==========
+        # Основные
+        self.order_prefix = StringVar(value="")
+        self.order_suffix = StringVar(value="")
+        self.order_number = StringVar(value="")
+        self.customer_var = StringVar(value="")
+        self.date_var = StringVar(value=datetime.now().strftime("%d.%m.%Y"))
+        self.date_emission_var = StringVar(value="")
+
+        # Производитель и продукт
         self.manufacturer_var = StringVar(value="")
         self.product_type_var = StringVar(value="")
-        self.manual_manufacturer_selection = False
-        self.manual_product_selection = False
-        self.customer_var = StringVar(value="")  # Наименование заказчика
-        self.gross_weight_kg_var = StringVar(value="")  # Вес ролика брутто в кг
-        self.net_weight_kg_var = StringVar(value="")  # Вес ролика нетто в кг (авторасчет)
-        self.order_number = StringVar(value="")  # Основной номер заказа
-        self.date_var = StringVar(value=datetime.now().strftime("%d.%m.%Y"))  # Дата изготовления
-        self.packer_var = StringVar(value="")  # ФИО упаковщика
-        self.quantity_var = StringVar(value="")  # Количество этикеток в одном ролике
-        self.sleeve_weight_var = StringVar(value="50")  # Вес втулки в граммах
-        self.winding_scheme_var = StringVar(value="7")  # Схема намотки
-        self.sleeve_diameter_var = StringVar(value="76")  # Диаметр втулки в мм
-        self.rolls_count_var = StringVar(value="1")  # Количество роликов в коробке
-        self.total_quantity_var = StringVar(value="")  # Общее количество этикеток (авторасчет)
-        self.total_gross_var = StringVar(value="")  # Общий вес коробки брутто в кг (авторасчет)
-        self.total_net_var = StringVar(value="")  # Общий вес коробки нетто в кг (авторасчет)
-        self.box_weight_var = StringVar(value="0.0")  # Вес пустой коробки в кг
-        self.box_size_var = StringVar(value="")  # Размер коробки (выбирается из списка)
-        self.date_emission_var = StringVar(value="") # Дата эмиссии кодов
-        # Раздел 2 цеха
-        self.cutter_var = StringVar(value="") # Резчик
-        self.roll_length = StringVar(value="") # Длина ролика
-        self.label_length_mm = StringVar(value="") # Длина этикетки
-        self.batch_num_var = StringVar(value="")  # № съёма
-        self.roll_num_var = StringVar(value="")   # № ролика  
-        self.streams_var = StringVar(value="")    # Кол-во ручьёв
-        self.stream_width_var = StringVar(value="")  # Ширина ручья в мм
-        self.xml_tu_number = ""
+        self.show_manufacturer_var = BooleanVar(value=False)
+
+        # Количество и вес
+        self.quantity_var = StringVar(value="")
+        self.rolls_count_var = StringVar(value="1")
+        self.total_quantity_var = StringVar(value="")
+
+        # Вес ролика
+        self.gross_weight_kg_var = StringVar(value="")
+        self.net_weight_kg_var = StringVar(value="")
+        self.sleeve_weight_var = StringVar(value="50")
+
+        # Вес коробки
+        self.box_weight_var = StringVar(value="0.0")
+        self.box_size_var = StringVar(value="")
+        self.total_gross_var = StringVar(value="")
+        self.total_net_var = StringVar(value="")
+
+        # Технические параметры
+        self.winding_scheme_var = StringVar(value="7")
+        self.sleeve_diameter_var = StringVar(value="76")
+        self.streams_var = StringVar(value="")
+        self.stream_width_var = StringVar(value="")
+        self.label_length_mm = StringVar(value="")
+
+        # Параметры 2 цеха
+        self.cutter_var = StringVar(value="")
+        self.roll_length = StringVar(value="")
+        self.batch_num_var = StringVar(value="")
+        self.roll_num_var = StringVar(value="")
+
+        # Росинка
+        self.rosinka_var = BooleanVar(value=False)
+        self.ros_podlo_var = StringVar(value="")
+        self.ros_size_var = StringVar(value="")
+
+        # Упаковщик
+        self.packer_var = StringVar(value="")
+
+        # Флаги интерфейса
+        self.shorten_text_var = BooleanVar(value=False)
+        self.show_weight_var = BooleanVar(value=False)
+
+        # ========== ДАННЫЕ И КЭШИ ==========
+        # Заказы
         self.cached_order_data = None
         self.cached_order_number = ""
-        # Флаг для оптимизации
+        self.multiple_orders_data = None
+        self.last_manual_order = ""
+        self.order_combobox_visible = False
+        self.xml_tu_number = ""
+
+        # Производители и ТУ
+        self.manufacturer_options = []
+        self.manufacturer_products_map = {}
+        self.manufacturer_full_data_map = {}
+        self.sorted_technical_specs = []
+        self.manufacturer = ""
+        self.last_tu_count = None
+
+        # Вес втулок
+        self.sleeve_weights = {}
+        self.parsed_sleeve_weights = {}
+
+        # Кэши для оптимизации
+        self._normalize_cache = {}
+
+        # ========== ФЛАГИ СОСТОЯНИЯ ==========
+        self.manual_manufacturer_selection = False
+        self.manual_product_selection = False
         self._skip_weight_calculation = False
+
+        # ========== ТАЙМЕРЫ ==========
         self._weight_timer = None
         self._quantity_timer = None
         self._length_timer = None
-        self._normalize_cache = {}
-        self.manufacturer_full_data_map = {}  # Новая структура загрузки производителей
-        # Росинка
-        self.rosinka_var = BooleanVar(value=False)
-        self.ros_podlo_var = StringVar(value="")  # Подложка для Росинки
-        self.ros_size_var = StringVar(value="")  # Размер этикетки для Росинки
-                    
+
+        # ========== UI ЭЛЕМЕНТЫ (будут созданы в create_ui) ==========
+        # Комбобоксы
+        self.manufacturer_combo = None
+        self.product_combo = None
+        self.packer_combo = None
+        self.cutter_combo = None
+        self.order_combobox = None
+
+        # Текстовые поля (Entry)
+        self.order_entry = None
+        self.entry_suffix = None
+        self.quantity_entry = None
+        self.gross_entry = None
+        self.sleeve_entry = None
+        self.date_entry = None
+        self.batch_entry = None
+        self.roll_entry = None
+        self.roll_length_entry = None
+        self.stream_width_entry = None
+        self.label_length_entry = None
+        self.winding_entry = None
+        self.diameter_entry = None
+        self.streams_entry = None
+        self.podlo_entry = None
+
+        # Многострочное текстовое поле
+        self.product_text = None
+
+        # Метки (Label)
+        self.weight_label = None
+        self.sleeve_label = None
+        self.batch_label = None
+        self.roll_label = None
+        self.roll_length_label = None
+        self.stream_width_label = None
+        self.label_length_label = None
+        self.winding_label = None
+        self.diameter_label = None
+        self.streams_label = None
+        self.cutter_label = None
+        self.podlo_label = None
+
+        # Чекбоксы
+        self.shorten_checkbutton = None
+        self.rosinka_checkbutton = None
+        self.weight_checkbutton = None
+
+        # ========== ИНИЦИАЛИЗАЦИЯ ==========
+        self.config_manager.ensure_packaging_tu_exists()
+
+        # Загрузка настроек номера заказа
+        order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
+        self.order_prefix.set(order_settings.get("prefix", "Ф"))
+        self.order_suffix.set(order_settings.get("suffix", "/5"))
+
+        # Создание UI
         self.create_ui()
+
+        # Загрузка данных
         self.load_box_sizes()
+
+        # Подписка на координатор
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
             self._update_cutter_visibility()
             self.load_sleeve_weights()
-        # Отслеживаем изменения всех переменных, влияющих на расчет веса
+
+        # ========== ПОДПИСКИ НА ИЗМЕНЕНИЯ ==========
+        # Вес
         self.gross_weight_kg_var.trace_add("write", self._on_weight_changed)
         self.sleeve_weight_var.trace_add("write", self._on_weight_changed)
         self.rolls_count_var.trace_add("write", self._on_weight_changed)
         self.box_weight_var.trace_add("write", self._on_weight_changed)
-        
-        # Отдельно для quantity
+
+        # Количество
         self.quantity_var.trace_add("write", self.calculate_total_quantity)
+
+        # Видимость производителя
+        self.show_manufacturer_var.trace_add("write", self._on_producer_visibility_changed)
         
     def _on_weight_changed(self, *args):
         """Единый обработчик изменений веса"""
@@ -702,7 +805,7 @@ class RollLabelPrinter:
                 text="Сначала загрузите заказ", 
                 foreground="orange"
             )
-            return
+            return None
             
         # Проверяем GTIN
         gtin = self.order_data_module._extract_gtin_from_input(search_text)
@@ -725,11 +828,13 @@ class RollLabelPrinter:
         
         if found_products:
             self.order_data_module.show_product_results(found_products, search_text)
+            return None
         else:
             self.order_data_module.parse_status.config(
                 text=f"Не найдено видов по запросу '{search_text}'", 
                 foreground="red"
             )
+            return None
     
     def load_sleeve_weights(self):
         """Загружает данные о весе втулок из настроек"""
@@ -794,7 +899,7 @@ class RollLabelPrinter:
                         self.sleeve_weight_var.set(str(diameter_data[closest]))
         except Exception as e:
             print(f"Ошибка выбора веса втулки: {e}")
-    
+
     def on_order_enter_pressed(self, event=None):
         """Запускает поиск заказа в БД при нажатии Энтер"""
         self.xml_tu_number = ""
@@ -867,7 +972,7 @@ class RollLabelPrinter:
             text=f"Найдено {len(results)} заказов. Выберите нужный:", 
             foreground="orange"
         )
-        
+
     def on_order_selected(self, event=None):
         """Обрабатывает выбор заказа из комбобокса"""
         selected_index = self.order_combobox.current()
@@ -901,7 +1006,7 @@ class RollLabelPrinter:
         """Автоматически заполняет ТОЛЬКО технические поля"""
         order_number = self.order_number.get().strip()
         if not order_number:
-            return
+            return None
         
         try:
             # Ищем заказ через DataManager
@@ -909,7 +1014,7 @@ class RollLabelPrinter:
             
             if not results:
                 print(f"Файлы для заказа {order_number} не найдены")
-                return
+                return None
                 
             # Берём первый найденный заказ
             parsed_result = results[0]
@@ -1066,7 +1171,7 @@ class RollLabelPrinter:
         
         self._normalize_cache[text] = normalized
         return normalized
-        
+
     def calculate_quantity_from_length(self, *args):
         """Автоматически рассчитывает количество этикеток на основе длины ролика и длины этикетки"""
         # Дебаунсинг для оптимизации
@@ -1289,8 +1394,7 @@ class RollLabelPrinter:
                 
         except Exception as e:
             print(f"Ошибка обновления списка резчиков: {e}")
-        
-        
+
     def load_manufacturer_options(self, event=None):
         """Загружает варианты производителей и продуктов из packaging_tu.json"""
         manufacturer_combo = self.manufacturer_combo
@@ -1507,7 +1611,8 @@ class RollLabelPrinter:
         """Устанавливает связь с модулем предпросмотра для обратной связи"""
         self.preview_module = preview_module
         
-    def parse_float(self, value):
+    @staticmethod
+    def parse_float(value):
         """Сверхоптимизированная версия parse_float"""
         if not value:
             return 0.0
@@ -1642,7 +1747,8 @@ class RollLabelPrinter:
         menu.add_command(label="Вставить", command=lambda: self.paste_text_to_text_widget(text_widget))
         text_widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_text_widget(self, widget):
+    @staticmethod
+    def copy_text_from_text_widget(widget):
         """Копирует текст из текстового виджета"""
         try:
             text = widget.get("1.0", "end-1c")
@@ -1652,7 +1758,8 @@ class RollLabelPrinter:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_text_widget(self, widget):
+    @staticmethod
+    def paste_text_to_text_widget(widget):
         """Вставляет текст в текстовый виджет"""
         try:
             text = widget.clipboard_get()
@@ -1669,7 +1776,8 @@ class RollLabelPrinter:
         menu.add_command(label="Вставить", command=lambda: self.paste_text(widget))
         widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text(self, widget):
+    @staticmethod
+    def copy_text(widget):
         """Копирует текст в буфер обмена"""
         try:
             text = widget.get()
@@ -1679,7 +1787,8 @@ class RollLabelPrinter:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text(self, widget):
+    @staticmethod
+    def paste_text(widget):
         """Вставляет текст из буфера обмена"""
         try:
             text = widget.clipboard_get()
