@@ -57,7 +57,8 @@ class PrintModule:
         self.create_print_ui()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
-    
+
+    # noinspection PyTypeChecker
     def create_print_ui(self):
         """Создает компактный интерфейс управления печатью"""
         frame = ttk.Frame(self.parent, padding=5)

@@ -1,15 +1,16 @@
+import math
 import os
-import sys
 import re
 import tkinter as tk
-from tkinter import ttk, messagebox, StringVar, BooleanVar
-import math
 from datetime import datetime
+from tkinter import ttk, StringVar, BooleanVar
 
 
+# noinspection SpellCheckingInspection,PyTypeChecker
 class RollLabelPrinter:
     """Управление заказами с весом"""
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
+        self.last_tu_count = None
         self.parent = parent
         self.config_manager = config_manager
         self.data_manager = data_manager
@@ -78,7 +79,6 @@ class RollLabelPrinter:
             self._update_cutter_visibility()
             self.load_sleeve_weights()
         # Отслеживаем изменения всех переменных, влияющих на расчет веса
-        # Оставляем только одну подписку на каждую переменную
         self.gross_weight_kg_var.trace_add("write", self._on_weight_changed)
         self.sleeve_weight_var.trace_add("write", self._on_weight_changed)
         self.rolls_count_var.trace_add("write", self._on_weight_changed)
@@ -115,16 +115,16 @@ class RollLabelPrinter:
             return
         if not self.show_weight_var.get():
             return
-        
+
+        net_var = self.net_weight_kg_var
+        total_gross_var = self.total_gross_var
+        total_net_var = self.total_net_var
         try:
             # Локальные ссылки на часто используемые переменные
             gross_var = self.gross_weight_kg_var
             sleeve_var = self.sleeve_weight_var
             rolls_var = self.rolls_count_var
             box_var = self.box_weight_var
-            net_var = self.net_weight_kg_var
-            total_gross_var = self.total_gross_var
-            total_net_var = self.total_net_var
             
             # 1. Быстрый парсинг значений
             gross_str = gross_var.get().strip()
@@ -544,7 +544,7 @@ class RollLabelPrinter:
             return
         
         # Ищем паттерн размеров
-        match = re.search(r'(\d+)\s*[хxХX\*]\s*(\d+)', order_name, re.IGNORECASE)
+        match = re.search(r'(\d+)\s*[хxХX*]\s*(\d+)', order_name, re.IGNORECASE)
         
         if match:
             width = match.group(1)
@@ -1172,7 +1172,7 @@ class RollLabelPrinter:
                 self.total_gross_var.set("")
                 self.total_net_var.set("")
                 
-                # 3. Фокус через небольшой таймаут
+                # 3. Фокус через небольшой тайм-аут
                 self.parent.after(50, lambda: self.gross_entry.focus_set())
                 
             else:
@@ -1293,23 +1293,20 @@ class RollLabelPrinter:
         
     def load_manufacturer_options(self, event=None):
         """Загружает варианты производителей и продуктов из packaging_tu.json"""
+        manufacturer_combo = self.manufacturer_combo
+        product_combo = self.product_combo
+        manufacturer_var = self.manufacturer_var
+        product_type_var = self.product_type_var
         try:
-            # Локальные ссылки
-            config_manager = self.config_manager
-            manufacturer_combo = self.manufacturer_combo
-            product_combo = self.product_combo
-            manufacturer_var = self.manufacturer_var
-            product_type_var = self.product_type_var
-            
             # Проверяем существует ли файл в data_dir
-            settings_path = config_manager.get_settings_path("packaging_tu.json")
+            settings_path = self.config_manager.get_settings_path("packaging_tu.json")
             if not os.path.exists(settings_path):
                 print(f"Файл packaging_tu.json не найден в {settings_path}")
                 # Пробуем скопировать из assets
                 self._copy_packaging_tu_from_assets()
             
             # Загружаем данные
-            packaging_data = config_manager.load_json_settings("packaging_tu.json")
+            packaging_data = self.config_manager.load_json_settings("packaging_tu.json")
             
             # Если данные пустые или не содержат нужной структуры
             if not packaging_data or "technical_specifications" not in packaging_data:
@@ -1325,7 +1322,7 @@ class RollLabelPrinter:
             specs_len = len(technical_specs)
             
             # Если список не изменился - не обновляем UI
-            if hasattr(self, 'last_tu_count') and self.last_tu_count == specs_len:
+            if self.last_tu_count is not None and self.last_tu_count == specs_len:
                 return
             self.last_tu_count = specs_len
             
@@ -1405,14 +1402,14 @@ class RollLabelPrinter:
             else:
                 product_combo['values'] = []
                 product_type_var.set("")
-                
+
         except Exception as e:
             print(f"Ошибка загрузки производителей: {e}")
-            if hasattr(self, 'manufacturer_combo'):
-                manufacturer_combo['values'] = []
-                product_combo['values'] = []
-                manufacturer_var.set("")
-                product_type_var.set("")
+            # Сбрасываем UI
+            manufacturer_combo['values'] = []
+            product_combo['values'] = []
+            manufacturer_var.set("")
+            product_type_var.set("")
                 
     def _copy_packaging_tu_from_assets(self):
         """Копирует файл packaging_tu.json из assets в data_dir"""
@@ -1560,7 +1557,7 @@ class RollLabelPrinter:
                 self.box_weight_var.set(f"{box_weight_kg:.2f}")
                 
                 # Запускаем пересчет весов
-                self.calculate_box_weights()
+                self._calculate_all_weights()
                 
             except Exception as e:
                 print(f"Ошибка загрузки веса коробки: {e}")
