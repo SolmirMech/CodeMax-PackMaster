@@ -1,9 +1,9 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
 import os
-import shutil
+import tkinter as tk
+from tkinter import ttk
 
 
+# noinspection PyTypeChecker
 class ListsSettingsDialog:
     """Диалог для редактируемых списков"""
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
@@ -175,12 +175,14 @@ class ListsSettingsDialog:
         # которые сами сохраняют изменения
         self.last_status = "✅ Списки успешно сохранены!"
         return True
-        
-        
+
+
+# noinspection PyTypeChecker
 class ShorteningRulesDialog:
     """Диалог редактирования списка сокращений"""
     
     def __init__(self, parent, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -338,7 +340,8 @@ class ShorteningRulesDialog:
         entry_widget.bind("<Button-3>", 
                          lambda e: menu.tk_popup(e.x_root, e.y_root))
     
-    def copy_text_from_entry(self, widget):
+    @staticmethod
+    def copy_text_from_entry(widget):
         """Копирует текст из поля ввода Entry."""
         try:
             text = widget.get()
@@ -348,7 +351,8 @@ class ShorteningRulesDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
     
-    def paste_text_to_entry(self, widget):
+    @staticmethod
+    def paste_text_to_entry(widget):
         """Вставляет текст в поле ввода Entry."""
         try:
             text = widget.clipboard_get()
@@ -419,13 +423,15 @@ class ShorteningRulesDialog:
                     self.window = None
                     
         except Exception as e:
-            self.parent_dialog.status_var.set(f"❌ Ошибка сохранения сокращений: {str(e)}")        
+            self.parent_dialog.status_var.set(f"❌ Ошибка сохранения сокращений: {str(e)}")
 
 
+# noinspection PyTypeChecker
 class BoxEditorDialog:
     """Диалог редактирования списка коробок"""
 
     def __init__(self, parent, pallets_mode=False, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.pallets_mode = pallets_mode
         self.config_manager = config_manager
@@ -476,6 +482,7 @@ class BoxEditorDialog:
         # Загружаем текущий список коробок
         if self.pallets_mode:
             current_boxes = self.get_current_boxes()
+            current_heights = {}
         else:
             current_boxes, current_heights = self.get_current_boxes()
 
@@ -498,14 +505,12 @@ class BoxEditorDialog:
         self.box_height_entries = []
         self.box_weight_entries = []
 
-        for size, box_data in current_boxes.items():
+        for size, weight in current_boxes.items():  # Исправлено: используем weight из items()
             if self.pallets_mode:
                 # Для поддонов: только вес
-                weight = current_boxes.get(size, "")
                 self._create_box_row(scrollable_frame, size, "", weight)
             else:
                 # Для коробок: высота и вес
-                weight = current_boxes.get(size, "")
                 height = current_heights.get(size, "")
                 self._create_box_row(scrollable_frame, size, height, weight)
 
@@ -558,7 +563,7 @@ class BoxEditorDialog:
             if not self.pallets_mode and hasattr(self, 'box_height_entries'):
                 # Находим и удаляем соответствующий height_entry
                 index = self.box_size_entries.index(size_entry) if size_entry in self.box_size_entries else -1
-                if index >= 0 and index < len(self.box_height_entries):
+                if 0 <= index < len(self.box_height_entries):
                     self.box_height_entries.pop(index)
             self.box_weight_entries.remove(weight_entry)
 
@@ -631,12 +636,14 @@ class BoxEditorDialog:
                     
         except Exception as e:
             self.parent_dialog.status_var.set(f"❌ Ошибка сохранения: {str(e)}")
-                
-                
+
+
+# noinspection PyTypeChecker
 class CustomersEditorDialog:
     """Диалог редактирования списка клиентов без производителя"""
 
     def __init__(self, parent, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -761,7 +768,8 @@ class CustomersEditorDialog:
         entry_widget.bind("<Button-3>", 
                          lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_entry(self, widget):
+    @staticmethod
+    def copy_text_from_entry(widget):
         """Копирует текст из поля ввода Entry."""
         try:
             text = widget.get()
@@ -771,7 +779,8 @@ class CustomersEditorDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_entry(self, widget):
+    @staticmethod
+    def paste_text_to_entry(widget):
         """Вставляет текст в поле ввода Entry."""
         try:
             text = widget.clipboard_get()
@@ -809,10 +818,12 @@ class CustomersEditorDialog:
             self.parent_dialog.status_var.set(f"❌ Ошибка сохранения клиентов: {str(e)}")
 
 
+# noinspection PyTypeChecker
 class SpecialClientsEditorDialog:
     """Диалог редактирования списка особых клиентов"""
 
     def __init__(self, parent, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -990,7 +1001,8 @@ class SpecialClientsEditorDialog:
         text_widget.bind("<Button-3>", 
                         lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_text_widget(self, widget):
+    @staticmethod
+    def copy_text_from_text_widget(widget):
         """Копирует текст из текстового виджета."""
         try:
             text = widget.get("1.0", "end-1c")
@@ -1000,7 +1012,8 @@ class SpecialClientsEditorDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_text_widget(self, widget):
+    @staticmethod
+    def paste_text_to_text_widget(widget):
         """Вставляет текст в текстовый виджет."""
         try:
             text = widget.clipboard_get()
@@ -1020,7 +1033,8 @@ class SpecialClientsEditorDialog:
         entry_widget.bind("<Button-3>", 
                          lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_entry(self, widget):
+    @staticmethod
+    def copy_text_from_entry(widget):
         """Копирует текст из поля ввода Entry."""
         try:
             text = widget.get()
@@ -1030,7 +1044,8 @@ class SpecialClientsEditorDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_entry(self, widget):
+    @staticmethod
+    def paste_text_to_entry(widget):
         """Вставляет текст в поле ввода Entry."""
         try:
             text = widget.clipboard_get()
@@ -1070,12 +1085,14 @@ class SpecialClientsEditorDialog:
 
         except Exception as e:
             self.parent_dialog.status_var.set(f"❌ Ошибка сохранения особых клиентов: {str(e)}")
-            
 
+
+# noinspection PyTypeChecker
 class TechnicalSpecificationsDialog:
     """Диалог редактирования списка технических условий (ТУ)"""
     
     def __init__(self, parent, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -1170,7 +1187,7 @@ class TechnicalSpecificationsDialog:
         self.window.bind("<Return>", lambda e: self.save_specifications())
     
     def _create_spec_row(self, parent, manufacturer, address, product_name, tu_number):
-        """Создает строку с полями ввода для ТУ"""
+        """Создает строку с полями ввода ТУ"""
         row_frame = ttk.Frame(parent)
         row_frame.pack(fill=tk.X, pady=5)
         
@@ -1217,7 +1234,8 @@ class TechnicalSpecificationsDialog:
                       row_frame, manufacturer_entry, address_text, 
                       product_entry, tu_entry, address_scrollbar
                   )).pack(side=tk.LEFT, padx=(10, 0))
-    
+
+    # noinspection PyUnusedLocal
     def _remove_spec_row(self, row_frame, man_entry, addr_widget, prod_entry, tu_entry, addr_scrollbar):
         """Удаляет строку с полями ввода"""
         if len(self.manufacturer_entries) > 1:
@@ -1234,7 +1252,8 @@ class TechnicalSpecificationsDialog:
         menu.add_command(label="Вставить", command=lambda: self.paste_text_to_text_widget(text_widget))
         text_widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_text_widget(self, widget):
+    @staticmethod
+    def copy_text_from_text_widget(widget):
         """Копирует текст из текстового виджета."""
         try:
             text = widget.get("1.0", "end-1c")
@@ -1244,7 +1263,8 @@ class TechnicalSpecificationsDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_text_widget(self, widget):
+    @staticmethod
+    def paste_text_to_text_widget(widget):
         """Вставляет текст в текстовый виджет."""
         try:
             text = widget.clipboard_get()
@@ -1261,7 +1281,8 @@ class TechnicalSpecificationsDialog:
         menu.add_command(label="Вставить", command=lambda: self.paste_text_to_entry(entry_widget))
         entry_widget.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def copy_text_from_entry(self, widget):
+    @staticmethod
+    def copy_text_from_entry(widget):
         """Копирует текст из поля ввода Entry."""
         try:
             text = widget.get()
@@ -1271,7 +1292,8 @@ class TechnicalSpecificationsDialog:
         except Exception as e:
             print(f"Ошибка копирования: {e}")
 
-    def paste_text_to_entry(self, widget):
+    @staticmethod
+    def paste_text_to_entry(widget):
         """Вставляет текст в поле ввода Entry."""
         try:
             text = widget.clipboard_get()
@@ -1339,10 +1361,11 @@ class TechnicalSpecificationsDialog:
                 
         except Exception as e:
             self.parent_dialog.status_var.set(f"❌ Ошибка сохранения ТУ: {str(e)}")
-            
-            
+
+
+# noinspection PyTypeChecker
 class SleeveWeightsDialog:
-    """Диалог редактирования веса втулок по диаметрам и ширинам"""
+    """Диалог редактирования веса втулок по диаметру и ширине"""
     
     # Статические данные по умолчанию
     DEFAULT_SLEEVE_WEIGHTS = {
@@ -1382,6 +1405,7 @@ class SleeveWeightsDialog:
     }    
     
     def __init__(self, parent, config_manager=None, coordinator=None):
+        self.parent_dialog = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -1404,7 +1428,7 @@ class SleeveWeightsDialog:
             return
             
         self.window = tk.Toplevel(self.parent)
-        self.window.title("Вес втулок по диаметрам и ширинам")
+        self.window.title("Вес втулок по диаметру и ширине")
         self.window.geometry("900x650")  # Увеличил высоту для кнопок
         self.window.grab_set()
         
