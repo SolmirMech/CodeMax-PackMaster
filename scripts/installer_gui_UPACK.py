@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-# noinspection PyTypeChecker
+# noinspection PyTypeChecker,SpellCheckingInspection
 class InstallerGUI:
     def __init__(self):
         self.copy_btn = None

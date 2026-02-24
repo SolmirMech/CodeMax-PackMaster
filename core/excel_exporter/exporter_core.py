@@ -5,16 +5,16 @@
 Не зависит от конкретного UI или структуры файла.
 """
 import os
-from typing import Dict, Any, Optional, List, Tuple, Union
+from typing import Dict, Any, Optional, List
+
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
-from openpyxl.utils import get_column_letter
 
-from .data_provider import ExportDataProvider
 from .cell_mappers import (
     SheetMapping, CellMapping, DynamicSection, DataType,
     HorizontalAlignment, VerticalAlignment, CellFormat
 )
+from .data_provider import ExportDataProvider
 
 
 class ExcelExportError(Exception):
@@ -49,8 +49,10 @@ class SmartExporter:
         self.current_mapping: Optional[SheetMapping] = None
         
     # ==================== ОСНОВНЫЕ МЕТОДЫ ЭКСПОРТА ====================
-    
-    def export_to_sheet(self, file_path: str, mapping: SheetMapping, 
+
+    # noinspection PyUnusedLocal
+    # mode передаётся из адаптера и используется там
+    def export_to_sheet(self, file_path: str, mapping: SheetMapping,
                        mode: str = "box") -> Dict[str, Any]:
         """
         Основной метод экспорта в указанный лист.
@@ -792,18 +794,19 @@ class SmartExporter:
             except Exception as e:
                 print(f"Ошибка очистки ячейки {cell_mapping.cell_reference}: {e}")
                 continue
-    
+
     def _clear_dynamic_section(self, section: DynamicSection):
         """Очищает динамическую секцию"""
         start_row, end_row = section.rows_range
-        
+
         for row in range(start_row, end_row):
             for col_config in section.columns_config:
+                cell_ref = None  # Инициализируем заранее
                 try:
                     cell_ref = f"{col_config['column']}{row}"
                     self._set_cell_value(cell_ref, None, CellFormat())
                 except Exception as e:
-                    print(f"Ошибка очистки ячейки {cell_ref}: {e}")
+                    print(f"Ошибка очистки ячейки {cell_ref if cell_ref else 'неизвестно'}: {e}")
                     continue
                     
     def _clear_noweight_section_with_numbers(self, section: DynamicSection):
@@ -928,7 +931,8 @@ class SmartExporter:
         elif free_rows <= 3:
             print(f"Внимание: в листе 'Список поддонов' осталось {free_rows} свободных строк")
 
-    def _hook_validate_rolls_count_workshop2(self, data: Dict[str, Any]):
+    @staticmethod
+    def _hook_validate_rolls_count_workshop2(data: Dict[str, Any]):
         """Хук для проверки количества роликов для 2 цеха (макс 60)"""
         rolls_count = data.get('rolls_count', 0)
         max_rolls = 60  # Максимум для 2 цеха (3 колонки по 20)
@@ -985,7 +989,8 @@ class SmartExporter:
         # Можно добавить дополнительную логику при необходимости
         pass
     
-    def _hook_validate_rolls_count(self, data: Dict[str, Any]):
+    @staticmethod
+    def _hook_validate_rolls_count(data: Dict[str, Any]):
         """Хук для проверки количества роликов"""
         rolls_count = data.get('rolls_count', 0)
         max_rolls = 30  # Максимум для 1 цеха (15 слева + 15 справа)
@@ -993,7 +998,8 @@ class SmartExporter:
         if rolls_count > max_rolls:
             print(f"Внимание: количество роликов ({rolls_count}) превышает максимальное ({max_rolls})")
             
-    def _hook_validate_boxes_count(self, data: Dict[str, Any]):
+    @staticmethod
+    def _hook_validate_boxes_count(data: Dict[str, Any]):
         """Хук для проверки количества коробок"""
         boxes_count = data.get('boxes_count', 0)
         max_boxes = 30  # Максимум для 1 цеха (15 слева + 15 справа)
@@ -1001,7 +1007,8 @@ class SmartExporter:
         if boxes_count > max_boxes:
             print(f"Внимание: количество коробок ({boxes_count}) превышает максимальное ({max_boxes})")
             
-    def _hook_validate_boxes_count_noweight(self, data: Dict[str, Any]):
+    @staticmethod
+    def _hook_validate_boxes_count_noweight(data: Dict[str, Any]):
         """Хук для проверки количества коробок в листе БезВеса"""
         boxes_count = data.get('boxes_count', 0)
         max_boxes = 45  # Максимум для БезВеса (15 слева + 15 центр + 15 справа)
@@ -1068,7 +1075,8 @@ class SmartExporter:
                 current_number += 1
                 boxes_filled += 1
     
-    def _process_value_by_type(self, value: Any, data_type: DataType) -> Any:
+    @staticmethod
+    def _process_value_by_type(value: Any, data_type: DataType) -> Any:
         """Обрабатывает значение согласно типу данных"""
         if value is None:
             return None
@@ -1178,7 +1186,8 @@ class SmartExporter:
         if check_lock and self._is_file_locked(file_path):
             raise ExcelFileLockedError(f"Файл {file_path} открыт в Excel. Закройте его и попробуйте снова.")
     
-    def _is_file_locked(self, filepath: str) -> bool:
+    @staticmethod
+    def _is_file_locked(filepath: str) -> bool:
         """Проверяет, открыт ли файл в другом процессе"""
         try:
             with open(filepath, 'a', encoding='utf-8'):

@@ -9,6 +9,7 @@ from .workshop1_pallet import (
     STATIC_CELLS as WORKSHOP1_PALLET_STATIC,
     DYNAMIC_SECTIONS as WORKSHOP1_PALLET_DYNAMIC
 )
+# noinspection SpellCheckingInspection
 from .workshop1_noweight import (
     STATIC_CELLS as WORKSHOP1_NOWEIGHT_STATIC,
     DYNAMIC_SECTIONS as WORKSHOP1_NOWEIGHT_DYNAMIC
@@ -30,6 +31,7 @@ from .workshop2_multitype import (
     DYNAMIC_SECTIONS as WORKSHOP2_MULTITYPE_DYNAMIC
 )
 
+# noinspection SpellCheckingInspection
 __all__ = [
     'WORKSHOP1_BOX_STATIC',
     'WORKSHOP1_BOX_DYNAMIC',
