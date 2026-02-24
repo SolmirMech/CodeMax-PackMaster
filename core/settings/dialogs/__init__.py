@@ -1,0 +1,6 @@
+from .box_editor_dialog import BoxEditorDialog
+from .customers_editor_dialog import CustomersEditorDialog
+from .special_clients_editor_dialog import SpecialClientsEditorDialog
+from .technical_specifications_dialog import TechnicalSpecificationsDialog
+from .sleeve_weights_dialog import SleeveWeightsDialog
+from .shortening_rules_dialog import ShorteningRulesDialog
