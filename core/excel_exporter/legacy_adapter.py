@@ -3,20 +3,20 @@
 Адаптер для обратной совместимости со старым кодом.
 Позволяет постепенно мигрировать на новую архитектуру.
 """
-import os
-from typing import Dict, Any, Optional
 
-from .data_provider import ExportDataProvider
 from .cell_mappers import CellMappingRegistry
+from .data_provider import ExportDataProvider
 from .exporter_core import SmartExporter
 
 
+# noinspection SpellCheckingInspection
 class LegacyExporterAdapter:
     """
     Адаптер, имитирующий старый WeightOrdersExporter.
     """
     
     def __init__(self, excel_file_path, roll_module, preview_module, coordinator=None, config_manager=None):
+        self.workshop = None
         self.original_excel_path = excel_file_path
         self.roll_module = roll_module
         self.preview_module = preview_module
@@ -84,7 +84,7 @@ class LegacyExporterAdapter:
             return {'success': False, 'error': str(e)}
         
         # Получаем путь к файлу
-        file_path = self.data_provider._get_excel_file_path(workshop)
+        file_path = self.data_provider.get_excel_file_path(workshop)
         
         # Выполняем экспорт
         try:
@@ -130,7 +130,7 @@ class LegacyExporterAdapter:
                 mode = "box"
                 try:
                     mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
-                    file_path = self.data_provider._get_excel_file_path(workshop)
+                    file_path = self.data_provider.get_excel_file_path(workshop)
                     success = self.exporter.clear_sheet(file_path, mapping)
                     return success
                 except ValueError as e:
@@ -150,7 +150,7 @@ class LegacyExporterAdapter:
             
             try:
                 mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
-                file_path = self.data_provider._get_excel_file_path(workshop)
+                file_path = self.data_provider.get_excel_file_path(workshop)
                 
                 success = self.exporter.clear_sheet(file_path, mapping)
                 
@@ -167,13 +167,12 @@ class LegacyExporterAdapter:
                 return success
                 
             except ValueError as e:
-                print(f"Маппинг не найден, используем старую очистку: {e}")
-                return self._legacy_fallback_clear(enable_pallet, multitype_mode)
+                print(f"Маппинг не найден: {e}")
             
         except Exception as e:
             print(f"Ошибка в новом очистителе: {e}")
-            return self._legacy_fallback_clear(enable_pallet, multitype_mode)         
-    
+
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Один метод для обновления всех настроек из координатора"""
         if not self.coordinator:

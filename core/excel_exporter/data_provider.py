@@ -4,6 +4,8 @@ from core.config_manager import ConfigManager
 from typing import Dict, Any, Optional, Union
 from openpyxl import load_workbook
 
+
+# noinspection SpellCheckingInspection
 class ExportDataProvider:
     """
     Единый централизованный сборщик данных из UI.
@@ -496,7 +498,7 @@ class ExportDataProvider:
         """
         try:
             # Получаем путь к файлу ДЛЯ ЦЕХА 1 (фиксировано)
-            actual_file_path = self._get_excel_file_path("1")  # Явно указываем цех 1
+            actual_file_path = self.get_excel_file_path("1")  # Явно указываем цех 1
             
             if not os.path.exists(actual_file_path):
                 return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
@@ -561,7 +563,7 @@ class ExportDataProvider:
         """
         try:
             # Получаем путь к файлу для 2 цеха
-            actual_file_path = self._get_excel_file_path("2")
+            actual_file_path = self.get_excel_file_path("2")
             
             if not os.path.exists(actual_file_path):
                 return {
@@ -591,9 +593,9 @@ class ExportDataProvider:
             
             # Пары колонок и соответствующие смещения для длины в L
             column_pairs = [
-                ('B', 'C', 0),   # B,C - длина в L с тем же номером строки
-                ('E', 'F', 20),  # E,F - длина в L со смещением +20
-                ('H', 'I', 40)   # H,I - длина в L со смещением +40
+                ('B', 'C', 0),   # B, C - длина в L с тем же номером строки
+                ('E', 'F', 20),  # E, F - длина в L со смещением +20
+                ('H', 'I', 40)   # H, I - длина в L со смещением +40
             ]
             
             for weight_col, qty_col, l_offset in column_pairs:
@@ -687,7 +689,7 @@ class ExportDataProvider:
         """
         try:
             # Получаем путь к файлу для 2 цеха
-            actual_file_path = self._get_excel_file_path("2")
+            actual_file_path = self.get_excel_file_path("2")
             
             if not os.path.exists(actual_file_path):
                 return {
@@ -858,7 +860,8 @@ class ExportDataProvider:
         
         return None
     
-    def _convert_to_number(self, value: Optional[str], force_int: bool = False) -> Optional[Union[int, float]]:
+    @staticmethod
+    def _convert_to_number(value: Optional[str], force_int: bool = False) -> Optional[Union[int, float]]:
         """
         Безопасно преобразует строку в число.
         
@@ -901,7 +904,7 @@ class ExportDataProvider:
         
         return None
         
-    def _get_excel_file_path(self, workshop: str) -> str:
+    def get_excel_file_path(self, workshop: str) -> str:
         """Определяет путь к файлу Excel"""
         # Копируем логику из старого get_excel_file_path
         try:

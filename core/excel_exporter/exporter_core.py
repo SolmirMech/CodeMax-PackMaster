@@ -27,6 +27,7 @@ class ExcelFileLockedError(ExcelExportError):
     pass
 
 
+# noinspection SpellCheckingInspection
 class SmartExporter:
     """
     Умный экспортер для работы с Excel.
@@ -559,7 +560,7 @@ class SmartExporter:
                 if filled_count >= max_rolls:
                     break
                 
-                # Проверяем, пуста ли строка (только B,C или E,F или H,I)
+                # Проверяем, пуста ли строка (только B, C или E, F или H, I)
                 is_empty = True
                 for col_config in section.columns_config:
                     cell_ref = f"{col_config['column']}{row}"
