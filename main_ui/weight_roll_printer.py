@@ -306,7 +306,7 @@ class RollLabelPrinter:
             
         if hasattr(self, 'coordinator') and self.coordinator:
             self.coordinator.check_weight_status(self)
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             # Обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
             
@@ -768,7 +768,7 @@ class RollLabelPrinter:
 
     def _show_date_message(self, message, is_error=False):
         """Показывает сообщение о дате в preview_module и скрывает через 5 секунд"""
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             foreground = "red" if is_error else "blue"
             self.preview_module.tirazh_label.config(
                 text=message,
@@ -779,7 +779,7 @@ class RollLabelPrinter:
 
     def _clear_date_message(self):
         """Очищает сообщение о дате в preview_module"""
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             self.preview_module.tirazh_label.config(
                 text="",
                 foreground="green"
@@ -917,7 +917,7 @@ class RollLabelPrinter:
         
         self.cached_order_data = None
         self.cached_order_number = ""
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             self.preview_module.set_product_gtin("")
             self.preview_module.cancel_update_timer()
         
@@ -1066,6 +1066,19 @@ class RollLabelPrinter:
             
         if tu_number and tu_number.strip() not in ["—", "-", ""]:
             self.xml_tu_number = tu_number.strip()
+
+        # Пытаемся найти продукт по ТУ в manufacturer_full_data_map
+        found_product = None
+        for norm_name, man_data in self.manufacturer_full_data_map.items():
+            for prod in man_data['products']:
+                if prod['tu_number'] == self.xml_tu_number:
+                    found_product = prod['name']
+                    break
+            if found_product:
+                break
+
+        if found_product:
+            self.product_type_var.set(found_product)
         
         # Префикс и суффикс заказа
         order_prefix = parsed_data.get('order_prefix', '')
@@ -1581,7 +1594,7 @@ class RollLabelPrinter:
             self.product_type_var.set("Обычная с\к этикетка")
         
         # Обновляем превью при смене производителя
-        if hasattr(self, 'preview_module') and self.preview_module:
+        if self.preview_module is not None:
             self.preview_module.update_preview_displays()
 
     def update_manufacturer_visibility(self):

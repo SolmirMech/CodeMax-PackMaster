@@ -738,7 +738,6 @@ class OrderDataProcessor:
                     'winding_scheme': order.get('operations', {}).get('winding_scheme', ''),
                     'sleeve_diameter': order.get('operations', {}).get('sleeve_diameter', ''),
                     'date_emission': product.get('date_emission', ''),
-                    'manufacturer': "",
                     'gtin': gtin,
                     'tirazh': product.get('quantity', ''),
                     'stream': product.get('stream', '1')                   
