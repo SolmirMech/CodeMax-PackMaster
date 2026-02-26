@@ -134,6 +134,7 @@ class RollLabelPrinter:
         self.diameter_entry = None
         self.streams_entry = None
         self.podlo_entry = None
+        self.emission_entry = None
 
         # Многострочное текстовое поле
         self.product_text = None
@@ -151,6 +152,7 @@ class RollLabelPrinter:
         self.streams_label = None
         self.cutter_label = None
         self.podlo_label = None
+        self.emission_label = None
 
         # Чекбоксы
         self.shorten_checkbutton = None
@@ -583,6 +585,15 @@ class RollLabelPrinter:
         self.streams_label.grid(row=10, column=0, sticky="w", pady=3)
         self.streams_entry = ttk.Entry(data_frame, textvariable=self.streams_var, width=8)
         self.streams_entry.grid(row=10, column=0, padx=(183, 0), pady=3, sticky="w")
+
+        # Дата эмиссии (ручной ввод)
+        self.emission_label = ttk.Label(data_frame, text="Дата эмиссии:")
+        self.emission_label.grid(row=10, column=1, sticky="w", pady=3)
+        self.emission_entry = ttk.Entry(data_frame, textvariable=self.date_emission_var, width=10)
+        self.emission_entry.grid(row=10, column=1, padx=(150, 0), pady=3, sticky="w")
+
+        # Привязываем обработчик для автоматической расстановки точек
+        self.emission_entry.bind("<KeyRelease>", self._on_date_emission_key_release)
         
         self.order_prefix.trace_add("write", self.on_order_number_changed)
         self.roll_length.trace_add("write", self.calculate_quantity_from_length)
@@ -592,6 +603,51 @@ class RollLabelPrinter:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         self.update_rosinka_visibility()
+
+    def _on_date_emission_key_release(self, event=None):
+        """Автоматически расставляет точки при вводе даты эмиссии"""
+        if event is None or event.widget != self.emission_entry:
+            return
+
+        # Получаем текущий текст и позицию курсора
+        current_text = self.emission_entry.get()
+        cursor_pos = self.emission_entry.index(tk.INSERT)
+
+        # Удаляем все точки из введенного текста
+        digits_only = current_text.replace('.', '')
+
+        # Оставляем только цифры
+        digits_only = ''.join(filter(str.isdigit, digits_only))
+
+        # Ограничиваем длину (макс 8 цифр: ДДММГГГГ)
+        if len(digits_only) > 8:
+            digits_only = digits_only[:8]
+            # Корректируем позицию курсора если обрезали
+            if cursor_pos > len(digits_only):
+                cursor_pos = len(digits_only)
+
+        # Формируем дату с точками
+        formatted = ""
+        if len(digits_only) > 0:
+            formatted = digits_only[:2]  # День
+            if len(digits_only) >= 3:
+                formatted += "." + digits_only[2:4]  # Месяц
+                if len(digits_only) >= 5:
+                    formatted += "." + digits_only[4:]  # Год
+
+        # Обновляем текст, если изменился
+        if formatted != current_text:
+            self.emission_entry.delete(0, tk.END)
+            self.emission_entry.insert(0, formatted)
+
+            # Восстанавливаем позицию курсора с учетом добавленных точек
+            if cursor_pos > 0:
+                # Считаем сколько точек добавилось до позиции курсора
+                dots_before = formatted[:cursor_pos].count('.') - current_text[:cursor_pos].count('.')
+                new_pos = cursor_pos + dots_before
+                # Корректируем с учетом возможного удаления символов
+                new_pos = min(new_pos, len(formatted))
+                self.emission_entry.icursor(new_pos)
         
     def _on_rosinka_toggled(self):
         """При включении/выключении галочки Росинка"""
@@ -1344,6 +1400,8 @@ class RollLabelPrinter:
                     self.stream_width_entry.grid()
                     self.label_length_label.grid()
                     self.label_length_entry.grid()
+                    self.emission_label.grid()
+                    self.emission_entry.grid()
                 else:
                     self.winding_label.grid_remove()
                     self.winding_entry.grid_remove()
@@ -1355,6 +1413,8 @@ class RollLabelPrinter:
                     self.stream_width_entry.grid_remove()
                     self.label_length_label.grid_remove()
                     self.label_length_entry.grid_remove()
+                    self.emission_label.grid_remove()
+                    self.emission_entry.grid_remove()
                     
                     
         except Exception as e:
