@@ -885,7 +885,8 @@ class SmartExporter:
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_pallet_list()}
         
         return sheet_data
-    
+
+    # ==================== Запуск хуков ====================
     def _run_post_processing_hooks(self, hooks: List[str], data: Dict[str, Any]):
         """Выполняет хуки пост-обработки"""
         for hook_name in hooks:
@@ -939,55 +940,6 @@ class SmartExporter:
         
         if rolls_count > max_rolls:
             print(f"Внимание: количество роликов ({rolls_count}) превышает максимальное ({max_rolls}) для 2 цеха")
-                
-    def _hook_clear_existing_row(self, data: Dict[str, Any]):
-        """Хук для очистки существующей строки с таким же product_name"""
-        if not self.current_mapping:
-            return
-        
-        product_name = data.get('product_text')  # product_name из данных
-        
-        if not product_name:
-            return
-        
-        # Ищем строку с таким product_name в колонке B
-        start_row, end_row = self.current_mapping.dynamic_sections[0].rows_range
-        
-        for row in range(start_row, end_row):
-            if self.ws[f'B{row}'].value == product_name:
-                # Очищаем всю строку (A, B, F, G, H)
-                for col in ['A', 'B', 'F', 'G', 'H']:
-                    self._set_cell_value(f'{col}{row}', None, CellFormat())
-                break
-
-    def _hook_find_available_row(self, data: Dict[str, Any]):
-        """Хук для поиска пустой строки"""
-        if not self.current_mapping:
-            return
-        
-        start_row, end_row = self.current_mapping.dynamic_sections[0].rows_range
-        
-        for row in range(start_row, end_row):
-            # Проверяем, пуста ли строка
-            is_empty = True
-            for col in ['A', 'B', 'F', 'G', 'H']:
-                if self.ws[f'{col}{row}'].value is not None:
-                    is_empty = False
-                    break
-            
-            if is_empty:
-                # Сохраняем найденную строку в данных для заполнения
-                data['target_row'] = row
-                return
-        
-        # Если не нашли пустую строку
-        data['target_row'] = None
-    
-    def _hook_update_manufacturer_info(self, data: Dict[str, Any]):
-        """Хук для обновления информации о производителе"""
-        # Эта логика уже реализована в _fill_static_cells через маппинг
-        # Можно добавить дополнительную логику при необходимости
-        pass
     
     @staticmethod
     def _hook_validate_rolls_count(data: Dict[str, Any]):
@@ -1074,7 +1026,7 @@ class SmartExporter:
                 self._set_cell_value(f"H{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
                 current_number += 1
                 boxes_filled += 1
-    
+
     @staticmethod
     def _process_value_by_type(value: Any, data_type: DataType) -> Any:
         """Обрабатывает значение согласно типу данных"""

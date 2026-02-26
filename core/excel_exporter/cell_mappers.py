@@ -55,7 +55,6 @@ class CellMappingRegistry:
             dynamic_sections=WORKSHOP1_BOX_DYNAMIC,
             
             post_processing_hooks=[
-                "update_manufacturer_info",  # Хук для обновления информации о производителе
                 "validate_rolls_count"       # Хук для проверки количества роликов
             ]
         )
@@ -75,7 +74,6 @@ class CellMappingRegistry:
             dynamic_sections=WORKSHOP1_PALLET_DYNAMIC,
             
             post_processing_hooks=[
-                "update_manufacturer_info",
                 "validate_boxes_count"  # Хук для проверки количества коробок
             ]
         )    
@@ -95,7 +93,6 @@ class CellMappingRegistry:
             dynamic_sections=WORKSHOP1_NOWEIGHT_DYNAMIC,
             
             post_processing_hooks=[
-                "update_manufacturer_info",
                 "validate_boxes_count_noweight",
                 "fill_box_numbers"
             ]
@@ -132,7 +129,6 @@ class CellMappingRegistry:
             dynamic_sections=WORKSHOP2_BOX_DYNAMIC,
             
             post_processing_hooks=[
-                "update_manufacturer_info",  # Производитель в A1
                 "validate_rolls_count_workshop2"
             ]
         )
@@ -151,7 +147,6 @@ class CellMappingRegistry:
             dynamic_sections=WORKSHOP2_PALLET_LIST_DYNAMIC,
             
             post_processing_hooks=[
-                "update_manufacturer_info",
                 "validate_pallet_list_capacity"
             ]
         )
@@ -168,10 +163,7 @@ class CellMappingRegistry:
             
             static_cells=WORKSHOP2_MULTITYPE_STATIC,
             dynamic_sections=WORKSHOP2_MULTITYPE_DYNAMIC,
-            
-            post_processing_hooks=[
-                "update_manufacturer_info"  # Производитель в A1
-            ]
+
         )
     
     # ==================== МЕТОДЫ ДОСТУПА К МАППИНГАМ ====================
