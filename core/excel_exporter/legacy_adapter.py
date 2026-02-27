@@ -175,10 +175,6 @@ class LegacyExporterAdapter:
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Один метод для обновления всех настроек из координатора"""
-        if not self.coordinator:
-            self.has_weight = True
-            return
-        
         if hasattr(self.coordinator, 'get_workshop'):
             self.workshop = self.coordinator.get_workshop()
         
