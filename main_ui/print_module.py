@@ -26,12 +26,12 @@ class PrintModule:
         self.coordinator = coordinator
         self.settings_file = "print_settings.json"
         self.config_manager = config_manager
-        self.manufacturer = self.config_manager.get_manufacturer()
-        
+
         self.default_settings = {
-            "printer": get_default_printer(),
+            "printer_roll": get_default_printer(),
+            "printer_box": get_default_printer(),
             "paper_width_mm": 90,
-            "paper_height_mm": 72           
+            "paper_height_mm": 72
         }
         self.settings = self.default_settings.copy()
         self.load_settings("weight_box_print")
@@ -131,15 +131,12 @@ class PrintModule:
             # Загружаем свежие настройки из JSON
             settings = self.config_manager.load_json_settings("shared_utils.json")
             
-            # 1. Обновляем префикс/суффикс номера заказа
+            # Обновляем префикс/суффикс номера заказа
             order_settings = settings.get("order_number", {})
             self.order_prefix.set(order_settings.get("prefix", "Ф"))
             self.order_suffix.set(order_settings.get("suffix", "/5"))
             
-            # 2. Обновляем производителя
-            self.manufacturer = settings.get("manufacturer", "")
-            
-            # 3. Обновляем настройки печати (если изменились размеры/принтер)
+            # Обновляем настройки печати
             print_settings = self.config_manager.load_json_settings("print_settings.json")
             weight_settings = print_settings.get("weight_box_print", {})
             if weight_settings:
@@ -252,35 +249,40 @@ class PrintModule:
             # Получаем множитель из copies_var (то, что ввел пользователь)
             copies_var_value = self.copies_var.get().strip()
             copies_multiplier = int(copies_var_value) if copies_var_value else 1
-            
+
             # Умножаем на stream_count
             total_copies = stream_count * copies_multiplier
-            
-            # Печатаем total_copies копий
-            printer_name = self._find_printer()
+
+            # Получаем принтер в зависимости от типа этикетки
+            if self.selected_preview == "roll":
+                printer_name = self._get_printer("roll")
+            else:  # box
+                printer_name = self._get_printer("box")
+
             if not printer_name:
                 self.print_status_label.config(text="Принтер не найден!", foreground="red")
                 return
-            
+
             if self.selected_preview == "roll":
                 data_map = self.preview_module._prepare_roll_data_map()
                 print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
             else:
                 data_map = self.preview_module._prepare_box_data_map()
                 print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
-            
+
             for i in range(total_copies):
                 self._print_image_gdi(print_image, printer_name)
-            
+
             # Следующий вид
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
-            
+
         except Exception as e:
-            self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
+            self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}",
+                                           foreground="red")
             self.current_batch_index += 1
-            self.parent.after(100, self.print_next_in_batch)       
-            
+            self.parent.after(100, self.print_next_in_batch)
+
     def load_settings(self, settings_key):
         """Загружает настройки печати из JSON-файла для конкретного ключа"""
         try:
@@ -306,7 +308,7 @@ class PrintModule:
         """Обновляет настройки шрифтов в preview_module"""
         self.font_settings = new_settings
         self.preview_module.update_font_settings(new_settings)
-        
+
     def print_rolls_with_box(self):
         """Печатает N копий ролика и одну коробку с N роликами"""
         original_rolls_count = None
@@ -314,74 +316,78 @@ class PrintModule:
             # === Проверка полей ===
             required_fields = [
                 (self.connected_roll_module.quantity_var, "Количество"),
-                (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
+                (self.connected_roll_module.product_text, "Название продукции",
+                 self.connected_roll_module.product_text),
                 (self.connected_roll_module.customer_var, "Заказчик", None),
             ]
 
             empty_fields = self._validate_required_fields(required_fields)
             if empty_fields:
                 self.preview_module.status_label.config(
-                    text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
+                    text=f"❌ Заполните поля: {', '.join(empty_fields)}",
                     foreground="red"
                 )
                 self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
                 return
-            
+
             # === Получение данных ===
             copies_text = self.copies_var.get().strip()
             copies = int(copies_text) if copies_text else 1
-            
+
             if copies < 1:
                 copies = 1
-            
+
             # Сохраняем оригинальное количество роликов
             original_rolls_count = self.connected_roll_module.rolls_count_var.get()
-            
-            printer_name = self._find_printer()
-            if not printer_name:
-                self.print_status_label.config(text="Принтер не найден!", foreground="red")
+
+            # Получаем принтеры
+            roll_printer = self._get_printer("roll")
+            box_printer = self._get_printer("box")
+
+            if not roll_printer or not box_printer:
+                self.print_status_label.config(text="Принтеры не найдены!", foreground="red")
                 return
-            
+
             # === печать роликов (rolls_count = 1) ===
             # Временно ставим 1 ролик для печати этикеток роликов
             self.connected_roll_module.rolls_count_var.set("1")
             self.connected_roll_module.calculate_total_quantity()
-            
+
             # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
-            
+
             # Готовим данные для ролика (rolls_count = 1)
             data_map = self.preview_module._prepare_roll_data_map()
             print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
-            
-            # Печатаем N копий ролика
+
+            # Печатаем N копий ролика на принтере для роликов
             for i in range(copies):
-                self._print_image_gdi(print_image, printer_name)
-            
+                self._print_image_gdi(print_image, roll_printer)
+
             # === Печать коробки (rolls_count = copies) ===
             # Меняем rolls_count на copies для коробки
             self.connected_roll_module.rolls_count_var.set(str(copies))
             # Пересчитываем общее количество мимо таймера
             self.connected_roll_module.force_recalculate_total()
-            
+
             # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
-            
+
             # Готовим данные для коробки (rolls_count = copies)
             box_data_map = self.preview_module._prepare_box_data_map()
             box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map)
-            
-            # Печатаем одну коробку
-            self._print_image_gdi(box_print_image, printer_name)
-            
+
+            # Печатаем одну коробку на принтере для коробок
+            self._print_image_gdi(box_print_image, box_printer)
+
             # === Восстанавливаем оригинальное значение ===
             self.connected_roll_module.rolls_count_var.set(original_rolls_count)
             self.connected_roll_module.calculate_total_quantity()
             self.preview_module._update_from_connected_roll_module()
-            
+
             # === Статус завершения ===
             self.set_status(f"✅ Печать завершена: {copies} роликов + 1 коробка", "green")
-            
+
         except Exception as e:
             # Восстанавливаем в случае ошибки
             if self.connected_roll_module is not None and 'original_rolls_count' in locals():
@@ -389,7 +395,7 @@ class PrintModule:
                 self.connected_roll_module.calculate_total_quantity()
                 if self.preview_module is not None:
                     self.preview_module._update_from_connected_roll_module()
-            
+
             self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")
 
     def print_label(self):
@@ -504,19 +510,24 @@ class PrintModule:
 
     def _print_standard_label(self, copies):
         """Стандартная печать без изменений"""
-        printer_name = self._find_printer()
+        # Выбираем принтер в зависимости от типа этикетки
+        if self.selected_preview == "roll":
+            printer_name = self._get_printer("roll")
+        else:  # box
+            printer_name = self._get_printer("box")
+
         if not printer_name:
             self.preview_module.status_label.config(text="Принтер не найден!", foreground="red")
             self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
             return
-        
+
         if self.selected_preview == "roll":
             data_map = self.preview_module._prepare_roll_data_map()
             print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
         else:
             data_map = self.preview_module._prepare_box_data_map()
             print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
-        
+
         for i in range(copies):
             self._print_image_gdi(print_image, printer_name)
 
@@ -531,25 +542,29 @@ class PrintModule:
                 return [int(range_str)]
         except:
             raise ValueError(f"Неверный формат диапазона: {range_str}")
-            
-    def _find_printer(self):
-        """Находит принтер из настроек weight_box_print"""
+
+    def _get_printer(self, printer_type="roll"):
+        """Возвращает принтер для указанного типа"""
         try:
             # Загружаем настройки печати
             print_settings = self.config_manager.load_json_settings("print_settings.json")
             weight_settings = print_settings.get("weight_box_print", {})
-            saved_printer = weight_settings.get("printer", "")
-            
+
+            if printer_type == "roll":
+                saved_printer = weight_settings.get("printer_roll", "")
+            else:  # box
+                saved_printer = weight_settings.get("printer_box", "")
+
             # Если принтер сохранен в настройках, проверяем его доступность
             if saved_printer:
                 printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
                 available_printers = [printer[2] for printer in printers]
-                
+
                 if saved_printer in available_printers:
                     return saved_printer
                 else:
                     print(f"Сохраненный принтер '{saved_printer}' недоступен")
-            
+
             # Fallback: ищем принтер с "big" в названии
             printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
             big_printers = []
@@ -557,7 +572,7 @@ class PrintModule:
                 printer_name = printer[2]
                 if printer_name.lower().startswith('big'):
                     big_printers.append(printer_name)
-            
+
             if big_printers:
                 return big_printers[0]
             else:
@@ -566,30 +581,10 @@ class PrintModule:
                 if available_printers:
                     return available_printers[0]
                 return None
-                
+
         except Exception as e:
             print(f"Ошибка поиска принтера: {e}")
             return None
-            
-    def update_local_printer(self):
-        """Обновляет список принтеров в настройках"""
-        try:
-            printers = win32print.EnumPrinters(2)
-            printer_names = [p[2] for p in printers]
-            
-            # Загружаем текущие настройки
-            print_settings = self.config_manager.load_json_settings("print_settings.json")
-            weight_settings = print_settings.get("weight_box_print", {})
-            current_printer = weight_settings.get("printer", "")
-            
-            # Если текущий принтер недоступен, выбираем первый доступный
-            if current_printer not in printer_names and printer_names:
-                weight_settings["printer"] = printer_names[0]
-                print_settings["weight_box_print"] = weight_settings
-                self.config_manager.save_json_settings("print_settings.json", print_settings)
-                
-        except Exception as e:
-            print(f"Ошибка обновления принтеров: {e}")
 
     def _print_image_gdi(self, img: Image.Image, printer_name: str):
         """Печатает изображение через GDI"""

@@ -27,7 +27,8 @@ class SettingsDialog:
         self.message_status_label = None
 
         # === НАСТРОЙКИ ПЕЧАТИ ===
-        self.printer_var = tk.StringVar(value="")  # Выбранный принтер
+        self.printer_roll_var = tk.StringVar(value="")
+        self.printer_box_var = tk.StringVar(value="")
 
         # === СПИСКИ СОТРУДНИКОВ ===
         self.cutter_entries = []  # Поля ввода резчиков
@@ -81,10 +82,11 @@ class SettingsDialog:
         print_frame = ttk.LabelFrame(content_frame, text="Настройки печати", padding=5)
         print_frame.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
 
-        # Загружаем принтер из JSON
+        # Загружаем принтеры из JSON
         print_settings = self.config_manager.load_json_settings("print_settings.json")
         weight_settings = print_settings.get("weight_box_print", {})
-        saved_printer = weight_settings.get("printer", "")
+        saved_printer_roll = weight_settings.get("printer_roll", "")
+        saved_printer_box = weight_settings.get("printer_box", "")
 
         # Получаем список доступных принтеров
         try:
@@ -92,22 +94,29 @@ class SettingsDialog:
             printers = win32print.EnumPrinters(2)
             printer_list = [p[2] for p in printers]
         except:
-            printer_list = [saved_printer] if saved_printer else []
+            printer_list = []
 
-        self.printer_var = tk.StringVar(value=saved_printer)
-        printer_combo = ttk.Combobox(
+        # Принтер для роликов
+        ttk.Label(print_frame, text="Принтер для роликов:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.printer_roll_var = tk.StringVar(value=saved_printer_roll)
+        printer_roll_combo = ttk.Combobox(
             print_frame,
-            textvariable=self.printer_var,
+            textvariable=self.printer_roll_var,
             values=printer_list,
             width=25,
         )
-        printer_combo.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-      
-        # Кнопка обновления принтеров
-        update_printers_btn = ttk.Button(
-            print_frame, text="🔄 Обновить принтеры", command=self.update_printers
+        printer_roll_combo.grid(row=1, column=0, padx=5, pady=(0, 5), sticky="w")
+
+        # Принтер для коробок
+        ttk.Label(print_frame, text="Принтер для коробок:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.printer_box_var = tk.StringVar(value=saved_printer_box)
+        printer_box_combo = ttk.Combobox(
+            print_frame,
+            textvariable=self.printer_box_var,
+            values=printer_list,
+            width=25,
         )
-        update_printers_btn.grid(row=1, column=0, padx=5, pady=5, sticky="w")        
+        printer_box_combo.grid(row=3, column=0, padx=5, pady=(0, 5), sticky="w")
         
         # Меню настроек папок
         folder_menu_btn = ttk.Menubutton(
@@ -116,7 +125,7 @@ class SettingsDialog:
             direction="below",
             width=17
         )
-        folder_menu_btn.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        folder_menu_btn.grid(row=4, column=0, padx=5, pady=5, sticky="w")
         
         folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
         folder_menu_btn["menu"] = folder_menu_btn.menu
@@ -174,7 +183,7 @@ class SettingsDialog:
         
         # Переключатель цеха
         workshop_frame = ttk.Frame(print_frame)
-        workshop_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+        workshop_frame.grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=5)
 
         ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT, padx=(10,5))
         ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT, padx=(5,10))
@@ -195,7 +204,7 @@ class SettingsDialog:
             font=("Arial", 14, "bold"),
             foreground="green"
         )
-        self.size_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
+        self.size_label.grid(row=6, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
         # РАЗДЕЛ: Папки и разное
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
@@ -454,7 +463,8 @@ class SettingsDialog:
         try:
             # Сохраняем настройки печати
             print_settings = {
-                "printer": self.printer_var.get(),
+                "printer_roll": self.printer_roll_var.get(),
+                "printer_box": self.printer_box_var.get(),
                 "paper_width_mm": int(self.paper_width_var.get()),
                 "paper_height_mm": int(self.paper_height_var.get())
             }
@@ -613,32 +623,6 @@ class SettingsDialog:
         
         status_text = f"{xml_text} | {excel_text}"
         self.status_var.set(status_text)
-        
-    def update_printers(self):
-        """Обновляет принтер во всех секциях настроек печати"""
-        try:
-            # Получаем текущий принтер по умолчанию из системы
-            default_printer = get_default_printer()
-
-            if not default_printer:
-                self.show_message("❌ Ошибка: Не удалось определить принтер по умолчанию", "red")
-                return False
-
-            # Используем метод из ConfigManager для обновления принтера
-            success = self.config_manager.update_printer_settings(default_printer)
-
-            if success:
-                self.show_message(f"✅ Принтер обновлен на '{default_printer}' во всех секциях", "green")
-                # Обновляем комбобокс в диалоге
-                self.printer_var.set(default_printer)
-            else:
-                self.show_message(f"❌ Ошибка: Не удалось обновить принтер на '{default_printer}'", "red")
-
-            return success
-
-        except Exception as e:
-            self.show_message(f"❌ Ошибка при обновлении принтеров: {str(e)}", "red")
-            return False
 
     def select_excel_folder(self):
         """Выбирает папку для Excel файла"""

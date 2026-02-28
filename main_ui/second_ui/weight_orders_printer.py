@@ -44,7 +44,7 @@ class WeightOrdersPrinter:
         self.settings = self.default_settings.copy()
         self.load_settings("weight_labels")
         self.settings_window = None
-        self.manufacturer = self.config_manager.get_manufacturer()
+        self.manufacturer = self.settings.get("manufacturer", "")
         
         # Префикс и суффикс номера заказа
         order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
@@ -278,7 +278,7 @@ class WeightOrdersPrinter:
 
         self.settings_window = tk.Toplevel(self.parent)
         self.settings_window.title("Настройки печати - Этикетки на втулки")
-        self.settings_window.geometry("505x300")
+        self.settings_window.geometry("505x350")
         self.settings_window.grab_set()
 
         # Центрирование окна
@@ -322,11 +322,19 @@ class WeightOrdersPrinter:
             entry.grid(row=row, column=1, padx=5, pady=2, sticky="w")
             self.settings_vars[key] = var
 
+        # Поле для производителя
+        row_manufacturer = len(settings_params) + 1
+        ttk.Label(frame, text="Производитель:").grid(row=row_manufacturer, column=0, sticky="w", pady=2)
+        manufacturer_var = StringVar(value=self.settings.get("manufacturer", ""))
+        manufacturer_entry = ttk.Entry(frame, textvariable=manufacturer_var, width=25)
+        manufacturer_entry.grid(row=row_manufacturer, column=1, padx=5, pady=2, sticky="w")
+        self.settings_vars["manufacturer"] = manufacturer_var
+
         # Кнопка сохранения
         ttk.Button(
             frame, text="💾 Сохранить", command=self.update_settings
-        ).grid(row=len(settings_params) + 1, columnspan=2, pady=15)
-        
+        ).grid(row=row_manufacturer + 1, columnspan=2, pady=15)
+
         self.settings_window.bind("<Return>", lambda e: self.update_settings())
 
     def update_settings(self):
@@ -342,6 +350,10 @@ class WeightOrdersPrinter:
 
             # Обновляем принтер
             self.settings["printer"] = self.printer_var.get()
+
+            # Сохраняем производителя отдельно в атрибут
+            self.manufacturer = self.settings.get("manufacturer", "")
+
             self.save_settings()
 
             if self.settings_window:
