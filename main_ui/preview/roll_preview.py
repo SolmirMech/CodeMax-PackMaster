@@ -227,6 +227,8 @@ class RollPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
     def __init__(self, parent, coordinator=None, config_manager=None):
+        self.box_frame = None
+        self.roll_frame = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -269,12 +271,12 @@ class RollPreview:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self._on_settings_changed)
         self.parent.after(100, self.initialize_templates)
-        
+
     def initialize_templates(self):
         """Инициализирует PDF шаблоны"""
         self._update_template_paths()
         self.load_font_settings()
-        
+
         # Создаем filler'ы ТОЛЬКО если их еще нет
         if self.roll_pdf_filler is None:
             if os.path.exists(self.roll_template_path):
@@ -285,7 +287,7 @@ class RollPreview:
                         self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
                 except Exception as e:
                     print(f"Ошибка загрузки шаблона ролика: {e}")
-        
+
         if self.box_pdf_filler is None:
             if os.path.exists(self.box_template_path):
                 try:
@@ -295,10 +297,13 @@ class RollPreview:
                         self.box_pdf_filler.set_font_settings(self.font_settings["box"])
                 except Exception as e:
                     print(f"Ошибка загрузки шаблона коробки: {e}")
-        
+
+        # Добавить эту строку:
+        self.update_label_sizes()
+
         # Обновляем превью
         self.update_preview_displays()
-            
+
     def cancel_update_timer(self):
         """Безопасно отменяет таймер обновления"""
         if self._update_timer is not None:
@@ -370,10 +375,10 @@ class RollPreview:
         frame.rowconfigure(1, weight=1)     # Коробка
         
         # Превью ролика - строка 0, колонка 0 для 2 цеха width=420, height=420,
-        roll_frame = ttk.LabelFrame(frame, text="Ролик", padding=2)
-        roll_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nsew")
+        self.roll_frame = ttk.LabelFrame(frame, text="Ролик", padding=2)
+        self.roll_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nsew")
         
-        self.roll_canvas_frame = ttk.Frame(roll_frame, relief="solid", borderwidth=2)
+        self.roll_canvas_frame = ttk.Frame(self.roll_frame, relief="solid", borderwidth=2)
         self.roll_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
         self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=416, height=520, bg="white")
@@ -386,10 +391,10 @@ class RollPreview:
         self.roll_canvas.bind("<Return>", lambda e: self.print_selected_preview())
         
         # Превью коробки - строка 1, колонка 0
-        box_frame = ttk.LabelFrame(frame, text="Коробка", padding=2)
-        box_frame.grid(row=1, column=0, padx=5, pady=(5, 5), sticky="nsew")
+        self.box_frame = ttk.LabelFrame(frame, text="Коробка", padding=2)
+        self.box_frame.grid(row=1, column=0, padx=5, pady=(5, 5), sticky="nsew")
         
-        self.box_canvas_frame = ttk.Frame(box_frame, relief="sunken", borderwidth=1)
+        self.box_canvas_frame = ttk.Frame(self.box_frame, relief="sunken", borderwidth=1)
         self.box_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
         self.box_canvas = tk.Canvas(self.box_canvas_frame, width=416, height=520, bg="white")
@@ -422,7 +427,24 @@ class RollPreview:
         
         # Сразу загружаем PDF и показываем превью
         self.load_and_show_previews()
-        
+
+    def update_label_sizes(self):
+        """Обновляет отображение размеров этикеток в заголовках фреймов"""
+        try:
+            # Размер ролика
+            if self.roll_pdf_filler:
+                w, h = self.roll_pdf_filler.get_template_size_mm()
+                if w > 0 and h > 0:
+                    self.roll_frame.configure(text=f"Ролик ({w}×{h} мм)")
+
+            # Размер коробки
+            if self.box_pdf_filler:
+                w, h = self.box_pdf_filler.get_template_size_mm()
+                if w > 0 and h > 0:
+                    self.box_frame.configure(text=f"Коробка ({w}×{h} мм)")
+        except Exception as e:
+            print(f"Ошибка обновления размеров: {e}")
+
     def _cleanup_tracking(self):
         """Очищает все активные подписки на переменные"""
         if self._active_tracking_vars is not None:
@@ -503,7 +525,8 @@ class RollPreview:
             self.box_pdf_filler.open_template()
             if self.font_settings:
                 self.box_pdf_filler.set_font_settings(self.font_settings["box"])
-        
+
+        self.update_label_sizes()
         self.update_preview_displays()      
         
     def print_selected_preview(self):

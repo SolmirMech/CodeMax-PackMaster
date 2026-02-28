@@ -36,9 +36,6 @@ class SettingsDialog:
 
         # === НАСТРОЙКИ ЦЕХА И РАЗМЕРОВ ===
         self.workshop_var = tk.StringVar(value="1")  # Выбор цеха
-        self.paper_width_var = tk.StringVar(value="")  # Ширина этикетки
-        self.paper_height_var = tk.StringVar(value="")  # Высота этикетки
-        self.size_label = None  # Метка с размером этикетки
 
         # === ПУТИ К ПАПКАМ ===
         self.xml_folder_path = tk.StringVar(value="")  # Папка для XML
@@ -188,23 +185,10 @@ class SettingsDialog:
         ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT, padx=(10,5))
         ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT, padx=(5,10))
 
-        # Привязка изменения цеха к обновлению размеров
-        self.workshop_var.trace_add("write", self._on_workshop_changed)
-
         # Загружаем текущую настройку цеха
         workshop = self.coordinator.get_workshop()
         self.workshop_var.set(workshop)
-        self._update_paper_sizes()
         self.coordinator.subscribe(self._on_settings_changed)
-        
-        # Отображение размера этикетки
-        self.size_label = ttk.Label(
-            print_frame,
-            text=self._get_label_size_text(),
-            font=("Arial", 14, "bold"),
-            foreground="green"
-        )
-        self.size_label.grid(row=6, column=0, columnspan=2, sticky="w", padx=(50, 10), pady=(0, 5))
 
         # РАЗДЕЛ: Папки и разное
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
@@ -464,9 +448,7 @@ class SettingsDialog:
             # Сохраняем настройки печати
             print_settings = {
                 "printer_roll": self.printer_roll_var.get(),
-                "printer_box": self.printer_box_var.get(),
-                "paper_width_mm": int(self.paper_width_var.get()),
-                "paper_height_mm": int(self.paper_height_var.get())
+                "printer_box": self.printer_box_var.get()
             }
             
             all_settings = self.config_manager.load_json_settings("print_settings.json")
@@ -542,22 +524,6 @@ class SettingsDialog:
         
         if self.workshop_var.get() != workshop:
             self.workshop_var.set(workshop)
-            self._update_paper_sizes()
-
-    # noinspection PyUnusedLocal
-    def _on_workshop_changed(self, *args):
-        """Обрабатывает изменение выбора цеха"""
-        self._update_paper_sizes()
-
-    def _update_paper_sizes(self):
-        """Обновляет размеры бумаги в зависимости от цеха"""
-        workshop = self.workshop_var.get()
-        if workshop == "1":
-            self.paper_width_var.set("90")
-            self.paper_height_var.set("72")
-        else:  # workshop == "2"
-            self.paper_width_var.set("80")
-            self.paper_height_var.set("57")
         
     def load_folder_paths(self):
         try:

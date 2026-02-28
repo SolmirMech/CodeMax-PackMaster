@@ -266,12 +266,14 @@ class PrintModule:
             if self.selected_preview == "roll":
                 data_map = self.preview_module._prepare_roll_data_map()
                 print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+                pdf_filler = self.preview_module.roll_pdf_filler
             else:
                 data_map = self.preview_module._prepare_box_data_map()
                 print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+                pdf_filler = self.preview_module.box_pdf_filler
 
             for i in range(total_copies):
-                self._print_image_gdi(print_image, printer_name)
+                self._print_image_gdi(print_image, printer_name, pdf_filler)
 
             # Следующий вид
             self.current_batch_index += 1
@@ -362,7 +364,7 @@ class PrintModule:
 
             # Печатаем N копий ролика на принтере для роликов
             for i in range(copies):
-                self._print_image_gdi(print_image, roll_printer)
+                self._print_image_gdi(print_image, roll_printer, self.preview_module.roll_pdf_filler)
 
             # === Печать коробки (rolls_count = copies) ===
             # Меняем rolls_count на copies для коробки
@@ -378,7 +380,7 @@ class PrintModule:
             box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map)
 
             # Печатаем одну коробку на принтере для коробок
-            self._print_image_gdi(box_print_image, box_printer)
+            self._print_image_gdi(box_print_image, box_printer, self.preview_module.box_pdf_filler)
 
             # === Восстанавливаем оригинальное значение ===
             self.connected_roll_module.rolls_count_var.set(original_rolls_count)
@@ -524,12 +526,14 @@ class PrintModule:
         if self.selected_preview == "roll":
             data_map = self.preview_module._prepare_roll_data_map()
             print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+            pdf_filler = self.preview_module.roll_pdf_filler
         else:
             data_map = self.preview_module._prepare_box_data_map()
             print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+            pdf_filler = self.preview_module.box_pdf_filler
 
         for i in range(copies):
-            self._print_image_gdi(print_image, printer_name)
+            self._print_image_gdi(print_image, printer_name, pdf_filler)
 
     @staticmethod
     def _parse_range(range_str):
@@ -586,28 +590,32 @@ class PrintModule:
             print(f"Ошибка поиска принтера: {e}")
             return None
 
-    def _print_image_gdi(self, img: Image.Image, printer_name: str):
-        """Печатает изображение через GDI"""
+    @staticmethod
+    def _print_image_gdi(img: Image.Image, printer_name: str, pdf_filler):
+        """печатает изображение через GDI с размерами из PDF шаблона"""
         try:
-            # noinspection PyUnresolvedReferences
+            # создаём контекст устройства для принтера
             hdc = win32ui.CreateDC()
             hdc.CreatePrinterDC(printer_name)
 
             if not hdc:
-                raise Exception(f"Не удалось создать контекст устройства для: {printer_name}")
+                raise Exception(f"не удалось создать контекст устройства для: {printer_name}")
 
-            printer_dpi_x = hdc.GetDeviceCaps(88)
-            printer_dpi_y = hdc.GetDeviceCaps(90)
+            # получаем разрешение принтера в dpi
+            printer_dpi_x = hdc.GetDeviceCaps(88)  # LOGPIXELSX
+            printer_dpi_y = hdc.GetDeviceCaps(90)  # LOGPIXELSY
 
-            # Размер этикетки (пдф-формы)
-            paper_width_mm = self.settings.get("paper_width_mm", 80)
-            paper_height_mm = self.settings.get("paper_height_mm", 58)
+            # получаем размер этикетки из PDF шаблона
+            width_mm, height_mm = pdf_filler.get_template_size_mm()
+            if width_mm <= 0 or height_mm <= 0:
+                raise Exception(f"не удалось получить размер из PDF шаблона")
 
-            paper_width_pixels = int(paper_width_mm / 25.4 * printer_dpi_x)
-            paper_height_pixels = int(paper_height_mm / 25.4 * printer_dpi_y)
+            # конвертируем миллиметры в пиксели с учётом DPI принтера
+            paper_width_pixels = int(width_mm / 25.4 * printer_dpi_x)
+            paper_height_pixels = int(height_mm / 25.4 * printer_dpi_y)
 
+            # рассчитываем масштаб для вписывания изображения в размер этикетки
             img_width, img_height = img.size
-
             scale_x = paper_width_pixels / img_width
             scale_y = paper_height_pixels / img_height
             scale = min(scale_x, scale_y)
@@ -615,9 +623,11 @@ class PrintModule:
             new_width = int(img_width * scale)
             new_height = int(img_height * scale)
 
+            # центрируем изображение на листе
             x_offset = (paper_width_pixels - new_width) // 2
             y_offset = (paper_height_pixels - new_height) // 2
 
+            # отправляем на печать
             doc_name = "Label Print"
             hdc.StartDoc(doc_name)
             hdc.StartPage()
@@ -630,8 +640,8 @@ class PrintModule:
             hdc.EndDoc()
 
         except Exception as e:
-            raise Exception(f"Ошибка печати GDI: {str(e)}")
-            
+            raise Exception(f"ошибка печати GDI: {str(e)}")
+
     def call_roll_module_method(self, method_name, *args, **kwargs):
         """Универсальный метод для вызовов методов подключенного модуля ролика"""
         if self.connected_roll_module and hasattr(self.connected_roll_module, method_name):

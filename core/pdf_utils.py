@@ -178,7 +178,27 @@ class PDFTemplateFiller:
         # добавляем версионность
         self._cache_version = 0
         self._current_version = 0
-        
+
+    def get_template_size_mm(self) -> tuple[float, float]:
+        """Возвращает размер первой страницы шаблона в миллиметрах"""
+        if not self.doc:
+            try:
+                self.open_template()
+            except Exception as e:
+                print(f"Ошибка открытия PDF для получения размера: {e}")
+                return 0, 0
+
+        if self.doc and len(self.doc) > 0:
+            page = self.doc[0]
+            # Размер в пунктах (1/72 дюйма)
+            width_pt = page.rect.width
+            height_pt = page.rect.height
+            # Конвертируем в мм (1 пункт = 1/72 дюйма, 1 дюйм = 25.4 мм)
+            width_mm = width_pt * 25.4 / 72
+            height_mm = height_pt * 25.4 / 72
+            return round(width_mm, 1), round(height_mm, 1)
+        return 0, 0
+
     def _generate_cache_key(self, data_map: Dict[str, str], for_print: bool) -> str:
         """Генерирует уникальный ключ кэша на основе данных и версии"""
         # Сортируем словарь для стабильности ключа
