@@ -5,90 +5,93 @@ from tkinter import ttk, messagebox, simpledialog
 # noinspection SpellCheckingInspection,PyTypeChecker
 class FontSettingsDialog:
     """Окно настроек размеров шрифтов"""
-    
+
+    # Константа для пересчёта print → preview
+    PRINT_TO_PREVIEW_RATIO = 2.7778  # (300/72) / 1.5
+
     @staticmethod
     def get_default_font_settings():
         """Возвращает настройки шрифтов по умолчанию для 1 цеха"""
         return {
-            "roll": {
-                "customer": {
-                    "preview": 14,
-                    "print": 36
-                },
-                "product": {
-                    "preview": 16,
-                    "print": 44
-                },
-                "tu_number": {
-                    "preview": 12,
-                    "print": 24
-                },
-                "other": {
-                    "preview": 16,
-                    "print": 36
-                },
-                "multiline_settings": {
-                    "line_width_mm": 79,
-                    "font_factor": 0.29,
-                    "printer_dpi": 203,
-                    "max_lines": 4,
-                    "font_family": "Arial",
-                    "font_style": "normal"
-                },
-                "address": {
-                    "preview": 9,
-                    "print": 26
-                }
+        "roll": {
+            "customer": {
+                "print": 40,
+                "preview": 14
             },
-            "box": {
-                "manufacturer": {
-                    "preview": 16,
-                    "print": 40
-                },
-                "address": {
-                    "preview": 9,
-                    "print": 26
-                },
-                "customer": {
-                    "preview": 14,
-                    "print": 36
-                },
-                "product": {
-                    "preview": 16,
-                    "print": 44
-                },
-                "total": {
-                    "preview": 20,
-                    "print": 50
-                },
-                "tu_number": {
-                    "preview": 10,
-                    "print": 30
-                },
-                "packer": {
-                    "preview": 12,
-                    "print": 30
-                },
-                "other": {
-                    "preview": 14,
-                    "print": 38
-                },
-                "multiline_settings": {
-                    "line_width_mm": 79,
-                    "font_factor": 0.28,
-                    "printer_dpi": 203,
-                    "max_lines": 4,
-                    "font_family": "Arial",
-                    "font_style": "normal"
-                },
-                "order_number": {
-                    "preview": 16,
-                    "print": 48,
-                    "font_family": "Arial",
-                    "font_style": "bold"
-                }
+            "product": {
+                "print": 50,
+                "preview": 17
+            },
+            "tu_number": {
+                "print": 24,
+                "preview": 8
+            },
+            "other": {
+                "print": 40,
+                "preview": 14
+            },
+            "multiline_settings": {
+                "line_width_mm": 79,
+                "font_factor": 0.29,
+                "printer_dpi": 203,
+                "max_lines": 4,
+                "font_family": "Arial",
+                "font_style": "normal"
+            },
+            "address": {
+                "print": 26,
+                "preview": 9
+            }
+        },
+        "box": {
+            "manufacturer": {
+                "print": 40,
+                "preview": 14
+            },
+            "address": {
+                "print": 26,
+                "preview": 9
+            },
+            "customer": {
+                "print": 40,
+                "preview": 14
+            },
+            "product": {
+                "print": 50,
+                "preview": 17
+            },
+            "total": {
+                "print": 50,
+                "preview": 17
+            },
+            "tu_number": {
+                "print": 30,
+                "preview": 10
+            },
+            "packer": {
+                "print": 36,
+                "preview": 12
+            },
+            "other": {
+                "print": 40,
+                "preview": 14
+            },
+            "multiline_settings": {
+                "line_width_mm": 79,
+                "font_factor": 0.28,
+                "printer_dpi": 203,
+                "max_lines": 4,
+                "font_family": "Arial",
+                "font_style": "normal"
+            },
+            "order_number": {
+                "print": 48,
+                "font_family": "Arial",
+                "font_style": "bold",
+                "preview": 17
             }
         }
+    }
         
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
         self.main_frame = None
@@ -392,26 +395,23 @@ class FontSettingsDialog:
                 self.show_status(f"Шаблон '{template_name}' удален", "info")
             else:
                 self.show_status("Не удалось удалить шаблон", "error")
-                
+
     def update_ui_from_settings(self):
         """Обновляет UI из текущих настроек"""
-        # Обновляем поля ролика
-        for key, entries in self.roll_entries.items():
-            entries["preview"].set(str(self.font_settings["roll"][key]["preview"]))
-            entries["print"].set(str(self.font_settings["roll"][key]["print"]))
-        
-        # Обновляем поля коробки
-        for key, entries in self.box_entries.items():
-            entries["preview"].set(str(self.font_settings["box"][key]["preview"]))
-            entries["print"].set(str(self.font_settings["box"][key]["print"]))
-        
-        # Обновляем настройки переноса для ролика
+        # Обновляем поля ролика - показываем только print
+        for key, var in self.roll_entries.items():
+            var.set(str(self.font_settings["roll"][key]["print"]))
+
+        # Обновляем поля коробки - показываем только print
+        for key, var in self.box_entries.items():
+            var.set(str(self.font_settings["box"][key]["print"]))
+
+        # Обновляем настройки переноса (без изменений)
         roll_multiline = self.font_settings["roll"].get("multiline_settings", {})
         for key, var in self.roll_wrap_entries.items():
             if key in roll_multiline:
                 var.set(str(roll_multiline[key]))
-        
-        # Обновляем настройки переноса для коробки
+
         box_multiline = self.font_settings["box"].get("multiline_settings", {})
         for key, var in self.box_wrap_entries.items():
             if key in box_multiline:
@@ -422,10 +422,9 @@ class FontSettingsDialog:
         # Заголовки
         headers_frame = ttk.Frame(parent)
         headers_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         ttk.Label(headers_frame, text="Поле", width=20).pack(side=tk.LEFT)
-        ttk.Label(headers_frame, text="Превью", width=10).pack(side=tk.LEFT, padx=5)
-        ttk.Label(headers_frame, text="Печать", width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(headers_frame, text="Размер шрифта(pt)", width=18).pack(side=tk.LEFT, padx=5)
         
         # Разделитель
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=5)
@@ -445,21 +444,13 @@ class FontSettingsDialog:
             field_frame.pack(fill=tk.X, padx=5, pady=2)
             
             ttk.Label(field_frame, text=label, width=20).pack(side=tk.LEFT)
-            
-            # Превью
-            preview_var = tk.StringVar(value=str(self.font_settings["roll"][key]["preview"]))
-            preview_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=8, textvariable=preview_var)
-            preview_spin.pack(side=tk.LEFT, padx=5)
-            
-            # Печать
-            print_var = tk.StringVar(value=str(self.font_settings["roll"][key]["print"]))
-            print_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=8, textvariable=print_var)
-            print_spin.pack(side=tk.LEFT, padx=(65, 5))
-            
-            self.roll_entries[key] = {
-                "preview": preview_var,
-                "print": print_var
-            }
+
+            # ОДИН спинбокс вместо двух
+            size_var = tk.StringVar(value=str(self.font_settings["roll"][key]["print"]))
+            size_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=10, textvariable=size_var)
+            size_spin.pack(side=tk.LEFT, padx=5)
+
+            self.roll_entries[key] = size_var  # Теперь храним только одну переменную
             
         # Секция переноса текста - добавляем после обычных полей
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=10)
@@ -523,10 +514,9 @@ class FontSettingsDialog:
         # Заголовки
         headers_frame = ttk.Frame(parent)
         headers_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         ttk.Label(headers_frame, text="Поле", width=20).pack(side=tk.LEFT)
-        ttk.Label(headers_frame, text="Превью", width=10).pack(side=tk.LEFT, padx=5)
-        ttk.Label(headers_frame, text="Печать", width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(headers_frame, text="Размер шрифта(pt)", width=18).pack(side=tk.LEFT, padx=5)
         
         # Разделитель
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=5)
@@ -550,21 +540,13 @@ class FontSettingsDialog:
             field_frame.pack(fill=tk.X, padx=5, pady=2)
             
             ttk.Label(field_frame, text=label, width=20).pack(side=tk.LEFT)
-            
-            # Превью
-            preview_var = tk.StringVar(value=str(self.font_settings["box"][key]["preview"]))
-            preview_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=8, textvariable=preview_var)
-            preview_spin.pack(side=tk.LEFT, padx=5)
-            
-            # Печать (для ВСЕХ полей теперь редактируемая)
-            print_var = tk.StringVar(value=str(self.font_settings["box"][key]["print"]))
-            print_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=8, textvariable=print_var)
-            print_spin.pack(side=tk.LEFT, padx=(65, 5))
-            
-            self.box_entries[key] = {
-                "preview": preview_var,
-                "print": print_var
-            }
+
+            # ОДИН спинбокс
+            size_var = tk.StringVar(value=str(self.font_settings["box"][key]["print"]))
+            size_spin = ttk.Spinbox(field_frame, from_=7, to=72, width=10, textvariable=size_var)
+            size_spin.pack(side=tk.LEFT, padx=5)
+
+            self.box_entries[key] = size_var
 
         # Секция переноса текста - добавляем после обычных полей
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=10)
@@ -619,15 +601,19 @@ class FontSettingsDialog:
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
         try:
-            # Сохраняем настройки ролика
-            for key, entries in self.roll_entries.items():
-                self.font_settings["roll"][key]["preview"] = int(entries["preview"].get())
-                self.font_settings["roll"][key]["print"] = int(entries["print"].get())
-            
-            # Сохраняем настройки переноса для ролика
+            # Сохраняем настройки ролика - только print, preview рассчитываем
+            for key, var in self.roll_entries.items():
+                print_size = int(var.get())
+                # Автоматически рассчитываем preview по формуле
+                preview_size = max(7, int(print_size / self.PRINT_TO_PREVIEW_RATIO))
+
+                self.font_settings["roll"][key]["print"] = print_size
+                self.font_settings["roll"][key]["preview"] = preview_size
+
+            # Сохраняем настройки переноса для ролика (без изменений)
             if "multiline_settings" not in self.font_settings["roll"]:
                 self.font_settings["roll"]["multiline_settings"] = {}
-            
+
             for key, var in self.roll_wrap_entries.items():
                 if key == "font_factor":
                     self.font_settings["roll"]["multiline_settings"][key] = float(var.get())
@@ -635,16 +621,20 @@ class FontSettingsDialog:
                     self.font_settings["roll"]["multiline_settings"][key] = var.get()
                 else:
                     self.font_settings["roll"]["multiline_settings"][key] = int(var.get())
-            
-            # Сохраняем настройки коробки
-            for key, entries in self.box_entries.items():
-                self.font_settings["box"][key]["preview"] = int(entries["preview"].get())
-                self.font_settings["box"][key]["print"] = int(entries["print"].get())
-            
-            # Сохраняем настройки переноса для коробки
+
+            # Сохраняем настройки коробки - только print, preview рассчитываем
+            for key, var in self.box_entries.items():
+                print_size = int(var.get())
+                # Автоматически рассчитываем preview по формуле
+                preview_size = max(7, int(print_size / self.PRINT_TO_PREVIEW_RATIO))
+
+                self.font_settings["box"][key]["print"] = print_size
+                self.font_settings["box"][key]["preview"] = preview_size
+
+            # Сохраняем настройки переноса для коробки (без изменений)
             if "multiline_settings" not in self.font_settings["box"]:
                 self.font_settings["box"]["multiline_settings"] = {}
-                
+
             for key, var in self.box_wrap_entries.items():
                 if key == "font_factor":
                     self.font_settings["box"]["multiline_settings"][key] = float(var.get())
@@ -653,26 +643,26 @@ class FontSettingsDialog:
                 else:
                     self.font_settings["box"]["multiline_settings"][key] = int(var.get())
 
-            # Сохраняем через ConfigManager
+            # Сохраняем через ConfigManager (без изменений)
             all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
             all_settings[self.current_template] = {
                 "roll": self.font_settings["roll"].copy(),
                 "box": self.font_settings["box"].copy()
             }
-            
+
             success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
-            
+
             if not success:
                 self.show_status("Не удалось сохранить настройки шрифтов", "error")
             else:
                 self.show_status("Настройки шрифтов сохранены", "info")
-                
+
             return success
-            
+
         except Exception as e:
             self.show_status(f"Ошибка сохранения: {e}", "error")
             return False
-        
+
     def show_status(self, message, status_type="info"):
         """Показывает статус в строке состояния"""
         colors = {
@@ -682,21 +672,19 @@ class FontSettingsDialog:
         }
         self.status_var.set(message)
         self.status_label.configure(foreground=colors.get(status_type, "green"))
-        self.main_frame.winfo_toplevel().update()       
+        self.main_frame.winfo_toplevel().update()
 
     def reset_to_default(self):
         """Сбрасывает настройки к значениям по умолчанию"""
         if messagebox.askyesno("Сброс", "Сбросить все настройки шрифтов к значениям по умолчанию?"):
             default_settings = self.get_default_font_settings()
-            
-            # Обновляем UI
-            for key, entries in self.roll_entries.items():
-                entries["preview"].set(str(default_settings["roll"][key]["preview"]))
-                entries["print"].set(str(default_settings["roll"][key]["print"]))
-            
-            for key, entries in self.box_entries.items():
-                entries["preview"].set(str(default_settings["box"][key]["preview"]))
-                entries["print"].set(str(default_settings["box"][key]["print"]))
-                
+
+            # Обновляем UI - показываем только print
+            for key, var in self.roll_entries.items():
+                var.set(str(default_settings["roll"][key]["print"]))
+
+            for key, var in self.box_entries.items():
+                var.set(str(default_settings["box"][key]["print"]))
+
             self.show_status("Настройки сброшены к значениям по умолчанию", "info")
                                 

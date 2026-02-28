@@ -443,7 +443,7 @@ class PDFTemplateFiller:
             dpi = 300
             mat = fitz.Matrix(dpi/72, dpi/72)
         else:
-            # Для превью используем zoom_level, как в оригинале
+            # Для превью используем увеличение, как в оригинале
             mat = fitz.Matrix(self.zoom_level, self.zoom_level)
         
         self._cached_mat = mat
