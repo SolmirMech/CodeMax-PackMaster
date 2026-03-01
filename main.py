@@ -72,6 +72,7 @@ class WeightOrdersApp:
         self.coordinator = None
         self.config_manager = None
         self.data_manager = None
+        self.settings_manager = None
         
         # Инициализация ConfigManager (менеджер настроек)
         from core.config_manager import ConfigManager
@@ -224,6 +225,18 @@ class WeightOrdersApp:
         # Связи для статусов (разделяем по назначению)
         self.preview_module.export_module = self.export_module  # только для экспорта
         self.order_data_module.export_module = self.export_module  # только для экспорта
+
+        # Инициализируем SettingsManager и диалоги сразу
+        from core.settings.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager(
+            self.root,
+            self,  # parent_manager
+            config_manager=self.config_manager,
+            coordinator=self.coordinator  # ЭТО ВАЖНО!
+        )
+        # Передаем ссылку на roll_module в координатор
+        self.coordinator.set_roll_module(self.roll_module)
+        self.coordinator.set_settings_manager(self.settings_manager)
         
         # Отложенная инициализация preview_module
         if hasattr(self.preview_module, 'initialize_templates'):

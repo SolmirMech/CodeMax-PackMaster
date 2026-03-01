@@ -147,12 +147,10 @@ class PrintModule:
 
     def open_settings_manager(self):
         """Открывает единое окно настроек с вкладками"""
-        from core.settings.settings_manager import SettingsManager
-        if self._settings_manager is None:
-            self._settings_manager = SettingsManager(self.parent, self, config_manager=self.config_manager, coordinator=self.coordinator)
-            # Передаем колбэк для статуса
-            self._settings_manager.set_status_callback(self.set_status)
-        self._settings_manager.show()
+        if self.coordinator:
+            self._settings_manager = self.coordinator.get_settings_manager()
+            if self._settings_manager:
+                self._settings_manager.show()
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""

@@ -25,6 +25,29 @@ class SettingsCoordinator:
 
         self._load_initial_settings()
         self._initialized = True
+        self.roll_module = None
+        self.settings_manager = None
+        self.settings_dialog = None
+
+    def set_settings_manager(self, manager):
+        """Устанавливает ссылку на менеджера настроек"""
+        self.settings_manager = manager
+
+    def get_settings_manager(self):
+        """Возвращает менеджер настроек"""
+        return self.settings_manager
+
+    def set_roll_module(self, roll_module):
+        """Устанавливает ссылку на модуль ролика"""
+        self.roll_module = roll_module
+
+    def get_roll_module(self):
+        """Возвращает модуль ролика"""
+        return self.roll_module
+
+    def set_settings_dialog(self, dialog):
+        """Устанавливает ссылку на диалог настроек"""
+        self.settings_dialog = dialog
 
     def _load_initial_settings(self):
         """Загружает начальные настройки"""

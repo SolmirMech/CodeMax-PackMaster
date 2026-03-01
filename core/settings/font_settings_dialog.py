@@ -469,7 +469,6 @@ class FontSettingsDialog:
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
         try:
-
             # Сохраняем настройки ролика
             for key, var in self.roll_entries.items():
                 print_size = int(var.get())
@@ -515,14 +514,15 @@ class FontSettingsDialog:
             current_roll_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
             current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
 
-            # Просто создаём словарь с двумя ключами
-            settings_to_save = {
-                current_roll_pdf: {"roll": self.font_settings["roll"].copy()},
-                current_box_pdf: {"box": self.font_settings["box"].copy()}
-            }
+            # Загружаем существующие настройки
+            all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
 
-            # Сохраняем
-            success = self.config_manager.save_json_settings("label_font_settings.json", settings_to_save)
+            # Обновляем только текущие
+            all_settings[current_roll_pdf] = {"roll": self.font_settings["roll"].copy()}
+            all_settings[current_box_pdf] = {"box": self.font_settings["box"].copy()}
+
+            # Сохраняем всё
+            success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
 
             if success:
                 self.show_status("✅ Настройки шрифтов сохранены", "info")
@@ -534,7 +534,7 @@ class FontSettingsDialog:
         except Exception as e:
             self.show_status(f"❌ Ошибка сохранения: {e}", "error")
             return False
-
+        
     def show_status(self, message, status_type="info"):
         """Показывает статус в строке состояния"""
         colors = {

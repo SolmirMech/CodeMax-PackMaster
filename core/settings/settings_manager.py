@@ -59,14 +59,14 @@ class SettingsManager:
         # Вкладка 2: Настройки шрифтов  
         font_frame = ttk.Frame(notebook)
         notebook.add(font_frame, text="Настройки шрифтов")
-        
+
         # Инициализируем диалоги
         self.general_dialog = SettingsDialog(
             left_frame,
             config_manager=self.config_manager,
             coordinator=self.coordinator
         )
-        self.general_dialog.set_parent_manager(self) # передаём ссылку на SettingsManager
+        self.general_dialog.set_parent_manager(self)
         self.general_dialog.create_ui()
         
         self.lists_dialog = ListsSettingsDialog(

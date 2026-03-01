@@ -648,40 +648,32 @@ class RollLabelPrinter:
                 # Корректируем с учетом возможного удаления символов
                 new_pos = min(new_pos, len(formatted))
                 self.emission_entry.icursor(new_pos)
-        
+
     def _on_rosinka_toggled(self):
         """При включении/выключении галочки Росинка"""
-        # Сохраняем текущие значения префикса и суффикса
         current_prefix = self.order_prefix.get()
         current_suffix = self.order_suffix.get()
-        
+
+        if self.rosinka_var.get():
+            self.podlo_label.grid()
+            self.podlo_entry.grid()
+            self.extract_label_size_from_db()
+        else:
+            self.podlo_label.grid_remove()
+            self.podlo_entry.grid_remove()
+            self.ros_size_var.set("")
+
+        # Уведомляем всех подписчиков
         if self.coordinator:
-            if self.rosinka_var.get():
-                # Включаем - ставим шаблон "Росинка"
-                self.coordinator.set_font_template("Росинка")
-                # Показываем поле Подложка
-                self.podlo_label.grid()
-                self.podlo_entry.grid()
-                # Извлекаем размер этикетки из БД
-                self.extract_label_size_from_db()
-            else:
-                # Выключаем - возвращаем стандартный по цеху
-                workshop = self.coordinator.get_workshop()
-                default_template = "1_цех" if workshop == "1" else "2_цех"
-                self.coordinator.set_font_template(default_template)
-                # Скрываем поле Подложка
-                self.podlo_label.grid_remove()
-                self.podlo_entry.grid_remove()
-                # Очищаем размер этикетки
-                self.ros_size_var.set("")
-            
-            # Уведомляем всех
             self.coordinator.notify_list_changed("rosinka")
-            
-            # Восстанавливаем сохраненные значения
-            self.order_prefix.set(current_prefix)
-            self.order_suffix.set(current_suffix)
-            
+
+
+        self.order_prefix.set(current_prefix)
+        self.order_suffix.set(current_suffix)
+
+        if self.preview_module is not None:
+            self.preview_module._update_from_connected_roll_module()
+
     def extract_label_size_from_db(self):
         """Извлекает размер этикетки из order_name для Росинки из кэша"""
         # Проверяем order_data_module
