@@ -1,5 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
+
+from core.settings.settings_dialog import SettingsDialog
 
 
 # noinspection SpellCheckingInspection,PyTypeChecker
@@ -94,6 +96,10 @@ class FontSettingsDialog:
     }
         
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
+        self.roll_status_label = None
+        self.roll_status_var = None
+        self.box_status_label = None
+        self.box_status_var = None
         self.main_frame = None
         self.parent_frame = parent_frame
         self.config_manager = config_manager
@@ -108,8 +114,6 @@ class FontSettingsDialog:
         self.font_settings = {}
         
         # UI переменные
-        self.template_var = None
-        self.template_combo = None
         self.roll_entries = {}
         self.box_entries = {}
         self.roll_wrap_entries = {}
@@ -124,19 +128,13 @@ class FontSettingsDialog:
         
     def create_ui(self):
         """Создает UI в указанном родительском фрейме"""
-        # Получаем шаблон из координатора
-        if self.coordinator:
-            self.current_template = self.coordinator.get_font_template()
-            self.coordinator.subscribe(self._on_coordinator_changed)
+        # Получаем шаблон
             
         self.font_settings = self.load_font_settings()
         
         # Основной контейнер с двумя колонками
         self.main_frame = ttk.Frame(self.parent_frame)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Панель шаблонов
-        self.create_template_panel()
         
         # Левая колонка - Ролик
         roll_frame = ttk.LabelFrame(self.main_frame, text="Ролик")
@@ -162,9 +160,6 @@ class FontSettingsDialog:
             success = self._save_font_settings()
 
             if success:
-                # Сохраняем выбранный шаблон в настройки приложения
-                self.coordinator.set_font_template(self.current_template)
-
                 # Обновляем превью
                 self.preview_printer.update_font_settings(self.font_settings)
                 self.preview_printer.update_preview_displays()
@@ -179,222 +174,39 @@ class FontSettingsDialog:
             self.last_status = "❌ Ошибка: Некорректные значения в настройках"
             return False
         except Exception as _:
-            self.last_status = f"❌ Ошибка сохранения"
+            self.last_status = "❌ Ошибка сохранения"
             return False
 
-    # noinspection PyUnusedLocal
-    def _on_coordinator_changed(self, context=None):
-        """Обрабатывает изменения от координатора"""
-        if not self._initialized:
-            return
-            
-        new_template = self.coordinator.get_font_template()
-        
-        if new_template != self.current_template:
-            self.current_template = new_template
-            self.template_var.set(new_template)
-        
     def load_font_settings(self):
-        """Загружает настройки шрифтов для текущего шаблона"""
-        all_settings = self.config_manager.get_font_settings()
-        
-        # Получаем настройки текущего шаблона
-        template_settings = all_settings.get(self.current_template)
-        
-        if template_settings:
-            # Проверяем и добавляем отсутствующие поля
-            default_settings = self.get_default_font_settings()
-            
-            # Для ролика
-            for key in default_settings["roll"]:
-                if key not in template_settings["roll"]:
-                    template_settings["roll"][key] = default_settings["roll"][key]
-            
-            # Для коробки
-            for key in default_settings["box"]:
-                if key not in template_settings["box"]:
-                    template_settings["box"][key] = default_settings["box"][key]
-            
-            return template_settings
-        else:
-            return self.get_default_font_settings()
-        
-    def create_template_panel(self):
-        """Создает панель управления шаблонами"""
-        template_frame = ttk.Frame(self.main_frame)
-        template_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
-        
-        # Левая часть - выбор шаблона
-        left_frame = ttk.Frame(template_frame)
-        left_frame.pack(side=tk.LEFT)
-        
-        ttk.Label(left_frame, text="Шаблон:").pack(side=tk.LEFT, padx=(0, 5))
-        
-        # Combobox шаблонов
-        self.template_var = tk.StringVar(value=self.current_template)
-        self.template_combo = ttk.Combobox(
-            left_frame, 
-            textvariable=self.template_var,
-            state="readonly",
-            width=15
-        )
-        self.template_combo.pack(side=tk.LEFT, padx=5)
-        self.template_combo.bind('<<ComboboxSelected>>', self.on_template_changed)
-        
-        # Кнопки управления шаблонами
-        ttk.Button(left_frame, text="🔄", width=3, 
-                   command=self.apply_template).pack(side=tk.LEFT, padx=5)
-        ttk.Button(left_frame, text="➕", width=3,
-                   command=self.save_as_template).pack(side=tk.LEFT, padx=5)
-        ttk.Button(left_frame, text="🗑️", width=3,
-                   command=self.delete_template).pack(side=tk.LEFT, padx=(5, 150))
-        
-        # Правая часть - кнопки сохранения и статус
-        right_frame = ttk.Frame(template_frame)
-        right_frame.pack(side=tk.LEFT)
-        
-        # Кнопка сохранения
-        save_btn = ttk.Button(
-            right_frame, 
-            text="💾 Сохранить", 
-            command=self._on_save_clicked
-        )
-        save_btn.pack(side=tk.LEFT, padx=(5, 220))
-        
-        # Кнопка сброса
-        ttk.Button(
-            right_frame,
-            text="🧹 Сбросить",
-            command=self.reset_to_default
-        ).pack(side=tk.RIGHT, padx=(0, 5))     
-        
-        # Загружаем список шаблонов
-        self.update_template_list()
-        
-    def update_template_list(self):
-        """Обновляет список шаблонов в комбобоксе"""
-        # Загружаем текущие настройки, чтобы получить список шаблонов
+        """Загружает настройки шрифтов для текущих PDF шаблонов"""
         all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        
-        # Если файл пустой, создаем дефолтный шаблон
-        if not all_settings:
-            all_settings = {"1_цех": self.get_default_font_settings()}
-            self.config_manager.save_json_settings("label_font_settings.json", all_settings)
-        
-        templates = list(all_settings.keys())
-        self.template_combo['values'] = templates
-        
-        # Устанавливаем текущий шаблон
-        if self.current_template in templates:
-            self.template_var.set(self.current_template)
-        else:
-            self.current_template = "1_цех"
-            self.template_var.set("1_цех")
-            
-    def apply_template(self, silent=False):
-        """Применить выбранный шаблон"""
-        template_name = self.template_var.get()
-        if template_name == self.current_template:
-            return  # Уже активен
-        
-        # Сохраняем текущие настройки перед переключением
-        self._save_font_settings()
-        
-        # Загружаем новый шаблон
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        if template_name in all_settings:
-            self.current_template = template_name
-            template_data = all_settings[template_name]
-            
-            # Загружаем настройки шаблона БЕЗ мерджа с дефолтными
-            self.font_settings = template_data
-            
-            self.update_ui_from_settings()
-            
-            # Уведомляем координатор только если не silent режим
-            if not silent:
-                self.coordinator.set_font_template(template_name)
-                
-            self.show_status(f"Шаблон '{template_name}' применен", "info")
-        else:
-            self.show_status(f"Шаблон '{template_name}' не найден", "error")
-            self.update_template_list()
-            
-    def save_as_template(self):
-        """Сохранить текущие настройки как новый шаблон"""
-        # Сначала сохраняем текущие настройки в активный шаблон
-        self._save_font_settings()
-        
-        # Запрашиваем имя шаблона
-        template_name = tk.simpledialog.askstring(
-            "Новый шаблон", 
-            "Введите имя нового шаблона:",
-            parent=self.main_frame.winfo_toplevel()
-        )
-        
-        if not template_name:
-            return
-        
-        if template_name in ["1_цех", "2_цех"]:
-            self.show_status("Недопустимое имя шаблона - зарезервировано системой", "error")
-            return
-        
-        # Загружаем все настройки и добавляем новый шаблон
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        
-        # Сохраняем КОПИЮ текущих настроек как новый шаблон
-        all_settings[template_name] = {
-            "roll": self.font_settings["roll"].copy(),
-            "box": self.font_settings["box"].copy()
-        }
-        
-        # Сохраняем обновленные настройки
-        success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
-        
-        if success:
-            self.current_template = template_name
-            self.update_template_list()
-            
-            self.coordinator.set_font_template(template_name)
-            
-            self.show_status(f"Шаблон '{template_name}' сохранен", "info")
-        else:
-            self.show_status("Не удалось сохранить шаблон", "error")
 
-    # noinspection PyUnusedLocal
-    def on_template_changed(self, event):
-        """При изменении выбора шаблона в комбобоксе"""
-        new_template = self.template_var.get()
-        if new_template != self.current_template:
-            self.apply_template()  # Автоматически применяем выбранный шаблон
-            
-    def delete_template(self):
-        """Удалить текущий шаблон"""
-        template_name = self.template_var.get()
-        
-        if template_name in ["1_цех", "2_цех"]:
-            self.show_status("Нельзя удалить системные шаблоны '1_цех' и '2_цех'", "error")
-            return
-        
-        if not messagebox.askyesno("Подтверждение", f"Удалить шаблон '{template_name}'?"):
-            return
-        
-        # Загружаем настройки и удаляем шаблон
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-        if template_name in all_settings:
-            del all_settings[template_name]
-            
-            # Сохраняем обновленные настройки
-            success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
-            
-            if success:
-                workshop = self.coordinator.get_workshop()
-                default_template = "1_цех" if workshop == "1" else "2_цех"
-                self.coordinator.set_font_template(default_template)               
-                
-                self.show_status(f"Шаблон '{template_name}' удален", "info")
-            else:
-                self.show_status("Не удалось удалить шаблон", "error")
+        # Получаем текущие PDF
+        workshop = self.coordinator.get_workshop()
+        shared = self.config_manager.load_json_settings("shared_utils.json")
+
+        current_roll_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
+        current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+
+        # Создаём результат с обоими типами
+        result = {
+            "roll": {},
+            "box": {}
+        }
+
+        # Загружаем настройки для ролика
+        if current_roll_pdf in all_settings and "roll" in all_settings[current_roll_pdf]:
+            result["roll"] = all_settings[current_roll_pdf]["roll"]
+        else:
+            result["roll"] = self.get_default_font_settings()["roll"]
+
+        # Загружаем настройки для коробки
+        if current_box_pdf in all_settings and "box" in all_settings[current_box_pdf]:
+            result["box"] = all_settings[current_box_pdf]["box"]
+        else:
+            result["box"] = self.get_default_font_settings()["box"]
+
+        return result
 
     def update_ui_from_settings(self):
         """Обновляет UI из текущих настроек"""
@@ -501,13 +313,46 @@ class FontSettingsDialog:
                     
                 entry.pack(side=tk.LEFT, padx=5)
                 self.roll_wrap_entries[key] = var
-                
-        status_frame = ttk.Frame(parent)
-        status_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
-                
-        self.status_var = tk.StringVar(value=f"Шаблон: {self.current_template}")
-        self.status_label = ttk.Label(status_frame, textvariable=self.status_var, foreground="green")
-        self.status_label.pack(side=tk.LEFT, padx=5)
+
+        # Информационная строка с текущим PDF
+        info_frame = ttk.Frame(parent)
+        info_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
+
+        # Получаем отображаемое имя PDF
+        workshop = self.coordinator.get_workshop()
+        shared = self.config_manager.load_json_settings("shared_utils.json")
+        current_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
+
+        # Находим отображаемое имя из ROLL_TEMPLATES
+        display_name = "Стандартный 1 цех"
+        for disp, filename in SettingsDialog.ROLL_TEMPLATES:
+            if filename == current_pdf:
+                display_name = disp.split(" → ")[0]
+                break
+
+        ttk.Label(
+            info_frame,
+            text=f"Текущий шаблон: {display_name} ({current_pdf})",
+            font=("Arial", 12, "bold")
+        ).grid(row=0, column=0, sticky="w", padx=5)
+
+        # Кнопка сохранения внизу ролика
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
+        button_frame.columnconfigure(0, weight=1)
+
+        save_btn = ttk.Button(
+            button_frame,
+            text="💾 Сохранить настройки шрифтов",
+            command=self._on_save_clicked,
+            width=30
+        )
+        save_btn.grid(row=0, column=0, sticky="w", padx=5)
+
+        # Статус для сообщений
+        self.roll_status_var = tk.StringVar()
+        self.roll_status_label = ttk.Label(info_frame, textvariable=self.roll_status_var, foreground="green")
+        self.roll_status_label.grid(row=1, column=0, sticky="w", padx=5)
 
     def create_box_tab(self, parent):
         """Создает вкладку настроек для коробки"""
@@ -598,19 +443,41 @@ class FontSettingsDialog:
                 entry.pack(side=tk.LEFT, padx=5)
                 self.box_wrap_entries[key] = var
 
+            # Информационная строка с текущим PDF коробки
+        info_frame = ttk.Frame(parent)
+        info_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
+
+        # Получаем отображаемое имя PDF для коробки
+        workshop = self.coordinator.get_workshop()
+        shared = self.config_manager.load_json_settings("shared_utils.json")
+        current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+
+        # Находим отображаемое имя из BOX_TEMPLATES
+        from core.settings.settings_dialog import SettingsDialog
+        box_display = "Стандартная коробка"
+        for disp, filename in SettingsDialog.BOX_TEMPLATES:
+            if filename == current_box_pdf:
+                box_display = disp.split(" → ")[0]
+                break
+
+        ttk.Label(
+            info_frame,
+            text=f"Текущий шаблон: {box_display} ({current_box_pdf})",
+            font=("Arial", 12, "bold")
+        ).pack(side=tk.LEFT, padx=5)
+
     def _save_font_settings(self):
         """Сохраняет настройки шрифтов"""
         try:
-            # Сохраняем настройки ролика - только print, preview рассчитываем
+
+            # Сохраняем настройки ролика
             for key, var in self.roll_entries.items():
                 print_size = int(var.get())
-                # Автоматически рассчитываем preview по формуле
                 preview_size = max(7, int(print_size / self.PRINT_TO_PREVIEW_RATIO))
-
                 self.font_settings["roll"][key]["print"] = print_size
                 self.font_settings["roll"][key]["preview"] = preview_size
 
-            # Сохраняем настройки переноса для ролика (без изменений)
+            # Сохраняем настройки переноса для ролика
             if "multiline_settings" not in self.font_settings["roll"]:
                 self.font_settings["roll"]["multiline_settings"] = {}
 
@@ -622,16 +489,14 @@ class FontSettingsDialog:
                 else:
                     self.font_settings["roll"]["multiline_settings"][key] = int(var.get())
 
-            # Сохраняем настройки коробки - только print, preview рассчитываем
+            # Сохраняем настройки коробки
             for key, var in self.box_entries.items():
                 print_size = int(var.get())
-                # Автоматически рассчитываем preview по формуле
                 preview_size = max(7, int(print_size / self.PRINT_TO_PREVIEW_RATIO))
-
                 self.font_settings["box"][key]["print"] = print_size
                 self.font_settings["box"][key]["preview"] = preview_size
 
-            # Сохраняем настройки переноса для коробки (без изменений)
+            # Настройки переноса для коробки
             if "multiline_settings" not in self.font_settings["box"]:
                 self.font_settings["box"]["multiline_settings"] = {}
 
@@ -643,35 +508,45 @@ class FontSettingsDialog:
                 else:
                     self.font_settings["box"]["multiline_settings"][key] = int(var.get())
 
-            # Сохраняем через ConfigManager (без изменений)
-            all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
-            all_settings[self.current_template] = {
-                "roll": self.font_settings["roll"].copy(),
-                "box": self.font_settings["box"].copy()
+            # Получаем текущие имена PDF
+            workshop = self.coordinator.get_workshop()
+            shared = self.config_manager.load_json_settings("shared_utils.json") or {}
+
+            current_roll_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
+            current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+
+            # Просто создаём словарь с двумя ключами
+            settings_to_save = {
+                current_roll_pdf: {"roll": self.font_settings["roll"].copy()},
+                current_box_pdf: {"box": self.font_settings["box"].copy()}
             }
 
-            success = self.config_manager.save_json_settings("label_font_settings.json", all_settings)
+            # Сохраняем
+            success = self.config_manager.save_json_settings("label_font_settings.json", settings_to_save)
 
-            if not success:
-                self.show_status("Не удалось сохранить настройки шрифтов", "error")
+            if success:
+                self.show_status("✅ Настройки шрифтов сохранены", "info")
             else:
-                self.show_status("Настройки шрифтов сохранены", "info")
+                self.show_status("❌ Не удалось сохранить", "error")
 
             return success
 
         except Exception as e:
-            self.show_status(f"Ошибка сохранения: {e}", "error")
+            self.show_status(f"❌ Ошибка сохранения: {e}", "error")
             return False
 
     def show_status(self, message, status_type="info"):
         """Показывает статус в строке состояния"""
         colors = {
             "info": "green",
-            "warning": "orange", 
+            "warning": "orange",
             "error": "red"
         }
-        self.status_var.set(message)
-        self.status_label.configure(foreground=colors.get(status_type, "green"))
+        # Используем roll_status_var вместо status_var
+        if self.roll_status_var:
+            self.roll_status_var.set(message)
+        if self.roll_status_label:
+            self.roll_status_label.configure(foreground=colors.get(status_type, "green"))
         self.main_frame.winfo_toplevel().update()
 
     def reset_to_default(self):

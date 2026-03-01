@@ -551,41 +551,42 @@ class RollPreview:
             self.print_module.print_label()
         else:
             self.status_label.config(text="Модуль печати не подключен", foreground="red")
-        
+
     def load_font_settings(self):
-        """Загружает настройки шрифтов через координатор"""
-        # Получаем активный шаблон из координатора
-        active_template = self.coordinator.get_font_template()
-        
-        # Загружаем настройки для этого шаблона
-        loaded_settings = self.config_manager.load_json_settings("label_font_settings.json")
-        
-        if loaded_settings and active_template in loaded_settings:
-            self.font_settings = loaded_settings[active_template]
-            
-            # Гарантируем, что все необходимые ключи присутствуют
-            default_settings = FontSettingsDialog.get_default_font_settings()
-            
-            # Для ролика
-            for key in default_settings["roll"]:
-                if key not in self.font_settings["roll"]:
-                    self.font_settings["roll"][key] = default_settings["roll"][key]
-            
-            # Для коробки  
-            for key in default_settings["box"]:
-                if key not in self.font_settings["box"]:
-                    self.font_settings["box"][key] = default_settings["box"][key]
-                    
+        """Загружает настройки шрифтов для текущих PDF шаблонов"""
+        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+
+        # Получаем текущие PDF
+        workshop = self.coordinator.get_workshop()
+        shared = self.config_manager.load_json_settings("shared_utils.json")
+
+        current_roll_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
+        current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+
+        # Загружаем настройки для ролика
+        if current_roll_pdf in all_settings and "roll" in all_settings[current_roll_pdf]:
+            roll_settings = all_settings[current_roll_pdf]["roll"]
         else:
-            # Используем настройки по умолчанию
-            self.font_settings = FontSettingsDialog.get_default_font_settings()
-            
-        # Применяем настройки к pdf filler'ам
+            roll_settings = FontSettingsDialog.get_default_font_settings()["roll"]
+
+        # Загружаем настройки для коробки
+        if current_box_pdf in all_settings and "box" in all_settings[current_box_pdf]:
+            box_settings = all_settings[current_box_pdf]["box"]
+        else:
+            box_settings = FontSettingsDialog.get_default_font_settings()["box"]
+
+        # Сохраняем в self.font_settings в ожидаемом формате
+        self.font_settings = {
+            "roll": roll_settings,
+            "box": box_settings
+        }
+
+        # Применяем настройки к pdf filler'ам (ЭТО ВАЖНО!)
         if self.roll_pdf_filler and self.font_settings:
             self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
         if self.box_pdf_filler and self.font_settings:
             self.box_pdf_filler.set_font_settings(self.font_settings["box"])
-            
+
     def update_font_settings(self, new_settings):
         """Обновляет настройки шрифтов"""
         # Очищаем всё перед применением новых настроек
