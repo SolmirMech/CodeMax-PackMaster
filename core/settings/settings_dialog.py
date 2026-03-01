@@ -14,6 +14,19 @@ def get_default_printer():
 # noinspection SpellCheckingInspection,PyTypeChecker
 class SettingsDialog:
     """Диалог настроек"""
+    # Сопоставление шаблонов: "отображаемое имя" → "имя файла"
+    ROLL_TEMPLATES = [
+        ("Стандартный 1 цех (90x72) → roll.pdf", "roll.pdf"),
+        ("Маленький 1 цех (80x57) → roll_1.pdf", "roll_1.pdf"),
+        ("Стандартный 2 цех (80x57) → roll_2_cex.pdf", "roll_2_cex.pdf"),
+        ("Росинка → rosinka.pdf", "rosinka.pdf"),
+        ("Пермалко ролик → permalko_roll.pdf", "permalko_roll.pdf"),
+    ]
+
+    BOX_TEMPLATES = [
+        ("Стандартная коробка → box.pdf", "box.pdf"),
+        ("Пермалко коробка → permalko_box.pdf", "permalko_box.pdf"),
+    ]
 
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
@@ -56,6 +69,13 @@ class SettingsDialog:
         # === ОКНО ВТУЛКИ ===
         self.weight_orders_window = None  # Ссылка на окно втулки
         self.weight_orders_module = None  # Модуль втулки
+
+        # === НАСТРОЙКИ ШАБЛОНОВ ЭТИКЕТОК ===
+        self.roll_template_var = tk.StringVar(value="")
+        self.box_template_var = tk.StringVar(value="")
+        # Подписываемся на изменения от координатора
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self._on_settings_changed)
 
     def set_parent_manager(self, manager):
         """Устанавливает ссылку на родительский менеджер"""
@@ -110,6 +130,56 @@ class SettingsDialog:
             width=25,
         )
         printer_box_combo.grid(row=3, column=0, padx=5, pady=(0, 5), sticky="w")
+
+        # ========== НОВЫЙ РАЗДЕЛ: Шаблоны этикеток ==========
+        templates_frame = ttk.LabelFrame(content_frame, text="Шаблоны этикеток", padding=5)
+        templates_frame.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+
+        # Сначала загружаем цех
+        workshop = self.coordinator.get_workshop()
+        self.workshop_var.set(workshop)
+
+        # --- Шаблон для ролика ---
+        ttk.Label(templates_frame, text="Шаблон ролика:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+
+        # Берём только отображаемые имена для комбобокса
+        roll_display_names = [item[0] for item in self.ROLL_TEMPLATES]
+
+        self.roll_template_var = tk.StringVar()
+        roll_combo = ttk.Combobox(
+            templates_frame,
+            textvariable=self.roll_template_var,
+            values=roll_display_names,
+            width=30,
+            state="readonly"
+        )
+        roll_combo.grid(row=1, column=0, padx=5, pady=(0, 5), sticky="w")
+
+        # --- Шаблон для коробки ---
+        ttk.Label(templates_frame, text="Шаблон коробки:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+
+        box_display_names = [item[0] for item in self.BOX_TEMPLATES]
+
+        self.box_template_var = tk.StringVar()
+        box_combo = ttk.Combobox(
+            templates_frame,
+            textvariable=self.box_template_var,
+            values=box_display_names,
+            width=30,
+            state="readonly"
+        )
+        box_combo.grid(row=3, column=0, padx=5, pady=(0, 5), sticky="w")
+
+        # Кнопка применения шаблонов
+        ttk.Button(
+            templates_frame,
+            text="✅ Применить шаблоны",
+            command=self._apply_templates,
+            width=20
+        ).grid(row=4, column=0, padx=5, pady=5, sticky="w")
+
+        # Загружаем сохранённые значения
+        self._load_templates_for_workshop(workshop)
         
         # Меню настроек папок
         folder_menu_btn = ttk.Menubutton(
@@ -145,7 +215,6 @@ class SettingsDialog:
         # Загружаем текущую настройку цеха
         workshop = self.coordinator.get_workshop()
         self.workshop_var.set(workshop)
-        self.coordinator.subscribe(self._on_settings_changed)
 
         # РАЗДЕЛ: Папки и разное
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
@@ -284,6 +353,56 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+
+    def _load_templates_for_workshop(self, workshop):
+        """Загружает шаблоны для указанного цеха из сохранённых настроек"""
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+
+        # Загружаем шаблон ролика
+        saved_roll = settings.get(f"selected_roll_template_{workshop}", "roll.pdf")
+        for display_name, filename in self.ROLL_TEMPLATES:
+            if filename == saved_roll:
+                self.roll_template_var.set(display_name)
+                break
+
+        # Загружаем шаблон коробки
+        saved_box = settings.get(f"selected_box_template_{workshop}", "box.pdf")
+        for display_name, filename in self.BOX_TEMPLATES:
+            if filename == saved_box:
+                self.box_template_var.set(display_name)
+                break
+
+    def _apply_templates(self):
+        """Сохраняет выбранные шаблоны для текущего цеха"""
+        workshop = self.workshop_var.get()
+
+        # Получаем выбранные отображаемые имена
+        selected_roll_display = self.roll_template_var.get()
+        selected_box_display = self.box_template_var.get()
+
+        # Ищем соответствующие имена файлов
+        roll_filename = "roll.pdf"  # значение по умолчанию
+        for display_name, filename in self.ROLL_TEMPLATES:
+            if display_name == selected_roll_display:
+                roll_filename = filename
+                break
+
+        box_filename = "box.pdf"
+        for display_name, filename in self.BOX_TEMPLATES:
+            if display_name == selected_box_display:
+                box_filename = filename
+                break
+
+        # Сохраняем в настройки
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        settings[f"selected_roll_template_{workshop}"] = roll_filename
+        settings[f"selected_box_template_{workshop}"] = box_filename
+        self.config_manager.save_json_settings("shared_utils.json", settings)
+
+        if self.coordinator:
+            self.coordinator.notify_subscribers()
+
+        self.show_message(f"✅ Шаблоны для {workshop} цеха сохранены", "green")
         
     def _on_qr_toggled(self):
         """Обработчик изменения галочки QR-кода"""
@@ -407,34 +526,33 @@ class SettingsDialog:
                 "printer_roll": self.printer_roll_var.get(),
                 "printer_box": self.printer_box_var.get()
             }
-            
+
             all_settings = self.config_manager.load_json_settings("print_settings.json")
             all_settings["weight_box_print"] = print_settings
             self.config_manager.save_json_settings("print_settings.json", all_settings)
 
             # Сохраняем настройки номера заказа
             shared_settings = self.config_manager.load_json_settings("shared_utils.json")
+
+            # Номер заказа
             shared_settings["order_number"] = {
                 "prefix": self.settings_prefix_var.get().strip(),
                 "suffix": self.settings_suffix_var.get().strip()
-            }            
-            
-            # Сохраняем статус архивации
+            }
+
+            # Статус архивации
             shared_settings["archive_status"] = self.archive_status_var.get()
-            
-            # Сохраняем статус дополнительных элементов
+
+            # Дополнительные элементы
             shared_settings["elements_status"] = self.elements_status_var.get()
-            
             shared_settings["qr_data"] = self.qr_var.get()
-            
-            # Сохраняем значение номера цеха
+
+            # Номер цеха
             workshop = self.workshop_var.get()
             shared_settings["workshop"] = workshop
-            
-            # Применяем изменения цеха
             self.coordinator.set_workshop(workshop)
 
-            # Сохраняем все изменения в shared_utils.json
+            # Сохраняем все изменения
             self.config_manager.save_json_settings("shared_utils.json", shared_settings)
 
             self.coordinator.refresh_archive_status()
@@ -459,13 +577,15 @@ class SettingsDialog:
     # noinspection PyUnusedLocal
     def _on_settings_changed(self, context=None):
         """Обрабатывает изменения настроек от координатора"""
-        
-        # Обновляем UI при внешних изменениях
+
+        # Обновляем цех из координатора
         workshop = self.coordinator.get_workshop()
-        
+
         if self.workshop_var.get() != workshop:
             self.workshop_var.set(workshop)
-        
+            # При смене цеха загружаем шаблоны для этого цеха
+            self._load_templates_for_workshop(workshop)
+
     def load_folder_paths(self):
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")

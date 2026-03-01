@@ -345,11 +345,19 @@ class RollPreview:
                 self.weight_enabled = self.coordinator.get_weight_status()
             else:
                 self.weight_enabled = False
-            
-            # Перезагружаем настройки QR-кода, шрифтов и шаблоны
+
+            # Проверяем, не изменились ли выбранные шаблоны
+            old_roll = getattr(self, 'roll_template_path', None)
+            old_box = getattr(self, 'box_template_path', None)
+            self._update_template_paths()
+
+            if (old_roll != self.roll_template_path or
+                    old_box != self.box_template_path):
+                self.reload_templates()
+
+            # Перезагружаем настройки QR-кода и шрифтов
             self.set_product_gtin(self.original_gtin)
             self.load_font_settings()
-            self.reload_for_workshop_change()
             
             # Обновляем подписки при изменении настроек
             self.refresh_tracking()
@@ -466,44 +474,52 @@ class RollPreview:
         """Пересоздаёт подписки при изменении условий (вес, цех, росинка)"""
         if self.connected_roll_module:
             self._cleanup_tracking()
-            self._setup_data_tracking()        
-        
+            self._setup_data_tracking()
+
+    def get_active_templates(self):
+        """Возвращает имена активных шаблонов с учётом приоритетов:
+        1. Специальные условия (Росинка, Пермалко)
+        2. Выбранные в настройках шаблоны для текущего цеха
+        """
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        workshop = self.coordinator.get_workshop()
+
+        # Получаем шаблоны, сохранённые для текущего цеха
+        roll_template = settings.get(f"selected_roll_template_{workshop}", "roll.pdf")
+        box_template = settings.get(f"selected_box_template_{workshop}", "box.pdf")
+
+        # Получаем заказчика
+        customer = self.current_data.get('customer', '').lower()
+
+        # Приоритет 1: Специальные условия
+        if self.rosinka_enabled:
+            return "rosinka.pdf", "box.pdf"
+
+        if "пермалко" in customer:
+            return "permalko_roll.pdf", "permalko_box.pdf"
+
+        # Приоритет 2: Выбранные шаблоны для текущего цеха
+        return roll_template, box_template
+
     def _update_template_paths(self):
-        """Обновляет пути к шаблонам в зависимости от настроек"""
+        """Обновляет пути к шаблонам (только преобразует имена в пути)"""
         # Защита от рекурсии
         if getattr(self, '_updating_paths', False):
             return
         self._updating_paths = True
-        
+
         try:
-            workshop = self.coordinator.get_workshop()
-            
-            # Определяем базовый шаблон в зависимости от цеха
-            if workshop == "2":
-                base_template = "roll_2_cex.pdf"
-            else:
-                base_template = "roll.pdf"
-            
-            # Получаем заказчика из current_data
-            customer = ""
-            if self.current_data and 'customer' in self.current_data:
-                customer = self.current_data.get('customer', '').lower()
-            
-            # Приоритет 1: Росинка (по галочке)
-            if self.rosinka_enabled:  # проверяет, равно ли True
-                self.roll_template_path = self.config_manager.get_asset_path("rosinka.pdf")
-                self.box_template_path = self.config_manager.get_asset_path("box.pdf")
-            
-            # Приоритет 2: Пермалко (по заказчику, если не Росинка)
-            elif customer and "пермалко" in customer:
-                self.roll_template_path = self.config_manager.get_asset_path("permalko_roll.pdf")
-                self.box_template_path = self.config_manager.get_asset_path("permalko_box.pdf")
-            
-            # Приоритет 3: Обычные шаблоны по цеху
-            else:
-                self.roll_template_path = self.config_manager.get_asset_path(base_template)
-                self.box_template_path = self.config_manager.get_asset_path("box.pdf")         
-            
+            # Получаем имена файлов из единого источника логики
+            roll_template, box_template = self.get_active_templates()
+
+            # Преобразуем в полные пути
+            self.roll_template_path = self.config_manager.get_asset_path(roll_template)
+            self.box_template_path = self.config_manager.get_asset_path(box_template)
+
+            # Проверка существования (опционально)
+            if not os.path.exists(self.roll_template_path):
+                print(f"Предупреждение: шаблон {roll_template} не найден")
+
         finally:
             self._updating_paths = False
 
