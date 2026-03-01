@@ -73,9 +73,9 @@ class XMLDataManager:
         # Подписываемся на уведомления координатора
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
-        
-        logging.info(f"DataManager инициализирован. XML папка: {self.xml_folder}")
-        logging.info(f"БД: {self.db_path}")
+
+        logging.debug(f"DataManager инициализирован. XML папка: {self.xml_folder}")
+        logging.debug(f"БД: {self.db_path}")
         
         self._pending_status = None  # ID отложенного сообщения
         self._last_message = ""      # Для дублей
@@ -241,7 +241,6 @@ class XMLDataManager:
                     logging.info("Добавлена колонка order_name в таблицу orders")                    
                 
                 conn.commit()
-                logging.info("База данных инициализирована")
                 
             except sqlite3.Error as e:
                 logging.error(f"Ошибка инициализации БД: {e}")
@@ -621,8 +620,6 @@ class XMLDataManager:
 
         def scan_in_background():
             try:
-                logging.info("Начато первичное сканирование папки XML")
-
                 # Проверяем есть ли данные в бд
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
@@ -632,7 +629,6 @@ class XMLDataManager:
                     conn.close()
 
                 if count > 0:
-                    logging.info(f"БД уже содержит {count} записей. Пропускаем полное сканирование.")
                     self._notify_status(f"База загружена ({count} записей)")
                     return
 
@@ -1042,8 +1038,8 @@ class XMLDataManager:
                                 
                                 # Сохранение в БД
                                 if self._save_order_to_db(conn, file_path, parsed_data, file_hash):
+                                    logging.info(f"Добавлен новый заказ: {file_name}")
                                     processed_files += 1
-                                    
                                     # Сбор статистики для обработанного файла
                                     self._collect_statistics_for_file(
                                         parsed_data=parsed_data,
@@ -1051,7 +1047,7 @@ class XMLDataManager:
                                         solmark_set=new_solmark_orders,
                                         multi_customer_list=new_multi_customer_orders
                                     )
-                        
+
                         except (PermissionError, FileNotFoundError) as e:
                             # Файл недоступен или удалён во время обработки
                             continue  # Пропускаем без паники

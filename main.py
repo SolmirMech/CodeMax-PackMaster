@@ -73,14 +73,11 @@ class WeightOrdersApp:
         self.config_manager = None
         self.data_manager = None
         
-        self.coordinator = SettingsCoordinator()
-        
-        # Установка стилей
-        self.setup_styles()
-        
         # Инициализация ConfigManager (менеджер настроек)
         from core.config_manager import ConfigManager
         self.config_manager = ConfigManager()
+        # Инициализация SettingsCoordinator (координатор настроек)
+        self.coordinator = SettingsCoordinator(self.config_manager)
         # Инициализация XMLDataManager (менеджер создания БД)
         from core.data_manager import XMLDataManager
         self.data_manager = XMLDataManager(
@@ -88,6 +85,9 @@ class WeightOrdersApp:
             coordinator=self.coordinator,
             root=self.root
         )
+
+        # Установка стилей
+        self.setup_styles()
         
         self.create_ui()
         self.center_window()

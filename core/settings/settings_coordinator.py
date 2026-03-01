@@ -1,28 +1,30 @@
 # settings_coordinator.py
 from typing import Callable
 
-from core.config_manager import ConfigManager
-
 
 class SettingsCoordinator:
     """Координатор настроек цеха и шаблонов шрифтов"""
+    WORKSHOP_TEMPLATE_MAP = {
+        "1": "1_цех",
+        "2": "2_цех"
+    }
     
     _instance = None
     
-    def __new__(cls):
+    def __new__(cls, config_manager=None):
         if cls._instance is None:
             cls._instance = super(SettingsCoordinator, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, config_manager=None):
         self._current_archive_status = None
         self._current_font_template = None
         self._current_workshop = None
         if self._initialized:
             return
             
-        self.config_manager = ConfigManager()
+        self.config_manager = config_manager
         self._subscribers = []
         
         # Инициализируем статус веса
@@ -129,13 +131,12 @@ class SettingsCoordinator:
             
     def _is_template_synced_with_workshop(self) -> bool:
         """Проверяет синхронизацию шаблона с цехом"""
-        expected_template = "1_цех" if self._current_workshop == "1" else "2_цех"
+        expected_template = self.WORKSHOP_TEMPLATE_MAP.get(self._current_workshop)
         return self._current_font_template == expected_template            
             
     def _auto_sync_template_with_workshop(self):
         """Автоматически синхронизирует шаблон с цехом"""
-        new_template = "1_цех" if self._current_workshop == "1" else "2_цех"
-        self._current_font_template = new_template
+        self._current_font_template = self.WORKSHOP_TEMPLATE_MAP.get(self._current_workshop)
     
     def set_font_template(self, template: str):
         """Устанавливает шаблон шрифтов"""
@@ -157,10 +158,7 @@ class SettingsCoordinator:
     @staticmethod
     def get_workshop_template_mapping() -> dict:
         """Возвращает соответствие цехов и шаблонов"""
-        return {
-            "1": "1_цех",
-            "2": "2_цех"
-        }
+        return SettingsCoordinator.WORKSHOP_TEMPLATE_MAP.copy()
         
     def get_archive_status(self) -> str:
         """Возвращает текущий статус архивации"""
