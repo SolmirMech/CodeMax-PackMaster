@@ -30,10 +30,6 @@ class SettingsDialog:
         self.printer_roll_var = tk.StringVar(value="")
         self.printer_box_var = tk.StringVar(value="")
 
-        # === СПИСКИ СОТРУДНИКОВ ===
-        self.cutter_entries = []  # Поля ввода резчиков
-        self.packer_entries = []  # Поля ввода упаковщиков
-
         # === НАСТРОЙКИ ЦЕХА И РАЗМЕРОВ ===
         self.workshop_var = tk.StringVar(value="1")  # Выбор цеха
 
@@ -138,45 +134,6 @@ class SettingsDialog:
         
         # Загружаем текущие пути
         self.load_folder_paths()
-        
-        cutters_label = ttk.Label(print_frame, text="Резчики:")
-        cutters_label.grid(row=0, column=1, sticky="w", padx=10, pady=5)
-
-        # Загружаем текущий список резчиков
-        current_cutters = self.config_manager.get_cutters()
-        self.cutter_entries = []
-
-        # Создаем поля ввода для каждого резчика
-        for i, cutter in enumerate(current_cutters):
-            entry = ttk.Entry(print_frame, width=20)
-            entry.insert(0, cutter)
-            entry.grid(row=1+i, column=1, padx=10, pady=5, sticky="w")
-            self.cutter_entries.append(entry)
-
-        # Добавляем пустое поле для нового резчика
-        new_entry = ttk.Entry(print_frame, width=20)
-        new_entry.grid(row=1+len(current_cutters), column=1, padx=10, pady=5, sticky="w")
-        self.cutter_entries.append(new_entry)     
-
-        # Список упаковщиков
-        packers_label = ttk.Label(print_frame, text="Упаковщики:")
-        packers_label.grid(row=0, column=2, sticky="w", padx=10, pady=5)
-
-        # Загружаем текущий список упаковщиков
-        current_packers = self.config_manager.get_packers()
-        self.packer_entries = []
-
-        # Создаем поля ввода для каждого упаковщика
-        for i, packer in enumerate(current_packers):
-            entry = ttk.Entry(print_frame, width=20)
-            entry.insert(0, packer)
-            entry.grid(row=1+i, column=2, padx=10, pady=5, sticky="w")
-            self.packer_entries.append(entry)
-
-        # Добавляем пустое поле для нового упаковщика
-        new_packer_entry = ttk.Entry(print_frame, width=20)
-        new_packer_entry.grid(row=1+len(current_packers), column=2, padx=10, pady=5, sticky="w")
-        self.packer_entries.append(new_packer_entry)
         
         # Переключатель цеха
         workshop_frame = ttk.Frame(print_frame)
@@ -469,22 +426,6 @@ class SettingsDialog:
             shared_settings["elements_status"] = self.elements_status_var.get()
             
             shared_settings["qr_data"] = self.qr_var.get()
-
-            # Сохраняем список резчиков
-            new_cutters = []
-            for entry in self.cutter_entries:
-                cutter_name = entry.get().strip()
-                if cutter_name:
-                    new_cutters.append(cutter_name)
-            shared_settings["cutters"] = new_cutters
-            
-            # Сохраняем список упаковщиков
-            new_packers = []
-            for entry in self.packer_entries:
-                packer_name = entry.get().strip()
-                if packer_name:
-                    new_packers.append(packer_name)
-            shared_settings["packers"] = new_packers                   
             
             # Сохраняем значение номера цеха
             workshop = self.workshop_var.get()

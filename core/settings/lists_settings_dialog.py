@@ -6,7 +6,9 @@ from .dialogs import (
     SpecialClientsEditorDialog,
     TechnicalSpecificationsDialog,
     SleeveWeightsDialog,
-    ShorteningRulesDialog
+    ShorteningRulesDialog,
+    CuttersEditorDialog,
+    PackersEditorDialog
 )
 
 # noinspection PyTypeChecker
@@ -95,7 +97,25 @@ class ListsSettingsDialog:
             command=self.open_shortening_rules_editor,
             width=20
         )
-        open_shortening_btn.grid(row=6, column=0, padx=5, pady=5, sticky="w")        
+        open_shortening_btn.grid(row=6, column=0, padx=5, pady=5, sticky="w")
+
+        # Кнопка для редактирования резчиков
+        open_cutters_btn = ttk.Button(
+            boxes_frame,
+            text="🔪 Список резчиков",
+            command=self.open_cutters_editor,
+            width=20
+        )
+        open_cutters_btn.grid(row=7, column=0, padx=5, pady=5, sticky="w")
+
+        # Кнопка для редактирования упаковщиков
+        open_packers_btn = ttk.Button(
+            boxes_frame,
+            text="📦 Список упаковщиков",
+            command=self.open_packers_editor,
+            width=20
+        )
+        open_packers_btn.grid(row=8, column=0, padx=5, pady=5, sticky="w")
         
         # Статус-строка
         status_label = ttk.Label(
@@ -172,7 +192,29 @@ class ListsSettingsDialog:
             coordinator=self.coordinator,
             status_var=self.status_var
         )
-        dialog.show()        
+        dialog.show()
+
+    def open_cutters_editor(self):
+        """Открывает окно редактирования списка резчиков"""
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = CuttersEditorDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator,
+            status_var=self.status_var
+        )
+        dialog.show()
+
+    def open_packers_editor(self):
+        """Открывает окно редактирования списка упаковщиков"""
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = PackersEditorDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator,
+            status_var=self.status_var
+        )
+        dialog.show()
         
     def save_settings(self):
         """Сохраняет настройки этой вкладки"""
