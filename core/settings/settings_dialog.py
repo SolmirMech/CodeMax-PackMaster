@@ -34,8 +34,6 @@ class SettingsDialog:
         self.coordinator = coordinator
         self.parent_manager = None
         self.last_status = ""
-        self.current_data = {}
-        self.rosinka_enabled = False
 
         # Инициализация UI элементов (будут созданы в create_ui)
         self.main_frame = None
@@ -75,9 +73,6 @@ class SettingsDialog:
         # === НАСТРОЙКИ ШАБЛОНОВ ЭТИКЕТОК ===
         self.roll_template_var = tk.StringVar(value="")
         self.box_template_var = tk.StringVar(value="")
-        # Подписываемся на изменения от координатора
-        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
-            self.coordinator.subscribe(self._on_settings_changed)
 
     def set_parent_manager(self, manager):
         """Устанавливает ссылку на родительский менеджер"""
@@ -575,48 +570,6 @@ class SettingsDialog:
         """Обновляет статус через колбэк"""
         if self.status_callback is not None:
             self.status_callback(message, color)
-
-    # noinspection PyUnusedLocal
-    def _on_settings_changed(self, context=None):
-        """Обрабатывает изменения настроек от координатора"""
-        # Обновляем цех из координатора
-        workshop = self.coordinator.get_workshop()
-        if self.workshop_var.get() != workshop:
-            self.workshop_var.set(workshop)
-
-        # Получаем данные напрямую из roll_module через координатор
-        roll_module = self.coordinator.get_roll_module()
-        if not roll_module:
-            self._load_templates_for_workshop(workshop)
-            return
-
-        # Приоритет 1: Специальные условия - Росинка
-        if roll_module.rosinka_var.get():
-            for display_name, filename in self.ROLL_TEMPLATES:
-                if filename == "rosinka.pdf":
-                    self.roll_template_var.set(display_name)
-                    break
-            for display_name, filename in self.BOX_TEMPLATES:
-                if filename == "box.pdf":
-                    self.box_template_var.set(display_name)
-                    break
-            return
-
-        # Приоритет 2: Проверка заказчика
-        customer = roll_module.customer_var.get().lower()
-        if "пермалко" in customer:
-            for display_name, filename in self.ROLL_TEMPLATES:
-                if filename == "permalko_roll.pdf":
-                    self.roll_template_var.set(display_name)
-                    break
-            for display_name, filename in self.BOX_TEMPLATES:
-                if filename == "permalko_box.pdf":
-                    self.box_template_var.set(display_name)
-                    break
-            return
-
-        # Приоритет 3: Выбранные шаблоны для текущего цеха
-        self._load_templates_for_workshop(workshop)
 
     def load_folder_paths(self):
         try:

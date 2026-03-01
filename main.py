@@ -232,7 +232,7 @@ class WeightOrdersApp:
             self.root,
             self,  # parent_manager
             config_manager=self.config_manager,
-            coordinator=self.coordinator  # ЭТО ВАЖНО!
+            coordinator=self.coordinator
         )
         # Передаем ссылку на roll_module в координатор
         self.coordinator.set_roll_module(self.roll_module)

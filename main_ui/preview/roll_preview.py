@@ -267,7 +267,6 @@ class RollPreview:
         self.print_module = None
 
         self.create_preview_ui()
-        self.load_font_settings()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self._on_settings_changed)
         self.parent.after(100, self.initialize_templates)
@@ -443,13 +442,15 @@ class RollPreview:
             if self.roll_pdf_filler:
                 w, h = self.roll_pdf_filler.get_template_size_mm()
                 if w > 0 and h > 0:
-                    self.roll_frame.configure(text=f"Ролик ({w}×{h} мм)")
+                    # Преобразуем в int, чтобы убрать .0
+                    self.roll_frame.configure(text=f"Ролик ({int(w)}×{int(h)} мм)")
 
             # Размер коробки
             if self.box_pdf_filler:
                 w, h = self.box_pdf_filler.get_template_size_mm()
                 if w > 0 and h > 0:
-                    self.box_frame.configure(text=f"Коробка ({w}×{h} мм)")
+                    # Преобразуем в int, чтобы убрать .0
+                    self.box_frame.configure(text=f"Коробка ({int(w)}×{int(h)} мм)")
         except Exception as e:
             print(f"Ошибка обновления размеров: {e}")
 
@@ -556,12 +557,9 @@ class RollPreview:
         """Загружает настройки шрифтов для текущих PDF шаблонов"""
         all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
 
-        # Получаем текущие PDF
-        workshop = self.coordinator.get_workshop()
-        shared = self.config_manager.load_json_settings("shared_utils.json")
-
-        current_roll_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
-        current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+        # Получаем имена текущих PDF файлов из путей
+        current_roll_pdf = os.path.basename(self.roll_template_path)
+        current_box_pdf = os.path.basename(self.box_template_path)
 
         # Загружаем настройки для ролика
         if current_roll_pdf in all_settings and "roll" in all_settings[current_roll_pdf]:
@@ -575,13 +573,13 @@ class RollPreview:
         else:
             box_settings = FontSettingsDialog.get_default_font_settings()["box"]
 
-        # Сохраняем в self.font_settings в ожидаемом формате
+        # Сохраняем в self.font_settings
         self.font_settings = {
             "roll": roll_settings,
             "box": box_settings
         }
 
-        # Применяем настройки к pdf filler'ам (ЭТО ВАЖНО!)
+        # Применяем настройки к pdf filler'ам
         if self.roll_pdf_filler and self.font_settings:
             self.roll_pdf_filler.set_font_settings(self.font_settings["roll"])
         if self.box_pdf_filler and self.font_settings:

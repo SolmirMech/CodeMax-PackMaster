@@ -534,7 +534,7 @@ class FontSettingsDialog:
         except Exception as e:
             self.show_status(f"❌ Ошибка сохранения: {e}", "error")
             return False
-        
+
     def show_status(self, message, status_type="info"):
         """Показывает статус в строке состояния"""
         colors = {
