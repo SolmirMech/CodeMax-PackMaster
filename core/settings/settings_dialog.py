@@ -87,10 +87,11 @@ class SettingsDialog:
         content_frame.pack(fill=tk.BOTH, expand=True)
         content_frame.grid_columnconfigure(0, weight=1)
         content_frame.grid_columnconfigure(1, weight=1)
+        content_frame.grid_columnconfigure(2, weight=1)
 
-        # Настройки печати - выбор принтера
+        # Настройки печати - выбор принтера (первая колонка сверху)
         print_frame = ttk.LabelFrame(content_frame, text="Настройки печати", padding=5)
-        print_frame.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
+        print_frame.grid(row=0, column=0, sticky="w", padx=5, pady=(10, 5))
 
         # Загружаем принтеры из JSON
         print_settings = self.config_manager.load_json_settings("print_settings.json")
@@ -128,16 +129,53 @@ class SettingsDialog:
         )
         printer_box_combo.grid(row=3, column=0, padx=5, pady=(0, 5), sticky="w")
 
-        # ========== НОВЫЙ РАЗДЕЛ: Шаблоны этикеток ==========
-        templates_frame = ttk.LabelFrame(content_frame, text="Шаблоны этикеток", padding=5)
-        templates_frame.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        # Меню настроек папок
+        folder_menu_btn = ttk.Menubutton(
+            print_frame,
+            text="📂 Настройки папок",
+            direction="below",
+            width=17
+        )
+        folder_menu_btn.grid(row=4, column=0, padx=5, pady=5, sticky="w")
+
+        folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
+        folder_menu_btn["menu"] = folder_menu_btn.menu
+
+        folder_menu_btn.menu.add_command(
+            label="Выбрать папку для импорта XML",
+            command=self.select_xml_folder
+        )
+        folder_menu_btn.menu.add_command(
+            label="Выбрать папку для экспорта в Excel",
+            command=self.select_excel_folder
+        )
+
+        # Загружаем текущие пути
+        self.load_folder_paths()
+
+        # Переключатель цеха
+        workshop_frame = ttk.Frame(print_frame)
+        workshop_frame.grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+
+        ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT,
+                                                                                                  padx=(10, 5))
+        ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT,
+                                                                                                  padx=(5, 10))
+
+        # Загружаем текущую настройку цеха
+        workshop = self.coordinator.get_workshop()
+        self.workshop_var.set(workshop)
+
+        # ========== Шаблоны этикеток (вторая колонка сверху) ==========
+        templates_frame = ttk.LabelFrame(content_frame, text="Выбор pdf-шаблона", padding=5)
+        templates_frame.grid(row=0, column=1, sticky="n", padx=5, pady=(10, 5))
 
         # Сначала загружаем цех
         workshop = self.coordinator.get_workshop()
         self.workshop_var.set(workshop)
 
         # --- Шаблон для ролика ---
-        ttk.Label(templates_frame, text="Шаблон ролика:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(templates_frame, text="Ролик:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
 
         # Берём только отображаемые имена для комбобокса
         roll_display_names = [item[0] for item in self.ROLL_TEMPLATES]
@@ -150,10 +188,10 @@ class SettingsDialog:
             width=30,
             state="readonly"
         )
-        roll_combo.grid(row=1, column=0, padx=5, pady=(0, 5), sticky="w")
+        roll_combo.grid(row=1, column=0, padx=5, pady=5, sticky="w")
 
         # --- Шаблон для коробки ---
-        ttk.Label(templates_frame, text="Шаблон коробки:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(templates_frame, text="Коробка:").grid(row=0, column=1, sticky="w", padx=5, pady=5)
 
         box_display_names = [item[0] for item in self.BOX_TEMPLATES]
 
@@ -165,7 +203,7 @@ class SettingsDialog:
             width=30,
             state="readonly"
         )
-        box_combo.grid(row=3, column=0, padx=5, pady=(0, 5), sticky="w")
+        box_combo.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
         # Кнопка применения шаблонов
         ttk.Button(
@@ -173,47 +211,12 @@ class SettingsDialog:
             text="✅ Применить шаблоны",
             command=self._apply_templates,
             width=20
-        ).grid(row=4, column=0, padx=5, pady=5, sticky="w")
+        ).grid(row=2, column=0, padx=5, pady=10, columnspan=2, sticky="w")
 
         # Загружаем сохранённые значения
         self._load_templates_for_workshop(workshop)
-        
-        # Меню настроек папок
-        folder_menu_btn = ttk.Menubutton(
-            print_frame, 
-            text="📂 Настройки папок", 
-            direction="below",
-            width=17
-        )
-        folder_menu_btn.grid(row=4, column=0, padx=5, pady=5, sticky="w")
-        
-        folder_menu_btn.menu = tk.Menu(folder_menu_btn, tearoff=0)
-        folder_menu_btn["menu"] = folder_menu_btn.menu
-        
-        folder_menu_btn.menu.add_command(
-            label="Выбрать папку для импорта XML", 
-            command=self.select_xml_folder
-        )
-        folder_menu_btn.menu.add_command(
-            label="Выбрать папку для экспорта в Excel", 
-            command=self.select_excel_folder
-        )
-        
-        # Загружаем текущие пути
-        self.load_folder_paths()
-        
-        # Переключатель цеха
-        workshop_frame = ttk.Frame(print_frame)
-        workshop_frame.grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=5)
 
-        ttk.Radiobutton(workshop_frame, text="1 цех", variable=self.workshop_var, value="1").pack(side=tk.LEFT, padx=(10,5))
-        ttk.Radiobutton(workshop_frame, text="2 цех", variable=self.workshop_var, value="2").pack(side=tk.LEFT, padx=(5,10))
-
-        # Загружаем текущую настройку цеха
-        workshop = self.coordinator.get_workshop()
-        self.workshop_var.set(workshop)
-
-        # РАЗДЕЛ: Папки и разное
+        # РАЗДЕЛ: Папки и разное (первая колонка снизу)
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
         manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
 
@@ -261,9 +264,9 @@ class SettingsDialog:
             width=17
         ).grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="w")       
         
-        # 3. РАЗДЕЛ: Настройки архивации
+        # 3. РАЗДЕЛ: Настройки архивации (вторая колонка снизу)
         archive_frame = ttk.LabelFrame(content_frame, text="Архивация листов при печати", padding=5)
-        archive_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        archive_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 60))
         
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -286,7 +289,7 @@ class SettingsDialog:
         
         # 4. РАЗДЕЛ: Дополнительные элементы
         elements_frame = ttk.LabelFrame(content_frame, text="Дата и другие редкие настройки", padding=5)
-        elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(5, 5))
 
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
