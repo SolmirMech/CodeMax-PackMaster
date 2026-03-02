@@ -326,7 +326,7 @@ class FontSettingsDialog:
         roll_templates = templates_data.get("roll_templates", {})
 
         # Находим отображаемое имя для ролика
-        roll_display = "Стандартный 1 цех"  # значение по умолчанию
+        roll_display = "Шаблон не найден"  # значение по умолчанию
         for disp_name, filename in roll_templates.items():
             if filename == current_pdf:
                 roll_display = disp_name
@@ -457,9 +457,9 @@ class FontSettingsDialog:
         box_templates = templates_data.get("box_templates", {})
 
         # Находим отображаемое имя для коробки
-        box_display = "Стандартная коробка"
+        box_display = "Шаблон не найден"
         for display_name, filename in box_templates.items():
-            if filename == self.current_box_pdf:
+            if filename == current_box_pdf:
                 box_display = display_name
                 break
 
