@@ -46,54 +46,75 @@ class LegacyExporterAdapter:
         Просто создает экземпляр LegacyExporterAdapter.
         """
         return LegacyExporterAdapter(excel_file_path, roll_module, preview_module, coordinator, config_manager)
-    
+
     def export_data(self, enable_pallet=False, multitype_mode=False):
         """
         Интерфейс, совместимый со старым WeightOrdersExporter.export_data
-        Теперь с автоматическим выбором между pallet и noweight
+        Теперь с поддержкой нового листа 'Много видов БезВеса' для цеха 1.
+
+        Args:
+            enable_pallet: Флаг режима поддона (True - паллета/без веса, False - коробка)
+            multitype_mode: Флаг режима "Много видов"
+
+        Returns:
+            Dict с результатом экспорта
         """
+        # Обновляем настройки из координатора
         self.on_settings_changed()
         workshop = getattr(self, 'workshop', '1')
-        
-        # Определяем тип листа для цеха 2
+
+        # ========== ЛОГИКА ОПРЕДЕЛЕНИЯ ТИПА ЛИСТА ==========
+        # Приоритет: цех 2 > multitype_mode > enable_pallet > box
+
+        # Для цеха 2 с поддонами всегда используем "pallet_list"
         if workshop == "2" and enable_pallet:
-            # Для цеха 2 с поддонами всегда используем "pallet_list"
             sheet_type = "pallet_list"
             mode = "pallet"
-        # Остальная логика для цеха 1
+
+        # Режим "Много видов" (приоритет для обоих цехов)
         elif multitype_mode:
-            sheet_type = "multitype"
-            mode = "box" if not enable_pallet else ("pallet" if self.has_weight else "noweight")
+            # Для цеха 1 проверяем наличие веса
+            if workshop == "1" and not self.has_weight:
+                # НЕТ ВЕСА → используем новый лист "Много видов БезВеса"
+                sheet_type = "multitype_noweight"
+                mode = "noweight"
+            else:
+                # Есть вес или цех 2 → стандартный мультитайп
+                sheet_type = "multitype"
+                # mode для multitype не критичен, передаём box для совместимости
+                mode = "box" if not enable_pallet else ("pallet" if self.has_weight else "noweight")
+
+        # Режим поддона (только для цеха 1, цех 2 уже отловлен выше)
         elif enable_pallet:
-            # Автоматический выбор на основе веса (только для цеха 1)
+            # Автоматический выбор на основе веса
             if self.has_weight:
-                sheet_type = "pallet"    # Лист для паллеты (с весом)
+                sheet_type = "pallet"  # Лист для паллеты (с весом)
                 mode = "pallet"
             else:
                 sheet_type = "noweight"  # Лист БезВеса (без веса)
                 mode = "noweight"
+
+        # Обычный режим коробки
         else:
             sheet_type = "box"
             mode = "box"
-        
-        # Получаем маппинг
+
+        # ========== ПОЛУЧЕНИЕ МАППИНГА ==========
         try:
             mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
         except ValueError as e:
-            print(f"Маппинг не найден, используем старый экспорт: {e}")
             return {'success': False, 'error': str(e)}
-        
-        # Получаем путь к файлу
+
+        # ========== ВЫПОЛНЕНИЕ ЭКСПОРТА ==========
         file_path = self.data_provider.get_excel_file_path(workshop)
-        
-        # Выполняем экспорт
+
         try:
             result = self.exporter.export_to_sheet(
                 file_path=file_path,
                 mapping=mapping,
                 mode=mode
             )
-            
+
             # Отправляем уведомление через координатор
             if result['success'] and self.coordinator and hasattr(self.coordinator, 'notify'):
                 self.coordinator.notify("excel_exported", {
@@ -103,57 +124,74 @@ class LegacyExporterAdapter:
                     'multitype_mode': multitype_mode,
                     'workshop': workshop,
                     'has_weight': self.has_weight,
-                    'sheet_type': sheet_type  # Добавляем для отладки
-                })          
-            
+                    'sheet_type': sheet_type
+                })
+
             return result
-            
+
         except Exception as e:
             print(f"Ошибка в новом экспортере: {e}")
             return {'success': False, 'error': str(e)}
-    
+
     def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
-        """Очистка листа (обратная совместимость)"""
+        """
+        Очистка листа (обратная совместимость со старым WeightOrdersExporter)
+        Теперь с поддержкой нового листа 'Много видов БезВеса' для цеха 1.
+
+        Args:
+            enable_pallet: Флаг режима поддона
+            multitype_mode: Флаг режима "Много видов"
+
+        Returns:
+            bool: True если очистка успешна, иначе False
+        """
         try:
+            # Обновляем настройки из координатора
             self.on_settings_changed()
             workshop = getattr(self, 'workshop', '1')
-            
-            # Определяем тип листа для цеха 2
+
+            # ========== ЛОГИКА ОПРЕДЕЛЕНИЯ ТИПА ЛИСТА ==========
+            # (полностью идентична export_data)
+
+            # Для цеха 2 с поддонами всегда используем "pallet_list"
             if workshop == "2" and enable_pallet:
-                # Для цеха 2 с поддонами всегда используем "pallet_list"
                 sheet_type = "pallet_list"
                 mode = "pallet"
-            # Остальная логика для цеха 1 и multitype
+
+            # Режим "Много видов" (приоритет для обоих цехов)
             elif multitype_mode:
-                # Используем новую архитектуру для multitype тоже!
-                sheet_type = "multitype"
-                mode = "box"
-                try:
-                    mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
-                    file_path = self.data_provider.get_excel_file_path(workshop)
-                    success = self.exporter.clear_sheet(file_path, mapping)
-                    return success
-                except ValueError as e:
-                    print(f"Маппинг multitype не найден: {e}")
-                    return False
+                # Для цеха 1 проверяем наличие веса
+                if workshop == "1" and not self.has_weight:
+                    # НЕТ ВЕСА → очищаем новый лист "Много видов БезВеса"
+                    sheet_type = "multitype_noweight"
+                    mode = "noweight"
+                else:
+                    # Есть вес или цех 2 → стандартный мультитайп
+                    sheet_type = "multitype"
+                    mode = "box"
+
+            # Режим поддона (только для цеха 1, цех 2 уже отловлен выше)
             elif enable_pallet:
-                # Автоматический выбор на основе веса (только для цеха 1)
                 if self.has_weight:
-                    sheet_type = "pallet"    # Лист для паллеты (с весом)
+                    sheet_type = "pallet"  # Лист для паллеты (с весом)
                     mode = "pallet"
                 else:
                     sheet_type = "noweight"  # Лист БезВеса (без веса)
                     mode = "noweight"
+
+            # Обычный режим коробки
             else:
                 sheet_type = "box"
                 mode = "box"
-            
+
+            # ========== ПОЛУЧЕНИЕ МАППИНГА И ОЧИСТКА ==========
             try:
                 mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
                 file_path = self.data_provider.get_excel_file_path(workshop)
-                
+
                 success = self.exporter.clear_sheet(file_path, mapping)
-                
+
+                # Отправляем уведомление через координатор
                 if success and self.coordinator and hasattr(self.coordinator, 'notify'):
                     self.coordinator.notify("excel_cleared", {
                         'file_path': file_path,
@@ -161,16 +199,18 @@ class LegacyExporterAdapter:
                         'multitype_mode': multitype_mode,
                         'workshop': workshop,
                         'has_weight': self.has_weight,
-                        'sheet_type': sheet_type  # Добавляем для отладки
+                        'sheet_type': sheet_type
                     })
-                
+
                 return success
-                
+
             except ValueError as e:
-                print(f"Маппинг не найден: {e}")
-            
+                print(f"Маппинг не найден для очистки: {e}")
+                return False
+
         except Exception as e:
             print(f"Ошибка в новом очистителе: {e}")
+            return False
 
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):

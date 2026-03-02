@@ -115,6 +115,9 @@ class InstallerGUI:
             self.show_error(f"Папка проекта не найдена:\n{self.project_path}")
             return
 
+        # ✅ ОЧИСТКА ПАПКИ ПЕРЕД СБОРКОЙ
+        if os.path.exists(self.installer_dir):
+            shutil.rmtree(self.installer_dir)
         os.makedirs(self.installer_dir, exist_ok=True)
 
         try:

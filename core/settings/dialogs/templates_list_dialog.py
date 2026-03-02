@@ -258,15 +258,15 @@ class TemplatesListDialog:
                 # Создаём начальный файл из текущих шаблонов
                 initial_templates = {
                     "roll_templates": {
-                        "Стандартный 1 цех (90x72)": "roll.pdf",
-                        "Маленький 1 цех (80x57)": "roll_1.pdf",
-                        "Стандартный 2 цех (80x57)": "roll_2_cex.pdf",
-                        "Росинка": "rosinka.pdf",
-                        "Пермалко ролик": "permalko_roll.pdf"
+                        "Обычный ролик 1 цех 90x72": "roll.pdf",
+                        "Маленький ролик 1 цех 80x57": "1_cex_small_roll.pdf",
+                        "Обычный ролик 2 цех 80x57": "2_cex_roll.pdf",
+                        "Росинка 71х89": "rosinka_roll.pdf",
+                        "Пермалко ролик 90х72": "permalko_roll.pdf"
                     },
                     "box_templates": {
-                        "Стандартная коробка": "box.pdf",
-                        "Пермалко коробка": "permalko_box.pdf"
+                        "Обычная коробка 98х72": "box.pdf",
+                        "Пермалко коробка 98х72": "permalko_box.pdf"
                     }
                 }
                 self.config_manager.save_json_settings("templates_list.json", initial_templates)

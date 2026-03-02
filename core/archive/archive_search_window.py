@@ -292,6 +292,8 @@ class ArchiveSearchWindow:
                 return "Без веса (цех 1)"
             elif archive_type == "multitype":
                 return "Много видов (цех 1)"
+            elif archive_type == "multitype_noweight":  # ← новый тип
+                return "Много видов без веса (цех 1)"
         else:  # workshop == "2"
             if archive_type == "box":
                 return "Поддон (цех 2)"

@@ -28,7 +28,9 @@ from .cell_mappers_data import (
     WORKSHOP2_PALLET_LIST_STATIC,
     WORKSHOP2_PALLET_LIST_DYNAMIC,
     WORKSHOP2_MULTITYPE_STATIC,
-    WORKSHOP2_MULTITYPE_DYNAMIC
+    WORKSHOP2_MULTITYPE_DYNAMIC,
+    WORKSHOP1_MULTITYPE_NOWEIGHT_STATIC,
+    WORKSHOP1_MULTITYPE_NOWEIGHT_DYNAMIC,
 )
 
 
@@ -40,7 +42,25 @@ class CellMappingRegistry:
     """
     
     # ==================== МАППИНГИ ДЛЯ ЦЕХА 1 ====================
-    
+
+    @staticmethod
+    def get_workshop1_multitype_noweight_mapping() -> SheetMapping:
+        """
+        Маппинг для 1 цеха, лист 'Много видов БезВеса'
+        """
+        return SheetMapping(
+            sheet_name="Много видов БезВеса",
+            workshop="1",
+            description="Лист много видов без веса (цех 1)",
+
+            static_cells=WORKSHOP1_MULTITYPE_NOWEIGHT_STATIC,
+            dynamic_sections=WORKSHOP1_MULTITYPE_NOWEIGHT_DYNAMIC,
+
+            post_processing_hooks=[
+                "validate_multitype_noweight_rows"
+            ]
+        )
+
     @staticmethod
     def get_workshop1_box_mapping() -> SheetMapping:
         """
@@ -187,10 +207,11 @@ class CellMappingRegistry:
         # Словарь доступных маппингов
         mappings = {
             # Цех 1
-            ("1", "box"): cls.get_workshop1_box_mapping,           
+            ("1", "box"): cls.get_workshop1_box_mapping,
             ("1", "pallet"): cls.get_workshop1_pallet_mapping,
             ("1", "noweight"): cls.get_workshop1_noweight_mapping,
-            ("1", "multitype"): cls.get_workshop1_multitype_mapping,            
+            ("1", "multitype"): cls.get_workshop1_multitype_mapping,
+            ("1", "multitype_noweight"): cls.get_workshop1_multitype_noweight_mapping,
             
             # Цех 2
             ("2", "box"): cls.get_workshop2_box_mapping,
@@ -243,6 +264,12 @@ class CellMappingRegistry:
                 "sheet_type": "multitype",
                 "sheet_name": "Лист много видов",
                 "description": "Лист много видов (цех 1)"
+            },
+            {
+                "workshop": "1",
+                "sheet_type": "multitype_noweight",
+                "sheet_name": "Много видов БезВеса",
+                "description": "Лист много видов без веса (цех 1)"
             },
             
             # Цех 2
@@ -342,6 +369,10 @@ def get_workshop1_noweight_mapping() -> SheetMapping:
 def get_workshop1_multitype_mapping() -> SheetMapping:
     """Краткая функция для получения много-видового маппинга 1 цеха"""
     return CellMappingRegistry.get_workshop1_multitype_mapping()
+
+def get_workshop1_multitype_noweight_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга много видов без веса 1 цеха"""
+    return CellMappingRegistry.get_workshop1_multitype_noweight_mapping()
 
 # Цех 2
 def get_workshop2_box_mapping() -> SheetMapping:

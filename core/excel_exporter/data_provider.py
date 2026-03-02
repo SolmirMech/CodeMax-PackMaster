@@ -50,7 +50,108 @@ class ExportDataProvider:
     def clear_cache(self):
         """Очищает кеш данных (например, при изменении данных в UI)"""
         self._data_cache = None
-    
+
+    def get_data_for_workshop1_multitype_noweight(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 1 цеха, лист 'Много видов БезВеса'.
+        Читает данные из листа 'БезВеса' для заполнения динамической секции.
+        """
+        all_data = self.collect_all_data()
+
+        # Читаем данные из листа 'БезВеса'
+        noweight_data = self._read_workshop1_noweight_sheet_data()
+
+        return {
+            # Основная информация (из UI)
+            'customer': all_data['common'].get('customer'),
+            'pallet_type': all_data['common'].get('pallet_type'),
+            'order_number': all_data['common'].get('order_number'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+
+            # product_text = product_name (из UI)
+            'product_text': all_data['common'].get('product_text'),
+
+            # Данные из листа 'БезВеса' (для динамической секции)
+            'boxes_count': noweight_data.get('boxes_count', 0),
+            'labels_total': noweight_data.get('labels_total', 0),
+
+            # Производитель
+            'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
+
+            # Дополнительно
+            'workshop': '1',
+            'sheet_type': 'multitype_noweight',
+            'has_weight': False
+        }
+
+    def _read_workshop1_noweight_sheet_data(self) -> Dict[str, Any]:
+        """Читает данные из листа 'БезВеса' Excel файла.
+           Возвращает:
+           - boxes_count: количество заполненных строк (для колонки A в Много видов)
+           - labels_total: сумма количеств из колонок C, F, I (для колонки G в Много видов)
+        """
+        try:
+            actual_file_path = self.get_excel_file_path("1")
+            if not os.path.exists(actual_file_path):
+                return {'boxes_count': 0, 'labels_total': 0}
+
+            workbook = load_workbook(actual_file_path, data_only=True)
+
+            if "БезВеса" not in workbook.sheetnames:
+                workbook.close()
+                return {'boxes_count': 0, 'labels_total': 0}
+
+            sheet = workbook["БезВеса"]
+
+            boxes_count = 0
+            labels_total = 0
+
+            # Строки 14-28 (как в маппинге noweight)
+            for row in range(14, 29):
+                row_filled = False
+
+                # Левая секция (количество в C)
+                qty_c = sheet[f'C{row}'].value
+                if qty_c is not None:
+                    row_filled = True
+                    try:
+                        labels_total += float(qty_c)
+                    except:
+                        pass
+
+                # Центральная секция (количество в F)
+                qty_f = sheet[f'F{row}'].value
+                if qty_f is not None:
+                    row_filled = True
+                    try:
+                        labels_total += float(qty_f)
+                    except:
+                        pass
+
+                # Правая секция (количество в I)
+                qty_i = sheet[f'I{row}'].value
+                if qty_i is not None:
+                    row_filled = True
+                    try:
+                        labels_total += float(qty_i)
+                    except:
+                        pass
+
+                # Если хоть одна ячейка в строке заполнена - увеличиваем счётчик коробок
+                if row_filled:
+                    boxes_count += 1
+
+            workbook.close()
+
+            return {'boxes_count': boxes_count, 'labels_total': labels_total}
+
+        except Exception as e:
+            print(f"Ошибка чтения листа 'БезВеса': {e}")
+            return {'boxes_count': 0, 'labels_total': 0}
+
     def get_data_for_workshop1_box(self) -> Dict[str, Any]:
         """
         Специализированный метод для 1 цеха, лист коробки.

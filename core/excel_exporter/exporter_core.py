@@ -113,6 +113,14 @@ class SmartExporter:
                         )
                     all_fitted = sections_fitted and all_fitted
 
+            # Для много видов БезВеса
+            elif mapping.sheet_name == "Много видов БезВеса":
+                if mapping.dynamic_sections:
+                    sections_fitted = self._fill_multitype_noweight_sections(
+                        mapping.dynamic_sections, sheet_specific_data, max_items=1
+                    )
+                    all_fitted = sections_fitted and all_fitted
+
             # Для всех остальных листов
             else:                
                 # Специальная обработка для "Список поддонов"
@@ -257,6 +265,74 @@ class SmartExporter:
             except Exception as e:
                 print(f"Ошибка заполнения ячейки {cell_mapping.cell_reference}: {e}")
                 continue
+
+    def _fill_multitype_noweight_sections(self, sections: List[DynamicSection],
+                                          data: Dict[str, Any], max_items: int = 1) -> bool:
+        """Распределяет строки по секциям для multitype без веса"""
+        filled_count = 0
+
+        for section in sections:
+            if filled_count >= max_items:
+                break
+            items_left = max_items - filled_count
+            filled_in_section = self._fill_single_multitype_noweight_section(section, data, items_left)
+            filled_count += filled_in_section
+
+        return filled_count >= max_items
+
+    def _fill_single_multitype_noweight_section(self, section: DynamicSection,
+                                                data: Dict[str, Any], max_items: int) -> int:
+        """Заполняет одну секцию для multitype без веса"""
+        try:
+            # Данные для заполнения
+            boxes_count = data.get('boxes_count')
+            product_text = data.get('product_text')
+            labels_total = data.get('labels_total')
+
+            # Если данных нет - пропускаем
+            if boxes_count is None and product_text is None and labels_total is None:
+                return 0
+
+            start_row, end_row = section.rows_range
+            filled_count = 0
+
+            for row in range(start_row, end_row):
+                if filled_count >= max_items:
+                    break
+
+                # Проверяем, пуста ли строка
+                is_empty = True
+                for col_config in section.columns_config:
+                    cell_ref = f"{col_config['column']}{row}"
+                    if self.ws[cell_ref].value is not None:
+                        is_empty = False
+                        break
+
+                if is_empty:
+                    for col_config in section.columns_config:
+                        cell_ref = f"{col_config['column']}{row}"
+                        data_key = col_config['data_key']
+
+                        if data_key == 'boxes_count':
+                            value = boxes_count
+                        elif data_key == 'product_text':
+                            value = product_text
+                        elif data_key == 'labels_total':
+                            value = labels_total
+                        else:
+                            value = None
+
+                        if value is not None:
+                            processed_value = self._process_value_by_type(value, col_config['data_type'])
+                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
+
+                    filled_count += 1
+
+            return filled_count
+
+        except Exception as e:
+            print(f"Ошибка заполнения секции multitype без веса '{section.name}': {e}")
+            return 0
                 
     def _fill_multitype_sections_with_distribution(self, sections: List[DynamicSection], 
                                                   data: Dict[str, Any], max_items: int = 1) -> bool:
@@ -871,6 +947,10 @@ class SmartExporter:
         # Для листа "Много видов 1 цех" используем специализированный метод DataProvider
         if sheet_name == "Лист много видов" and workshop == "1":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype()}
+
+        # В методе _prepare_sheet_data, после workshop1_multitype:
+        if sheet_name == "Много видов БезВеса" and workshop == "1":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype_noweight()}
             
         # Для листа "Много видов 2 цех" используем специализированный метод DataProvider
         if (sheet_name == "Много видов" or "много видов" in sheet_name.lower()) and workshop == "2":
@@ -898,6 +978,25 @@ class SmartExporter:
                     print(f"Внимание: хук '{hook_name}' не найден")
             except Exception as e:
                 print(f"Ошибка выполнения хука '{hook_name}': {e}")
+
+    def _hook_validate_multitype_noweight_rows(self, data: Dict[str, Any]):
+        """
+        Хук для проверки количества строк в листе 'Много видов БезВеса'.
+        Максимум 18 строк (A11-A28).
+        """
+        if not self.current_mapping or self.current_mapping.sheet_name != "Много видов БезВеса":
+            return
+
+        # Получаем количество заполняемых строк
+        boxes_count = data.get('boxes_count', 0)
+        max_rows = 18  # строки 11-28
+
+        if boxes_count > max_rows:
+            print(
+                f"ВНИМАНИЕ: Количество строк ({boxes_count}) превышает максимальное ({max_rows}) для листа 'Много видов БезВеса'")
+            data['sheet_overflow'] = True
+        elif boxes_count == 0:
+            print("ВНИМАНИЕ: Нет данных для заполнения в листе 'Много видов БезВеса'")
                 
     def _hook_validate_pallet_list_capacity(self, data: Dict[str, Any]):
         """Хук для проверки заполнения листа 'Список поддонов'"""

@@ -494,7 +494,7 @@ class RollPreview:
 
         # Приоритет 1: Специальные условия
         if self.rosinka_enabled:
-            return "rosinka.pdf", "box.pdf"
+            return "rosinka_roll.pdf", "box.pdf"
 
         if "пермалко" in customer:
             return "permalko_roll.pdf", "permalko_box.pdf"

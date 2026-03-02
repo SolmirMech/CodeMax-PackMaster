@@ -82,18 +82,27 @@ class ExcelPreviewModule:
                     
         except Exception as e:
             print(f"[ERROR] Ошибка проверки Excel файлов: {e}")
-            
+
     def get_sheet_for_preview(self, workshop, enable_pallet=False, multitype_mode=False):
         """Определяет лист для предпросмотра на основе контекста"""
         if workshop == "1":
             if multitype_mode:
-                return "Лист много видов"
+                # Проверяем наличие веса для мультитайпа
+                has_weight = True
+                if self.coordinator is not None:
+                    has_weight = self.coordinator.get_weight_status()
+
+                # Если нет веса - показываем новый лист "Много видов БезВеса"
+                if not has_weight:
+                    return "Много видов БезВеса"
+                else:
+                    return "Лист много видов"
             elif enable_pallet:
                 # Проверяем наличие веса через координатор
                 has_weight = True
                 if self.coordinator is not None:
                     has_weight = self.coordinator.get_weight_status()
-                
+
                 # Если нет веса и включен режим паллеты - показываем лист "БезВеса"
                 if not has_weight and enable_pallet:
                     return "БезВеса"
@@ -849,6 +858,8 @@ class ExcelPreviewModule:
         elif sheet_name == "БезВеса":
             return {"workshop": "1", "enable_pallet": True, "multitype_mode": False}
         elif sheet_name == "Лист много видов":
+            return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}
+        elif sheet_name == "Много видов БезВеса":  # ← НОВЫЙ ЛИСТ
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}
         elif sheet_name == "Поддон":
             return {"workshop": "2", "enable_pallet": False, "multitype_mode": False}
