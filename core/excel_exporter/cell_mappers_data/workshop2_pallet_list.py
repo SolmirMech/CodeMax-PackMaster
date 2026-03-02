@@ -1,7 +1,7 @@
 # cell_mappers_data/workshop2_pallet_list.py
 """Данные для маппинга Списка поддонов 2 цеха"""
 
-from ..cell_mappers_models import (
+from core.excel_exporter.cell_mappers_data.cell_mappers_models import (
     CellMapping, DynamicSection, CellFormat,
     DataType, HorizontalAlignment, VerticalAlignment
 )

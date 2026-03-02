@@ -1,7 +1,7 @@
 # cell_mappers_data/workshop1_box.py
 """Данные для маппинга коробки 1 цеха"""
 
-from ..cell_mappers_models import (  # ← импорт из нового файла
+from core.excel_exporter.cell_mappers_data.cell_mappers_models import (  # ← импорт из нового файла
     CellMapping, DynamicSection, CellFormat,
     DataType, HorizontalAlignment, VerticalAlignment
 )
