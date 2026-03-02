@@ -6,3 +6,4 @@ from .sleeve_weights_dialog import SleeveWeightsDialog
 from .shortening_rules_dialog import ShorteningRulesDialog
 from .cutters_editor_dialog import CuttersEditorDialog
 from .packers_editor_dialog import PackersEditorDialog
+from .templates_list_dialog import TemplatesListDialog

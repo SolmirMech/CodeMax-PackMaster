@@ -14,19 +14,6 @@ def get_default_printer():
 # noinspection SpellCheckingInspection,PyTypeChecker
 class SettingsDialog:
     """Диалог настроек"""
-    # Сопоставление шаблонов: "отображаемое имя" → "имя файла"
-    ROLL_TEMPLATES = [
-        ("Стандартный 1 цех (90x72) → roll.pdf", "roll.pdf"),
-        ("Маленький 1 цех (80x57) → roll_1.pdf", "roll_1.pdf"),
-        ("Стандартный 2 цех (80x57) → roll_2_cex.pdf", "roll_2_cex.pdf"),
-        ("Росинка → rosinka.pdf", "rosinka.pdf"),
-        ("Пермалко ролик → permalko_roll.pdf", "permalko_roll.pdf"),
-    ]
-
-    BOX_TEMPLATES = [
-        ("Стандартная коробка → box.pdf", "box.pdf"),
-        ("Пермалко коробка → permalko_box.pdf", "permalko_box.pdf"),
-    ]
 
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
         self.parent_frame = parent_frame
@@ -174,11 +161,15 @@ class SettingsDialog:
         workshop = self.coordinator.get_workshop()
         self.workshop_var.set(workshop)
 
+        templates_data = self.config_manager.load_json_settings("templates_list.json")
+        roll_templates = templates_data.get("roll_templates", {})
+        box_templates = templates_data.get("box_templates", {})
+
         # --- Шаблон для ролика ---
         ttk.Label(templates_frame, text="Ролик:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
 
         # Берём только отображаемые имена для комбобокса
-        roll_display_names = [item[0] for item in self.ROLL_TEMPLATES]
+        roll_display_names = list(roll_templates.keys())
 
         self.roll_template_var = tk.StringVar()
         roll_combo = ttk.Combobox(
@@ -193,7 +184,7 @@ class SettingsDialog:
         # --- Шаблон для коробки ---
         ttk.Label(templates_frame, text="Коробка:").grid(row=0, column=1, sticky="w", padx=5, pady=5)
 
-        box_display_names = [item[0] for item in self.BOX_TEMPLATES]
+        box_display_names = list(box_templates.keys())
 
         self.box_template_var = tk.StringVar()
         box_combo = ttk.Combobox(
@@ -358,19 +349,32 @@ class SettingsDialog:
         """Загружает шаблоны для указанного цеха из сохранённых настроек"""
         settings = self.config_manager.load_json_settings("shared_utils.json")
 
+        # Загружаем список всех шаблонов
+        templates_data = self.config_manager.load_json_settings("templates_list.json")
+        roll_templates = templates_data.get("roll_templates", {})
+        box_templates = templates_data.get("box_templates", {})
+
         # Загружаем шаблон ролика
         saved_roll = settings.get(f"selected_roll_template_{workshop}", "roll.pdf")
-        for display_name, filename in self.ROLL_TEMPLATES:
+        # Ищем отображаемое имя по имени файла
+        for display_name, filename in roll_templates.items():
             if filename == saved_roll:
                 self.roll_template_var.set(display_name)
                 break
+        else:
+            # Если не нашли, берём первый или пустую строку
+            if roll_templates:
+                self.roll_template_var.set(list(roll_templates.keys())[0])
 
         # Загружаем шаблон коробки
         saved_box = settings.get(f"selected_box_template_{workshop}", "box.pdf")
-        for display_name, filename in self.BOX_TEMPLATES:
+        for display_name, filename in box_templates.items():
             if filename == saved_box:
                 self.box_template_var.set(display_name)
                 break
+        else:
+            if box_templates:
+                self.box_template_var.set(list(box_templates.keys())[0])
 
     def _apply_templates(self):
         """Сохраняет выбранные шаблоны для текущего цеха"""
@@ -380,18 +384,14 @@ class SettingsDialog:
         selected_roll_display = self.roll_template_var.get()
         selected_box_display = self.box_template_var.get()
 
-        # Ищем соответствующие имена файлов
-        roll_filename = "roll.pdf"  # значение по умолчанию
-        for display_name, filename in self.ROLL_TEMPLATES:
-            if display_name == selected_roll_display:
-                roll_filename = filename
-                break
+        # Загружаем список всех шаблонов
+        templates_data = self.config_manager.load_json_settings("templates_list.json")
+        roll_templates = templates_data.get("roll_templates", {})
+        box_templates = templates_data.get("box_templates", {})
 
-        box_filename = "box.pdf"
-        for display_name, filename in self.BOX_TEMPLATES:
-            if display_name == selected_box_display:
-                box_filename = filename
-                break
+        # Получаем имена файлов
+        roll_filename = roll_templates.get(selected_roll_display, "roll.pdf")
+        box_filename = box_templates.get(selected_box_display, "box.pdf")
 
         # Сохраняем в настройки
         settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -403,7 +403,7 @@ class SettingsDialog:
             self.coordinator.notify_subscribers()
 
         self.show_message(f"✅ Шаблоны для {workshop} цеха сохранены", "green")
-        
+
     def _on_qr_toggled(self):
         """Обработчик изменения галочки QR-кода"""
         if self.coordinator is not None:

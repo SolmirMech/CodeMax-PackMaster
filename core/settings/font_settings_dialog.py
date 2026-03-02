@@ -1,8 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from core.settings.settings_dialog import SettingsDialog
-
 
 # noinspection SpellCheckingInspection,PyTypeChecker
 class FontSettingsDialog:
@@ -96,6 +94,8 @@ class FontSettingsDialog:
     }
         
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
+        self.current_pdf = None
+        self.current_box_pdf = None
         self.roll_status_label = None
         self.roll_status_var = None
         self.box_status_label = None
@@ -322,17 +322,19 @@ class FontSettingsDialog:
         workshop = self.coordinator.get_workshop()
         shared = self.config_manager.load_json_settings("shared_utils.json")
         current_pdf = shared.get(f"selected_roll_template_{workshop}", "roll.pdf")
+        templates_data = self.config_manager.load_json_settings("templates_list.json")
+        roll_templates = templates_data.get("roll_templates", {})
 
-        # Находим отображаемое имя из ROLL_TEMPLATES
-        display_name = "Стандартный 1 цех"
-        for disp, filename in SettingsDialog.ROLL_TEMPLATES:
+        # Находим отображаемое имя для ролика
+        roll_display = "Стандартный 1 цех"  # значение по умолчанию
+        for disp_name, filename in roll_templates.items():
             if filename == current_pdf:
-                display_name = disp.split(" → ")[0]
+                roll_display = disp_name
                 break
 
         ttk.Label(
             info_frame,
-            text=f"Текущий шаблон: {display_name} ({current_pdf})",
+            text=f"Текущий шаблон: {roll_display} ({current_pdf})",
             font=("Arial", 12, "bold")
         ).grid(row=0, column=0, sticky="w", padx=5)
 
@@ -451,13 +453,14 @@ class FontSettingsDialog:
         workshop = self.coordinator.get_workshop()
         shared = self.config_manager.load_json_settings("shared_utils.json")
         current_box_pdf = shared.get(f"selected_box_template_{workshop}", "box.pdf")
+        templates_data = self.config_manager.load_json_settings("templates_list.json")
+        box_templates = templates_data.get("box_templates", {})
 
-        # Находим отображаемое имя из BOX_TEMPLATES
-        from core.settings.settings_dialog import SettingsDialog
+        # Находим отображаемое имя для коробки
         box_display = "Стандартная коробка"
-        for disp, filename in SettingsDialog.BOX_TEMPLATES:
-            if filename == current_box_pdf:
-                box_display = disp.split(" → ")[0]
+        for display_name, filename in box_templates.items():
+            if filename == self.current_box_pdf:
+                box_display = display_name
                 break
 
         ttk.Label(

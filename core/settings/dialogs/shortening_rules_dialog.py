@@ -45,7 +45,7 @@ class ShorteningRulesDialog:
         container.pack(fill=tk.BOTH, expand=True)
 
         # Создаем canvas и scrollbar
-        canvas = tk.Canvas(container)
+        canvas = tk.Canvas(container, highlightthickness=0)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
 
@@ -78,6 +78,10 @@ class ShorteningRulesDialog:
 
         # Загружаем текущие сокращения
         current_rules = self.load_shortening_rules()
+
+        # Очищаем списки перед заполнением
+        self.original_entries.clear()
+        self.replacement_entries.clear()
 
         # Создаем поля ввода для каждого правила
         for original_text, replacement in current_rules.items():
@@ -115,8 +119,7 @@ class ShorteningRulesDialog:
         original_entry.insert(0, original_text)
         original_entry.pack(side=tk.LEFT, padx=(0, 10))
 
-        # Добавляем контекстное меню и горячие клавиши
-        self.add_context_menu_to_entry(original_entry)
+        # Добавляем горячие клавиши
         original_entry.bind("<Control-KeyPress>", self.control_key_handler)
         self.original_entries.append(original_entry)
 
@@ -125,8 +128,7 @@ class ShorteningRulesDialog:
         replacement_entry.insert(0, replacement)
         replacement_entry.pack(side=tk.LEFT, padx=(0, 10))
 
-        # Добавляем контекстное меню и горячие клавиши
-        self.add_context_menu_to_entry(replacement_entry)
+        # Добавляем горячие клавиши
         replacement_entry.bind("<Control-KeyPress>", self.control_key_handler)
         self.replacement_entries.append(replacement_entry)
 
@@ -135,36 +137,28 @@ class ShorteningRulesDialog:
             row_frame,
             text="×",
             width=2,
-            command=lambda: self._remove_rule_row(row_frame, original_entry, replacement_entry)
+            command=lambda f=row_frame, oe=original_entry, re=replacement_entry:
+                self._remove_rule_row(f, oe, re)
         ).pack(side=tk.RIGHT)
 
     def _remove_rule_row(self, row_frame, original_entry, replacement_entry):
         """Удаляет строку с полями ввода"""
-        if len(self.original_entries) > 1:  # Не позволяем удалить последнюю строку
+        if len(self.original_entries) > 1:
             row_frame.destroy()
-            self.original_entries.remove(original_entry)
-            self.replacement_entries.remove(replacement_entry)
+            if original_entry in self.original_entries:
+                self.original_entries.remove(original_entry)
+            if replacement_entry in self.replacement_entries:
+                self.replacement_entries.remove(replacement_entry)
 
     def control_key_handler(self, event):
         """Обработчик горячих клавиш для Entry полей"""
-        widget = event.widget
         if event.keycode in (86, 118):  # V key - вставка
-            self.paste_text_to_entry(widget)
+            self.paste_text_to_entry(event.widget)
             return "break"
         elif event.keycode in (67, 99):  # C key - копирование
-            self.copy_text_from_entry(widget)
+            self.copy_text_from_entry(event.widget)
             return "break"
         return None
-
-    def add_context_menu_to_entry(self, entry_widget):
-        """Добавляет контекстное меню к полю ввода Entry."""
-        menu = tk.Menu(entry_widget, tearoff=0)
-        menu.add_command(label="Копировать",
-                         command=lambda: self.copy_text_from_entry(entry_widget))
-        menu.add_command(label="Вставить",
-                         command=lambda: self.paste_text_to_entry(entry_widget))
-        entry_widget.bind("<Button-3>",
-                          lambda e: menu.tk_popup(e.x_root, e.y_root))
 
     @staticmethod
     def copy_text_from_entry(widget):
@@ -190,28 +184,20 @@ class ShorteningRulesDialog:
 
     def load_shortening_rules(self):
         """Загружает список сокращений, копирует из assets если нет в data"""
-        # Проверяем существует ли файл в data_dir
         settings_path = self.config_manager.get_settings_path("shortening_rules.json")
 
         if not os.path.exists(settings_path):
-            # Пробуем скопировать из assets
             self._copy_shortening_rules_from_assets()
 
-        # Загружаем данные
         return self.config_manager.load_json_settings("shortening_rules.json")
 
     def _copy_shortening_rules_from_assets(self):
         """Копирует файл shortening_rules.json из assets в data_dir"""
         try:
-            # Получаем путь к файлу в assets
             asset_path = self.config_manager.get_asset_path("shortening_rules.json")
-
-            # Получаем путь назначения в data_dir
             dest_path = self.config_manager.get_settings_path("shortening_rules.json")
 
-            # Проверяем существует ли файл в assets
             if os.path.exists(asset_path):
-                # Копируем файл
                 import shutil
                 shutil.copy2(asset_path, dest_path)
                 print(f"Файл shortening_rules.json скопирован из {asset_path} в {dest_path}")
@@ -231,17 +217,14 @@ class ShorteningRulesDialog:
                     self.replacement_entries
             ):
                 original_text = original_entry.get().strip()
-                replacement = replacement_entry.get().strip()
-
-                if original_text:  # Добавляем только правила с оригинальным текстом
-                    new_rules[original_text] = replacement
+                if original_text:
+                    new_rules[original_text] = replacement_entry.get().strip()
 
             # Сохраняем через ConfigManager
             if self.config_manager.save_json_settings("shortening_rules.json", new_rules):
                 if self.status_var:
                     self.status_var.set("✅ Список сокращений успешно сохранен!")
 
-                # Уведомляем координатора об изменении списка
                 if self.coordinator:
                     self.coordinator.notify_list_changed('shortening_rules')
 

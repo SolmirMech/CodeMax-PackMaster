@@ -8,7 +8,8 @@ from .dialogs import (
     SleeveWeightsDialog,
     ShorteningRulesDialog,
     CuttersEditorDialog,
-    PackersEditorDialog
+    PackersEditorDialog,
+    TemplatesListDialog
 )
 
 # noinspection PyTypeChecker
@@ -116,6 +117,15 @@ class ListsSettingsDialog:
             width=20
         )
         open_packers_btn.grid(row=8, column=0, padx=5, pady=5, sticky="w")
+
+        # Список шаблонов
+        open_templates_btn = ttk.Button(
+            boxes_frame,
+            text="📄 Список шаблонов",
+            command=self.open_templates_editor,
+            width=20
+        )
+        open_templates_btn.grid(row=9, column=0, padx=5, pady=5, sticky="w")
         
         # Статус-строка
         status_label = ttk.Label(
@@ -209,6 +219,17 @@ class ListsSettingsDialog:
         """Открывает окно редактирования списка упаковщиков"""
         parent_window = self.parent_frame.winfo_toplevel()
         dialog = PackersEditorDialog(
+            parent_window,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator,
+            status_var=self.status_var
+        )
+        dialog.show()
+
+    def open_templates_editor(self):
+        """Открывает окно редактирования списка шаблонов"""
+        parent_window = self.parent_frame.winfo_toplevel()
+        dialog = TemplatesListDialog(
             parent_window,
             config_manager=self.config_manager,
             coordinator=self.coordinator,
