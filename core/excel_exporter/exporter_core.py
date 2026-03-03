@@ -1,8 +1,7 @@
 # exporter_core.py
 """
-Ядро системы экспорта в Excel.
-Использует DataProvider для получения данных и CellMappers для маппинга.
-Не зависит от конкретного UI или структуры файла.
+Ядро системы экспорта в Excel. Только базовые методы.
+Обращается к вспомогательным модулям для специфической логики.
 """
 import os
 from typing import Dict, Any, Optional, List
@@ -10,11 +9,11 @@ from typing import Dict, Any, Optional, List
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
 
-from .cell_mappers import (
-    SheetMapping, CellMapping, DynamicSection, DataType,
-    HorizontalAlignment, VerticalAlignment, CellFormat
-)
+from .cell_mappers import SheetMapping, CellMapping, DataType, CellFormat, HorizontalAlignment
 from .data_provider import ExportDataProvider
+from core.excel_exporter.exporter_data.strategies import get_strategy_for_sheet  # импорт стратегий
+from core.excel_exporter.exporter_data.fill_methods import FillMethods  # методы заполнения
+from core.excel_exporter.exporter_data.clear_methods import ClearMethods  # методы очистки
 
 
 class ExcelExportError(Exception):
@@ -47,6 +46,9 @@ class SmartExporter:
         self.wb = None
         self.ws = None
         self.current_mapping: Optional[SheetMapping] = None
+        # Инициализация вспомогательных классов
+        self.filler = FillMethods(self)      # передаём себя для доступа к wb/ws
+        self.cleaner = ClearMethods(self)    # передаём себя для доступа к wb/ws        
         
     # ==================== ОСНОВНЫЕ МЕТОДЫ ЭКСПОРТА ====================
 
@@ -54,116 +56,31 @@ class SmartExporter:
     # mode передаётся из адаптера и используется там
     def export_to_sheet(self, file_path: str, mapping: SheetMapping,
                        mode: str = "box") -> Dict[str, Any]:
-        """
-        Основной метод экспорта в указанный лист.
-        
-        Args:
-            file_path: Путь к файлу Excel
-            mapping: Маппинг листа
-            mode: Режим экспорта ('box', 'pallet', etc.)
-            
-        Returns:
-            Словарь с результатами экспорта
-        """
+        """Основной метод экспорта в указанный лист."""
         try:
-            # Проверка файла
             self._validate_file(file_path)
-            
-            # Загрузка книги
             self.wb = load_workbook(file_path)
             
-            # Проверка существования листа
             if mapping.sheet_name not in self.wb.sheetnames:
-                raise ExcelExportError(f"Лист '{mapping.sheet_name}' не найден в файле")
+                raise ExcelExportError(f"Лист '{mapping.sheet_name}' не найден")
             
             self.ws = self.wb[mapping.sheet_name]
             self.current_mapping = mapping
             
-            # 1. Заполняем статические ячейки
+            # 1. Данные
             all_data = self.data_provider.collect_all_data()
-            sheet_specific_data = self._prepare_sheet_data(all_data, mapping.workshop, mapping.sheet_name)
+            sheet_data = self._prepare_sheet_data(all_data, mapping.workshop, mapping.sheet_name)
             
-            self._fill_static_cells(mapping.static_cells, sheet_specific_data)
+            # 2. Статика
+            self._fill_static_cells(mapping.static_cells, sheet_data)
             
-            # 2. Заполняем динамические секции
-            all_fitted = True
-
-            # ТОЛЬКО для БезВеса
-            if mapping.sheet_name == "БезВеса":
-                boxes_count = sheet_specific_data.get('boxes_count', 1)
-                if boxes_count == 0:
-                    boxes_count = 1
-                boxes_fitted = self._fill_quantity_sections_with_distribution(
-                    mapping.dynamic_sections, sheet_specific_data, boxes_count
-                )
-                all_fitted = boxes_fitted
-                
-            # Для много видов (оба цеха)
-            elif mapping.sheet_name == "Лист много видов" or mapping.sheet_name == "Много видов" or "много видов" in mapping.sheet_name.lower():
-                if mapping.dynamic_sections:
-                    # Для цеха 2 используем специальную логику
-                    if mapping.workshop == "2":
-                        sections_fitted = self._fill_multitype_sections_workshop2(
-                            mapping.dynamic_sections, sheet_specific_data, max_items=1
-                        )
-                    else:
-                        # Для цеха 1 используем стандартную логику
-                        sections_fitted = self._fill_multitype_sections_with_distribution(
-                            mapping.dynamic_sections, sheet_specific_data, max_items=1
-                        )
-                    all_fitted = sections_fitted and all_fitted
-
-            # Для много видов БезВеса
-            elif mapping.sheet_name == "Много видов БезВеса":
-                if mapping.dynamic_sections:
-                    sections_fitted = self._fill_multitype_noweight_sections(
-                        mapping.dynamic_sections, sheet_specific_data, max_items=1
-                    )
-                    all_fitted = sections_fitted and all_fitted
-
-            # Для всех остальных листов
-            else:                
-                # Специальная обработка для "Список поддонов"
-                if mapping.sheet_name == "Список поддонов":
-                    # Заполняем одну строку с данными поддона
-                    pallet_fitted = self._fill_pallet_list_sections(
-                        mapping.dynamic_sections, sheet_specific_data
-                    )
-                    all_fitted = pallet_fitted
-                    
-                # Группируем секции по типу
-                boxes_sections = [s for s in mapping.dynamic_sections if "boxes" in s.name]
-                rolls_sections = [s for s in mapping.dynamic_sections if "rolls" in s.name]
-                
-                # Заполняем коробки (для поддона)
-                if boxes_sections:
-                    boxes_count = sheet_specific_data.get('boxes_count', 1)
-                    if boxes_count == 0:
-                        boxes_count = 1
-                    boxes_fitted = self._fill_boxes_sections_with_distribution(
-                        boxes_sections, sheet_specific_data, boxes_count
-                    )
-                    all_fitted = boxes_fitted and all_fitted
-                
-                # Заполняем ролики (для коробки)
-                if rolls_sections:
-                    rolls_count = sheet_specific_data.get('rolls_count', 1)
-                    if mapping.workshop == "2":
-                        # Для 2 цеха используем специальную логику
-                        rolls_fitted = self._fill_rolls_sections_with_distribution_workshop2(
-                            rolls_sections, sheet_specific_data, rolls_count
-                        )
-                    else:
-                        # Для 1 цеха используем стандартную логику
-                        rolls_fitted = self._fill_rolls_sections_with_distribution(
-                            rolls_sections, sheet_specific_data, rolls_count
-                        )
-                    all_fitted = rolls_fitted and all_fitted
+            # 3. Динамика через стратегию
+            strategy = get_strategy_for_sheet(mapping, sheet_data)
+            all_fitted = strategy.process(self, mapping, sheet_data)
             
-            # 3. Выполняем пост-обработку
-            self._run_post_processing_hooks(mapping.post_processing_hooks, sheet_specific_data)
+            # 4. Хуки
+            self._run_post_processing_hooks(mapping.post_processing_hooks, sheet_data)
             
-            # 4. Сохраняем файл
             self.wb.save(file_path)
             
             return {
@@ -173,7 +90,6 @@ class SmartExporter:
                 'sheet_name': mapping.sheet_name,
                 'workshop': mapping.workshop
             }
-            
         except Exception as e:
             return {
                 'success': False,
@@ -181,61 +97,32 @@ class SmartExporter:
                 'file_path': file_path,
                 'sheet_name': mapping.sheet_name if mapping else 'Unknown'
             }
-            
         finally:
             self._cleanup()
     
     def clear_sheet(self, file_path: str, mapping: SheetMapping) -> bool:
-        """
-        Очищает указанный лист.
-        
-        Args:
-            file_path: Путь к файлу Excel
-            mapping: Маппинг листа для очистки
-            
-        Returns:
-            True если успешно, False если ошибка
-        """
+        """Очищает указанный лист."""
         try:
-            # Проверка файла
             self._validate_file(file_path, check_lock=True)
-            
-            # Загрузка книги
             self.wb = load_workbook(file_path)
             
-            # Проверка существования листа
             if mapping.sheet_name not in self.wb.sheetnames:
-                print(f"Лист '{mapping.sheet_name}' не найден в файле")
                 return False
             
             self.ws = self.wb[mapping.sheet_name]
             self.current_mapping = mapping
             
-            # 1. Очищаем статические ячейки
-            self._clear_static_cells(mapping.static_cells)
+            # Очистка через cleaner
+            self.cleaner.clear_sheet(mapping)
             
-            # 2. Очищаем динамические секции
-            if mapping.sheet_name == "БезВеса":
-                # Очистка для БезВеса: и ячейки с количеством, и номера
-                for section in mapping.dynamic_sections:
-                    self._clear_noweight_section_with_numbers(section)
-            else:
-                # Обычная очистка для других листов
-                for section in mapping.dynamic_sections:
-                    self._clear_dynamic_section(section)
-            
-            # 3. Сохраняем файл
             self.wb.save(file_path)
-            
             return True
-            
         except Exception as e:
             print(f"Ошибка очистки листа: {e}")
             return False
-            
         finally:
             self._cleanup()
-    
+            
     # ==================== МЕТОДЫ ЗАПОЛНЕНИЯ ЯЧЕЕК ====================
     
     def _fill_static_cells(self, cell_mappings: List[CellMapping], data: Dict[str, Any]):
@@ -252,10 +139,10 @@ class SmartExporter:
                     continue
                 
                 # Преобразуем значение согласно типу данных
-                processed_value = self._process_value_by_type(value, cell_mapping.data_type)
+                processed_value = self.process_value_by_type(value, cell_mapping.data_type)
                 
                 # Устанавливаем значение в ячейку
-                self._set_cell_value(
+                self.set_cell_value(
                     cell_mapping.cell_reference, 
                     processed_value,
                     cell_mapping.format,
@@ -265,648 +152,7 @@ class SmartExporter:
             except Exception as e:
                 print(f"Ошибка заполнения ячейки {cell_mapping.cell_reference}: {e}")
                 continue
-
-    def _fill_multitype_noweight_sections(self, sections: List[DynamicSection],
-                                          data: Dict[str, Any], max_items: int = 1) -> bool:
-        """Распределяет строки по секциям для multitype без веса"""
-        filled_count = 0
-
-        for section in sections:
-            if filled_count >= max_items:
-                break
-            items_left = max_items - filled_count
-            filled_in_section = self._fill_single_multitype_noweight_section(section, data, items_left)
-            filled_count += filled_in_section
-
-        return filled_count >= max_items
-
-    def _fill_single_multitype_noweight_section(self, section: DynamicSection,
-                                                data: Dict[str, Any], max_items: int) -> int:
-        """Заполняет одну секцию для multitype без веса"""
-        try:
-            # Данные для заполнения
-            boxes_count = data.get('boxes_count')
-            product_text = data.get('product_text')
-            labels_total = data.get('labels_total')
-
-            # Если данных нет - пропускаем
-            if boxes_count is None and product_text is None and labels_total is None:
-                return 0
-
-            start_row, end_row = section.rows_range
-            filled_count = 0
-
-            for row in range(start_row, end_row):
-                if filled_count >= max_items:
-                    break
-
-                # Проверяем, пуста ли строка
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-
-                if is_empty:
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-
-                        if data_key == 'boxes_count':
-                            value = boxes_count
-                        elif data_key == 'product_text':
-                            value = product_text
-                        elif data_key == 'labels_total':
-                            value = labels_total
-                        else:
-                            value = None
-
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-
-                    filled_count += 1
-
-            return filled_count
-
-        except Exception as e:
-            print(f"Ошибка заполнения секции multitype без веса '{section.name}': {e}")
-            return 0
                 
-    def _fill_multitype_sections_with_distribution(self, sections: List[DynamicSection], 
-                                                  data: Dict[str, Any], max_items: int = 1) -> bool:
-        """Распределяет строки по секциям для multitype (ТОЧНО как для boxes)"""
-        filled_count = 0
-        
-        for section in sections:
-            if filled_count >= max_items:
-                break
-                
-            # Сколько осталось заполнить
-            items_left = max_items - filled_count
-            filled_in_section = self._fill_single_multitype_section(section, data, items_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= max_items
-
-    def _fill_single_multitype_section(self, section: DynamicSection, data: Dict[str, Any], max_items: int) -> int:
-        """Заполняет одну секцию для multitype (ТОЧНО как _fill_boxes_section)"""
-        try:
-            # Данные для заполнения
-            boxes_count = data.get('boxes_count')
-            product_text = data.get('product_text')
-            gross_total = data.get('gross_total')
-            net_total = data.get('net_total')
-            labels_total = data.get('labels_total')
-            
-            # Если данных нет - пропускаем
-            if boxes_count is None and product_text is None and gross_total is None and net_total is None and labels_total is None:
-                return 0
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # Ищем пустые строки (ТОЧНАЯ ЛОГИКА!)
-            for row in range(start_row, end_row):
-                if filled_count >= max_items:
-                    break
-                
-                # Проверяем, пуста ли строка (ТОЧНО как в _fill_boxes_section)
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # Заполняем строку
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        # Сопоставляем ключи данных (аналогично _fill_boxes_section)
-                        if data_key == 'boxes_count':
-                            value = boxes_count
-                        elif data_key == 'product_text':
-                            value = product_text
-                        elif data_key == 'gross_total':
-                            value = gross_total
-                        elif data_key == 'net_total':
-                            value = net_total
-                        elif data_key == 'labels_total':
-                            value = labels_total
-                        else:
-                            value = None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции multitype '{section.name}': {e}")
-            return 0
-        
-    def _fill_rolls_sections_with_distribution(self, sections: List[DynamicSection], 
-                                              data: Dict[str, Any], total_rolls: int) -> bool:
-        """Распределяет ролики по секциям последовательно"""
-        filled_count = 0
-        
-        for section in sections:
-            if filled_count >= total_rolls:
-                break
-                
-            # Сколько осталось заполнить
-            rolls_left = total_rolls - filled_count
-            filled_in_section = self._fill_single_rolls_section(section, data, rolls_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= total_rolls
-
-    def _fill_single_rolls_section(self, section: DynamicSection, data: Dict[str, Any], max_rolls: int) -> int:
-        """Заполняет одну секцию роликов, возвращает сколько заполнил"""
-        try:
-            # Данные одного ролика
-            gross_weight = data.get('gross_weight_per_roll')
-            net_weight = data.get('net_weight_per_roll')
-            quantity = data.get('quantity_per_roll')
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # Ищем пустые строки
-            for row in range(start_row, end_row):
-                if filled_count >= max_rolls:
-                    break
-                
-                # Проверяем, пуста ли строка
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # Заполняем строку
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        if data_key == 'gross_weight_per_roll':
-                            value = gross_weight
-                        elif data_key == 'net_weight_per_roll':
-                            value = net_weight
-                        elif data_key == 'quantity_per_roll':
-                            value = quantity
-                        else:
-                            value = None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции роликов '{section.name}': {e}")
-            return 0
-            
-    def _fill_boxes_sections_with_distribution(self, sections: List[DynamicSection], 
-                                              data: Dict[str, Any], total_boxes: int) -> bool:
-        """Распределяет коробки по секциям последовательно (логика как для роликов)"""
-        filled_count = 0
-        
-        for section in sections:
-            if filled_count >= total_boxes:
-                break
-                
-            # Сколько осталось заполнить
-            boxes_left = total_boxes - filled_count
-            filled_in_section = self._fill_boxes_section(section, data, boxes_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= total_boxes
-
-    def _fill_boxes_section(self, section: DynamicSection, data: Dict[str, Any], max_boxes: int) -> int:
-        """Заполняет одну секцию коробок, возвращает сколько заполнил"""
-        try:
-            # Данные одной коробки
-            gross_weight = data.get('gross_weight_per_box')
-            net_weight = data.get('net_weight_per_box')
-            quantity = data.get('quantity_per_box')
-            
-            # Если данных нет - пропускаем
-            if gross_weight is None and net_weight is None and quantity is None:
-                return 0
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # Ищем пустые строки
-            for row in range(start_row, end_row):
-                if filled_count >= max_boxes:
-                    break
-                
-                # Проверяем, пуста ли строка
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # Заполняем строку
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        # Сопоставляем ключи данных
-                        if data_key == 'gross_weight_per_box':
-                            value = gross_weight
-                        elif data_key == 'net_weight_per_box':
-                            value = net_weight
-                        elif data_key == 'quantity_per_box':
-                            value = quantity
-                        else:
-                            value = None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции коробок '{section.name}': {e}")
-            return 0
-            
-    def _fill_quantity_sections_with_distribution(self, sections: List[DynamicSection], 
-                                                data: Dict[str, Any], total_boxes: int) -> bool:
-        """Распределяет количество по 3 секциям для листа БезВеса"""
-        
-        filled_count = 0
-        
-        for i, section in enumerate(sections):
-            if filled_count >= total_boxes:
-                break
-                
-            # Сколько осталось заполнить
-            boxes_left = total_boxes - filled_count
-            filled_in_section = self._fill_quantity_section(section, data, boxes_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= total_boxes
-
-    def _fill_quantity_section(self, section: DynamicSection, data: Dict[str, Any], max_boxes: int) -> int:
-        """Заполняет одну секцию количества для листа БезВеса"""
-        try:
-            # Только количество
-            quantity = data.get('quantity_per_box')
-            
-            # Если данных нет - пропускаем
-            if quantity is None:
-                return 0
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # Ищем пустые строки
-            for row in range(start_row, end_row):
-                if filled_count >= max_boxes:
-                    break
-                
-                # Проверяем, пуста ли строка (ТА ЖЕ ЛОГИКА)
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # Заполняем строку (ПРОЩЕ - только quantity_per_box)
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        # В БезВеса только quantity_per_box
-                        value = quantity if data_key == 'quantity_per_box' else None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции количества '{section.name}': {e}")
-            return 0
-
-    def _fill_single_rolls_section_workshop2(self, section: DynamicSection, data: Dict[str, Any], max_rolls: int) -> int:
-        """Заполняет одну секцию роликов ТОЛЬКО для 2 цеха (с L колонкой)"""
-        try:
-            # Данные одного ролика для 2 цеха
-            net_weight = data.get('net_weight_per_roll')  # Только нетто!
-            quantity = data.get('quantity_per_roll')
-            roll_length = data.get('roll_length')
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # Определяем смещение для L на основе имени секции
-            l_offset = 0
-            if section.name == "rolls_column_2":
-                l_offset = 20  # E,F → L+20
-            elif section.name == "rolls_column_3":
-                l_offset = 40  # H,I → L+40
-            
-            # Ищем пустые строки
-            for row in range(start_row, end_row):
-                if filled_count >= max_rolls:
-                    break
-                
-                # Проверяем, пуста ли строка (только B, C или E, F или H, I)
-                is_empty = True
-                for col_config in section.columns_config:
-                    cell_ref = f"{col_config['column']}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # 1. Заполняем основные колонки (B/C, E/F, H/I)
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        if data_key == 'net_weight_per_roll':
-                            value = net_weight
-                        elif data_key == 'quantity_per_roll':
-                            value = quantity
-                        else:
-                            value = None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    # 2. Заполняем соответствующую строку в L
-                    if roll_length is not None:
-                        l_row = row + l_offset
-                        l_cell = f"L{l_row}"
-                        
-                        # Форматирование для L
-                        l_format = CellFormat(
-                            horizontal_alignment=HorizontalAlignment.CENTER,
-                            vertical_alignment=VerticalAlignment.CENTER,
-                            number_format="0.0"
-                        )
-                        
-                        self._set_cell_value(l_cell, roll_length, l_format)
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции роликов 2 цеха '{section.name}': {e}")
-            return 0
-
-    def _fill_rolls_sections_with_distribution_workshop2(self, sections: List[DynamicSection], 
-                                                       data: Dict[str, Any], total_rolls: int) -> bool:
-        """Распределяет ролики по секциям ТОЛЬКО для 2 цеха"""
-        filled_count = 0
-        
-        for section in sections:
-            if filled_count >= total_rolls:
-                break
-                
-            # Сколько осталось заполнить
-            rolls_left = total_rolls - filled_count
-            filled_in_section = self._fill_single_rolls_section_workshop2(section, data, rolls_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= total_rolls
-        
-    def _fill_pallet_list_sections(self, sections: List[DynamicSection], 
-                                  data: Dict[str, Any]) -> bool:
-        """
-        Заполняет динамические секции для листа 'Список поддонов'.
-        Находит первую свободную строку и заполняет её данными одного поддона.
-        """
-        if not sections:
-            return True
-        
-        # Проверяем, что есть данные для заполнения
-        rolls_count = data.get('rolls_count', 0)
-        total_weight = data.get('total_weight', 0)
-        total_quantity = data.get('total_quantity', 0)
-        total_length = data.get('total_length', 0)
-        
-        # Если все данные пустые - пропускаем
-        if rolls_count == 0 and total_weight == 0 and total_quantity == 0 and total_length == 0:
-            return False
-        
-        # Берем первую секцию
-        section = sections[0]
-        start_row, end_row = section.rows_range
-        
-        # Ищем первую свободную строку
-        target_row = None
-        
-        for row in range(start_row, end_row):
-            is_empty = True
-            for col in ['D', 'F', 'H', 'L']:
-                if self.ws[f'{col}{row}'].value is not None:
-                    is_empty = False
-                    break
-            
-            if is_empty:
-                target_row = row
-                break
-        
-        # Если не нашли свободную строку - хуки уже показали ошибку
-        if target_row is None:
-            return False
-        
-        # Заполняем найденную строку
-        try:
-            for col_config in section.columns_config:
-                cell_ref = f"{col_config['column']}{target_row}"
-                data_key = col_config['data_key']
-                
-                if data_key == 'rolls_count':
-                    value = rolls_count
-                elif data_key == 'total_weight':
-                    value = total_weight
-                elif data_key == 'total_quantity':
-                    value = total_quantity
-                elif data_key == 'total_length':
-                    value = total_length
-                else:
-                    value = None
-                
-                if value is not None:
-                    processed_value = self._process_value_by_type(value, col_config['data_type'])
-                    self._set_cell_value(cell_ref, processed_value, col_config['format'])
-            
-            return True
-            
-        except Exception as e:
-            print(f"Ошибка заполнения строки {target_row}: {e}")
-            return False
-            
-    def _fill_multitype_sections_workshop2(self, sections: List[DynamicSection], 
-                                          data: Dict[str, Any], max_items: int = 1) -> bool:
-        """Распределяет строки по секциям для multitype (цех 2)"""
-        filled_count = 0
-        
-        for section in sections:
-            if filled_count >= max_items:
-                break
-                
-            # Сколько осталось заполнить
-            items_left = max_items - filled_count
-            filled_in_section = self._fill_single_multitype_section_workshop2(section, data, items_left)
-            filled_count += filled_in_section
-        
-        return filled_count >= max_items
-
-    def _fill_single_multitype_section_workshop2(self, section: DynamicSection, data: Dict[str, Any], max_items: int) -> int:
-        """Заполняет одну секцию для multitype (цех 2) - логика с очисткой дублирующихся строк"""
-        try:
-            # Данные для заполнения
-            pallets_count = data.get('pallets_count', 0)
-            product_name = data.get('product_name', '')
-            total_weight = data.get('total_weight', 0)
-            total_quantity = data.get('total_quantity', 0)
-            total_length = data.get('total_length', 0)
-            
-            # Если данных нет - пропускаем
-            if not product_name:
-                return 0
-            
-            start_row, end_row = section.rows_range
-            filled_count = 0
-            
-            # 1. Сначала ищем строку с таким же product_name (для замены)
-            for row in range(start_row, end_row):
-                if self.ws[f'B{row}'].value == product_name:
-                    # Очищаем всю строку
-                    for col in ['A', 'B', 'H', 'I', 'L']:
-                        cell_ref = f"{col}{row}"
-                        self._set_cell_value(cell_ref, None, CellFormat())
-                    break
-            
-            # 2. Теперь ищем пустую строку
-            for row in range(start_row, end_row):
-                if filled_count >= max_items:
-                    break
-                
-                # Проверяем, пуста ли строка
-                is_empty = True
-                for col in ['A', 'B', 'H', 'I', 'L']:
-                    cell_ref = f"{col}{row}"
-                    if self.ws[cell_ref].value is not None:
-                        is_empty = False
-                        break
-                
-                if is_empty:
-                    # Заполняем строку
-                    for col_config in section.columns_config:
-                        cell_ref = f"{col_config['column']}{row}"
-                        data_key = col_config['data_key']
-                        
-                        # Сопоставляем ключи данных
-                        if data_key == 'pallets_count':
-                            value = pallets_count
-                        elif data_key == 'product_text':  # Это product_name в маппинге
-                            value = product_name
-                        elif data_key == 'total_weight':
-                            value = total_weight
-                        elif data_key == 'total_quantity':
-                            value = total_quantity
-                        elif data_key == 'total_length':
-                            value = total_length
-                        else:
-                            value = None
-                        
-                        if value is not None:
-                            processed_value = self._process_value_by_type(value, col_config['data_type'])
-                            self._set_cell_value(cell_ref, processed_value, col_config['format'])
-                    
-                    filled_count += 1
-            
-            return filled_count
-                
-        except Exception as e:
-            print(f"Ошибка заполнения секции multitype цех 2 '{section.name}': {e}")
-            return 0
-    
-    # ==================== МЕТОДЫ ОЧИСТКИ ====================
-    
-    def _clear_static_cells(self, cell_mappings: List[CellMapping]):
-        """Очищает статические ячейки"""
-        for cell_mapping in cell_mappings:
-            try:
-                self._set_cell_value(
-                    cell_mapping.cell_reference,
-                    None,
-                    CellFormat()  # Сбрасываем форматирование
-                )
-            except Exception as e:
-                print(f"Ошибка очистки ячейки {cell_mapping.cell_reference}: {e}")
-                continue
-
-    def _clear_dynamic_section(self, section: DynamicSection):
-        """Очищает динамическую секцию"""
-        start_row, end_row = section.rows_range
-
-        for row in range(start_row, end_row):
-            for col_config in section.columns_config:
-                cell_ref = None  # Инициализируем заранее
-                try:
-                    cell_ref = f"{col_config['column']}{row}"
-                    self._set_cell_value(cell_ref, None, CellFormat())
-                except Exception as e:
-                    print(f"Ошибка очистки ячейки {cell_ref if cell_ref else 'неизвестно'}: {e}")
-                    continue
-                    
-    def _clear_noweight_section_with_numbers(self, section: DynamicSection):
-        """Очищает секцию в БезВеса вместе с номерами"""
-        start_row, end_row = section.rows_range
-        
-        for row in range(start_row, end_row):
-            for col_config in section.columns_config:
-                try:
-                    # 1. Очищаем ячейку с количеством (C/F/I)
-                    quantity_col = col_config['column']  # C, F, I
-                    quantity_cell = f"{quantity_col}{row}"
-                    self._set_cell_value(quantity_cell, None, CellFormat())
-                    
-                    # 2. Очищаем соседнюю ячейку с номером
-                    number_col = chr(ord(quantity_col) - 1)  # C→B, F→E, I→H
-                    number_cell = f"{number_col}{row}"
-                    self._set_cell_value(number_cell, None, CellFormat())
-                    
-                except Exception as e:
-                    print(f"Не удалось очистить ячейку в БезВеса {row}: {e}")
-    
-    # ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
-    
     def _prepare_sheet_data(self, all_data: Dict[str, Any], workshop: str, sheet_name: str) -> Dict[str, Any]:
         """
         Подготавливает данные для конкретного листа.
@@ -965,8 +211,9 @@ class SmartExporter:
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_pallet_list()}
         
         return sheet_data
-
+    
     # ==================== Запуск хуков ====================
+    
     def _run_post_processing_hooks(self, hooks: List[str], data: Dict[str, Any]):
         """Выполняет хуки пост-обработки"""
         for hook_name in hooks:
@@ -1104,7 +351,7 @@ class SmartExporter:
             if boxes_filled >= boxes_count:
                 break
             if self.ws[f"B{i}"].value is None:
-                self._set_cell_value(f"B{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                self.set_cell_value(f"B{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
                 current_number += 1
                 boxes_filled += 1
         
@@ -1113,7 +360,7 @@ class SmartExporter:
             if boxes_filled >= boxes_count:
                 break
             if self.ws[f"E{i}"].value is None:
-                self._set_cell_value(f"E{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                self.set_cell_value(f"E{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
                 current_number += 1
                 boxes_filled += 1
         
@@ -1122,12 +369,13 @@ class SmartExporter:
             if boxes_filled >= boxes_count:
                 break
             if self.ws[f"H{i}"].value is None:
-                self._set_cell_value(f"H{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
+                self.set_cell_value(f"H{i}", current_number, CellFormat(horizontal_alignment=HorizontalAlignment.CENTER))
                 current_number += 1
                 boxes_filled += 1
 
+    # ==================== Вспомогательные методы ====================
     @staticmethod
-    def _process_value_by_type(value: Any, data_type: DataType) -> Any:
+    def process_value_by_type(value: Any, data_type: DataType) -> Any:
         """Обрабатывает значение согласно типу данных"""
         if value is None:
             return None
@@ -1169,7 +417,7 @@ class SmartExporter:
             print(f"Ошибка обработки значения '{value}' как {data_type}: {e}")
             return value
     
-    def _set_cell_value(self, cell_ref: str, value: Any, 
+    def set_cell_value(self, cell_ref: str, value: Any,
                        format_spec: Optional[CellFormat] = None,
                        is_merged_cell: bool = False):
         """
