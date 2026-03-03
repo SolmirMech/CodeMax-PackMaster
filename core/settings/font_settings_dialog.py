@@ -179,7 +179,7 @@ class FontSettingsDialog:
 
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущих PDF шаблонов"""
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        all_settings = self.config_manager.get_font_settings()
 
         # Получаем текущие PDF
         workshop = self.coordinator.get_workshop()

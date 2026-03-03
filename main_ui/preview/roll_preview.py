@@ -555,7 +555,7 @@ class RollPreview:
 
     def load_font_settings(self):
         """Загружает настройки шрифтов для текущих PDF шаблонов"""
-        all_settings = self.config_manager.load_json_settings("label_font_settings.json") or {}
+        all_settings = self.config_manager.get_font_settings()
 
         # Получаем имена текущих PDF файлов из путей
         current_roll_pdf = os.path.basename(self.roll_template_path)
