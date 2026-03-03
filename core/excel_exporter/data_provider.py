@@ -26,6 +26,10 @@ class ExportDataProvider:
         self._provider2 = Workshop2DataProvider(roll_module, config_manager, excel_file_path)
     
     # Проброс методов цеха 1
+
+    def get_data_for_workshop1_box_noweight(self) -> Dict[str, Any]:
+        return self._provider1.get_data_for_workshop1_box_noweight()
+
     def get_data_for_workshop1_box(self) -> Dict[str, Any]:
         return self._provider1.get_data_for_workshop1_box()
     

@@ -102,7 +102,7 @@ class ArchiveManager:
             if multitype_mode:
                 # Добавляем проверку веса для мультитайпа
                 if not has_weight:
-                    return "Много видов БезВеса", "multitype_noweight"  # ← новый лист
+                    return "Много видов БезВеса", "multitype_noweight"
                 else:
                     return "Лист много видов", "multitype"
             elif enable_pallet:
@@ -111,7 +111,10 @@ class ArchiveManager:
                 else:
                     return "БезВеса", "noweight"
             else:
-                return "Лист для коробки", "box"
+                if not has_weight:
+                    return "ПоддонРолики", "box_noweight"
+                else:
+                    return "Лист для коробки", "box"
         else:  # workshop == "2"
             if multitype_mode:
                 return "Много видов", "multitype"
@@ -252,8 +255,10 @@ class ArchiveManager:
             return "box"
         elif mapping.sheet_name == "Лист много видов":
             return "multitype"
-        elif mapping.sheet_name == "Много видов БезВеса":  # ← новый лист
+        elif mapping.sheet_name == "Много видов БезВеса":
             return "multitype_noweight"
+        elif mapping.sheet_name == "ПоддонРолики":
+            return "box_noweight"
         elif mapping.sheet_name == "Поддон":
             return "box"
         elif mapping.sheet_name == "Список поддонов":

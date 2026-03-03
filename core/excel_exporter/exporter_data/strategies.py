@@ -16,6 +16,17 @@ class SheetStrategy:
         """Возвращает True, если всё заполнилось"""
         return True
 
+class BoxNoWeightStrategy(SheetStrategy):
+    """Стратегия для ПоддонРолики (коробка без веса)"""
+
+    def should_apply(self, mapping: SheetMapping, data: Dict) -> bool:
+        return mapping.sheet_name == "ПоддонРолики"
+
+    def process(self, exporter, mapping, data):
+        # Просто заполняем первую пустую строку
+        return exporter.filler.fill_box_noweight_section(
+            mapping.dynamic_sections, data
+        )
 
 class MultiTypeWorkshop1Strategy(SheetStrategy):
     """Стратегия для "Лист много видов" (цех 1, с весом)"""
@@ -108,6 +119,7 @@ def get_strategy_for_sheet(mapping: SheetMapping, data: Dict) -> SheetStrategy:
         MultiTypeWorkshop2Strategy(),
         MultiTypeWorkshop1Strategy(),
         MultiTypeNoWeightStrategy(),
+        BoxNoWeightStrategy(),
         PalletListStrategy(),
     ]
     

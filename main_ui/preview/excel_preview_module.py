@@ -109,7 +109,15 @@ class ExcelPreviewModule:
                 else:
                     return "Лист для паллеты"
             else:
-                return "Лист для коробки"
+                # +++ для коробки без веса показываем "ПоддонРолики" +++
+                has_weight = True
+                if self.coordinator is not None:
+                    has_weight = self.coordinator.get_weight_status()
+
+                if not has_weight:
+                    return "ПоддонРолики"
+                else:
+                    return "Лист для коробки"
         else:  # workshop == "2"
             if multitype_mode:
                 return "Много видов"
@@ -859,8 +867,10 @@ class ExcelPreviewModule:
             return {"workshop": "1", "enable_pallet": True, "multitype_mode": False}
         elif sheet_name == "Лист много видов":
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}
-        elif sheet_name == "Много видов БезВеса":  # ← НОВЫЙ ЛИСТ
+        elif sheet_name == "Много видов БезВеса":
             return {"workshop": "1", "enable_pallet": False, "multitype_mode": True}
+        elif sheet_name == "ПоддонРолики":
+            return {"workshop": "1", "enable_pallet": False, "multitype_mode": False}
         elif sheet_name == "Поддон":
             return {"workshop": "2", "enable_pallet": False, "multitype_mode": False}
         elif sheet_name == "Список поддонов":

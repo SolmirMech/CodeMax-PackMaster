@@ -240,18 +240,25 @@ class ArchiveSearchWindow:
             # Определяем тип для отображения
             type_display = self._get_archive_type_display(workshop, archive_type)
 
+            pallet_num = "—"
+
             if workshop == "1":
                 # Для noweight номер заказа в E9, дата в E37
                 if archive_type == "noweight":
                     order_num = basic_fields.get("E9", "—")
-                    date = basic_fields.get("E37", "—")  # ← дата для noweight
+                    date = basic_fields.get("E37", "—")
+                # Для box_noweight (ПоддонРолики)
+                elif archive_type == "box_noweight":
+                    order_num = basic_fields.get("E9", "—")
+                    date = basic_fields.get("E37", "—")
+                    pallet_num = basic_fields.get("F5", "—")
                 else:
                     order_num = basic_fields.get("D8", "—")
-                    date = basic_fields.get("F37", "—")  # ← дата для остальных листов цеха 1
+                    date = basic_fields.get("F37", "—")
 
                 product = basic_fields.get("D10", "—")
-                pallet_num = "—"
-            else:
+
+            else:  # workshop == "2"
                 order_num = basic_fields.get("D6", "—")
                 product = basic_fields.get("D8", "—")
                 date = basic_fields.get("D37", "—")
@@ -292,8 +299,10 @@ class ArchiveSearchWindow:
                 return "Без веса (цех 1)"
             elif archive_type == "multitype":
                 return "Много видов (цех 1)"
-            elif archive_type == "multitype_noweight":  # ← новый тип
+            elif archive_type == "multitype_noweight":
                 return "Много видов без веса (цех 1)"
+            elif archive_type == "box_noweight":
+                return "Коробка без веса (ПоддонРолики)"
         else:  # workshop == "2"
             if archive_type == "box":
                 return "Поддон (цех 2)"

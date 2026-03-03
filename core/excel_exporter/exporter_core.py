@@ -197,7 +197,10 @@ class SmartExporter:
         # В методе _prepare_sheet_data, после workshop1_multitype:
         if sheet_name == "Много видов БезВеса" and workshop == "1":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_multitype_noweight()}
-            
+
+        if sheet_name == "ПоддонРолики" and workshop == "1":
+            sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop1_box_noweight()}
+
         # Для листа "Много видов 2 цех" используем специализированный метод DataProvider
         if (sheet_name == "Много видов" or "много видов" in sheet_name.lower()) and workshop == "2":
             sheet_data = {**sheet_data, **self.data_provider.get_data_for_workshop2_multitype()}

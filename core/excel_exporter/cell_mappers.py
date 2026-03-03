@@ -31,6 +31,8 @@ from .cell_mappers_data import (
     WORKSHOP2_MULTITYPE_DYNAMIC,
     WORKSHOP1_MULTITYPE_NOWEIGHT_STATIC,
     WORKSHOP1_MULTITYPE_NOWEIGHT_DYNAMIC,
+    WORKSHOP1_BOX_NOWEIGHT_STATIC,
+    WORKSHOP1_BOX_NOWEIGHT_DYNAMIC,
 )
 
 
@@ -42,6 +44,23 @@ class CellMappingRegistry:
     """
     
     # ==================== МАППИНГИ ДЛЯ ЦЕХА 1 ====================
+
+    @staticmethod
+    def get_workshop1_box_noweight_mapping() -> SheetMapping:
+        """
+        Маппинг для 1 цеха, лист 'ПоддонРолики' (коробка, без веса)
+        """
+        return SheetMapping(
+            sheet_name="ПоддонРолики",
+            workshop="1",
+            description="Этикетка для коробки без веса (цех 1)",
+
+            static_cells=WORKSHOP1_BOX_NOWEIGHT_STATIC,
+            dynamic_sections=WORKSHOP1_BOX_NOWEIGHT_DYNAMIC,
+
+            # Хуки можно добавить позже, если потребуется валидация
+            # post_processing_hooks=[]
+        )
 
     @staticmethod
     def get_workshop1_multitype_noweight_mapping() -> SheetMapping:
@@ -212,6 +231,7 @@ class CellMappingRegistry:
             ("1", "noweight"): cls.get_workshop1_noweight_mapping,
             ("1", "multitype"): cls.get_workshop1_multitype_mapping,
             ("1", "multitype_noweight"): cls.get_workshop1_multitype_noweight_mapping,
+            ("1", "box_noweight"): cls.get_workshop1_box_noweight_mapping,
             
             # Цех 2
             ("2", "box"): cls.get_workshop2_box_mapping,
@@ -270,6 +290,12 @@ class CellMappingRegistry:
                 "sheet_type": "multitype_noweight",
                 "sheet_name": "Много видов БезВеса",
                 "description": "Лист много видов без веса (цех 1)"
+            },
+            {
+                "workshop": "1",
+                "sheet_type": "box_noweight",
+                "sheet_name": "ПоддонРолики",
+                "description": "Этикетка для коробки без веса (цех 1)"
             },
             
             # Цех 2
@@ -352,6 +378,10 @@ def get_mapping(workshop: str, sheet_type: str, mode: str = "box") -> SheetMappi
     return CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
 
 # Цех 1
+def get_workshop1_box_noweight_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга коробки без веса 1 цеха"""
+    return CellMappingRegistry.get_workshop1_box_noweight_mapping()
+
 def get_workshop1_box_mapping() -> SheetMapping:
     """Краткая функция для получения маппинга коробки 1 цеха"""
     return CellMappingRegistry.get_workshop1_box_mapping()

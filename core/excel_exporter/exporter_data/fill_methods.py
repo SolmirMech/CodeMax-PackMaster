@@ -53,6 +53,52 @@ class FillMethods:
         except Exception as e:
             print(f"Ошибка заполнения секции {section.name}: {e}")
             return 0
+
+    def fill_box_noweight_section(self, sections: List[DynamicSection], data: Dict[str, Any]) -> bool:
+        """
+        Заполняет секцию для листа "ПоддонРолики":
+        - Находит первую пустую строку в секции
+        - Заполняет B{row} значением rolls_count
+        - Заполняет C{row} значением quantity_per_roll
+        """
+        if not sections:
+            return False
+
+        section = sections[0]  # только одна секция
+        ws = self.exporter.ws
+        start_row, end_row = section.rows_range
+
+        rolls_count = data.get('rolls_count')
+        quantity = data.get('quantity_per_roll')
+
+        if rolls_count is None or quantity is None:
+            return False
+
+        # Ищем первую пустую строку
+        for row in range(start_row, end_row):
+            # Проверяем, пусты ли обе ячейки
+            cell_b = ws[f"B{row}"].value
+            cell_c = ws[f"C{row}"].value
+
+            if cell_b is None and cell_c is None:
+                # Заполняем
+                for col_config in section.columns_config:
+                    data_key = col_config['data_key']
+                    value = data.get(data_key)
+
+                    if value is not None:
+                        processed = self.exporter.process_value_by_type(
+                            value, col_config['data_type']
+                        )
+                        self.exporter.set_cell_value(
+                            f"{col_config['column']}{row}",
+                            processed,
+                            col_config['format']
+                        )
+                return True
+
+        # Нет свободных строк
+        return False
     
     # ==================== МЕТОДЫ ДЛЯ РОЛИКОВ ====================
     

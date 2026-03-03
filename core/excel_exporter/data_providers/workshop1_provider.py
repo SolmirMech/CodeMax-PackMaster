@@ -12,6 +12,39 @@ class Workshop1DataProvider(BaseDataProvider):
     def __init__(self, roll_module, config_manager=None, excel_file_path=""):
         super().__init__(roll_module, config_manager, excel_file_path)
 
+    def get_data_for_workshop1_box_noweight(self) -> Dict[str, Any]:
+        """
+        Специализированный метод для 1 цеха, лист 'ПоддонРолики' (коробка без веса).
+        """
+        all_data = self.collect_all_data()
+
+        # В этом листе вес не нужен (data['has_weight'] = False)
+        return {
+            # Основная информация
+            'customer': all_data['common'].get('customer'),
+            'order_number': all_data['common'].get('order_number'),
+            'product_text': all_data['common'].get('product_text'),
+            'date': all_data['common'].get('date'),
+            'packer': all_data['common'].get('packer'),
+            'product_type': all_data['common'].get('product_type'),
+            'tu_number': all_data['common'].get('tu_number'),
+
+            # Количества
+            'pallet_num': all_data['quantities'].get('pallet_num'),
+            # Данные 'rolls_count' и 'quantity_per_roll' попадут в динамическую секцию.
+            # Провайдер отдает их как есть, а маппинг уже знает, куда их вставлять.
+            'rolls_count': all_data['quantities'].get('rolls_count'),
+            'quantity_per_roll': all_data['quantities'].get('quantity_per_roll'),
+
+            # Производитель
+            'manufacturer_display_text': all_data['manufacturer'].get('display_text'),
+
+            # Дополнительно
+            'workshop': '1',
+            'sheet_type': 'box_noweight',
+            'has_weight': False  # Явно указываем, что веса нет
+        }
+
     def get_data_for_workshop1_box(self) -> Dict[str, Any]:
         """
         Специализированный метод для 1 цеха, лист коробки.

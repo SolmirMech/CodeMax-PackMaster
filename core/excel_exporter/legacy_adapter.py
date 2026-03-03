@@ -50,7 +50,7 @@ class LegacyExporterAdapter:
     def export_data(self, enable_pallet=False, multitype_mode=False):
         """
         Интерфейс, совместимый со старым WeightOrdersExporter.export_data
-        Теперь с поддержкой нового листа 'Много видов БезВеса' для цеха 1.
+        Теперь с поддержкой нового листа 'ПоддонРолики' для цеха 1.
 
         Args:
             enable_pallet: Флаг режима поддона (True - паллета/без веса, False - коробка)
@@ -75,13 +75,12 @@ class LegacyExporterAdapter:
         elif multitype_mode:
             # Для цеха 1 проверяем наличие веса
             if workshop == "1" and not self.has_weight:
-                # НЕТ ВЕСА → используем новый лист "Много видов БезВеса"
+                # НЕТ ВЕСА → используем лист "Много видов БезВеса"
                 sheet_type = "multitype_noweight"
                 mode = "noweight"
             else:
                 # Есть вес или цех 2 → стандартный мультитайп
                 sheet_type = "multitype"
-                # mode для multitype не критичен, передаём box для совместимости
                 mode = "box" if not enable_pallet else ("pallet" if self.has_weight else "noweight")
 
         # Режим поддона (только для цеха 1, цех 2 уже отловлен выше)
@@ -96,8 +95,13 @@ class LegacyExporterAdapter:
 
         # Обычный режим коробки
         else:
-            sheet_type = "box"
-            mode = "box"
+            # +++ ИЗМЕНЕНИЕ: для цеха 1 без веса используем новый лист "ПоддонРолики" +++
+            if workshop == "1" and not self.has_weight:
+                sheet_type = "box_noweight"
+                mode = "box_noweight"
+            else:
+                sheet_type = "box"
+                mode = "box"
 
         # ========== ПОЛУЧЕНИЕ МАППИНГА ==========
         try:
@@ -136,7 +140,7 @@ class LegacyExporterAdapter:
     def clear_all_rolls(self, enable_pallet=False, multitype_mode=False):
         """
         Очистка листа (обратная совместимость со старым WeightOrdersExporter)
-        Теперь с поддержкой нового листа 'Много видов БезВеса' для цеха 1.
+        Теперь с поддержкой нового листа 'ПоддонРолики' для цеха 1.
 
         Args:
             enable_pallet: Флаг режима поддона
@@ -162,7 +166,7 @@ class LegacyExporterAdapter:
             elif multitype_mode:
                 # Для цеха 1 проверяем наличие веса
                 if workshop == "1" and not self.has_weight:
-                    # НЕТ ВЕСА → очищаем новый лист "Много видов БезВеса"
+                    # НЕТ ВЕСА → очищаем лист "Много видов БезВеса"
                     sheet_type = "multitype_noweight"
                     mode = "noweight"
                 else:
@@ -181,8 +185,13 @@ class LegacyExporterAdapter:
 
             # Обычный режим коробки
             else:
-                sheet_type = "box"
-                mode = "box"
+                # +++ ИЗМЕНЕНИЕ: для цеха 1 без веса очищаем новый лист "ПоддонРолики" +++
+                if workshop == "1" and not self.has_weight:
+                    sheet_type = "box_noweight"
+                    mode = "box_noweight"
+                else:
+                    sheet_type = "box"
+                    mode = "box"
 
             # ========== ПОЛУЧЕНИЕ МАППИНГА И ОЧИСТКА ==========
             try:
