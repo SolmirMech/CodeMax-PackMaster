@@ -94,12 +94,10 @@ class FontSettingsDialog:
     }
         
     def __init__(self, parent_frame, config_manager, preview_printer, preview_export_module, coordinator=None):
-        self.current_pdf = None
-        self.current_box_pdf = None
         self.roll_status_label = None
         self.roll_status_var = None
-        self.box_status_label = None
-        self.box_status_var = None
+        self.current_pdf = None
+        self.current_box_pdf = None
         self.main_frame = None
         self.parent_frame = parent_frame
         self.config_manager = config_manager
@@ -118,8 +116,6 @@ class FontSettingsDialog:
         self.box_entries = {}
         self.roll_wrap_entries = {}
         self.box_wrap_entries = {}
-        self.status_var = None
-        self.status_label = None
         self._initialized = False
 
     def set_parent_manager(self, manager):
@@ -236,7 +232,7 @@ class FontSettingsDialog:
         headers_frame.pack(fill=tk.X, padx=5, pady=5)
 
         ttk.Label(headers_frame, text="Поле", width=20).pack(side=tk.LEFT)
-        ttk.Label(headers_frame, text="Размер шрифта(pt)", width=18).pack(side=tk.LEFT, padx=5)
+        ttk.Label(headers_frame, text="Размер шрифта", width=18).pack(side=tk.LEFT, padx=5)
         
         # Разделитель
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=5)
@@ -335,7 +331,8 @@ class FontSettingsDialog:
         ttk.Label(
             info_frame,
             text=f"Текущий шаблон: {roll_display} ({current_pdf})",
-            font=("Arial", 12, "bold")
+            font=("Arial", 12, "bold"),
+            wraplength=480
         ).grid(row=0, column=0, sticky="w", padx=5)
 
         # Кнопка сохранения внизу ролика
@@ -351,11 +348,6 @@ class FontSettingsDialog:
         )
         save_btn.grid(row=0, column=0, sticky="w", padx=5)
 
-        # Статус для сообщений
-        self.roll_status_var = tk.StringVar()
-        self.roll_status_label = ttk.Label(info_frame, textvariable=self.roll_status_var, foreground="green")
-        self.roll_status_label.grid(row=1, column=0, sticky="w", padx=5)
-
     def create_box_tab(self, parent):
         """Создает вкладку настроек для коробки"""
         # Заголовки
@@ -363,7 +355,7 @@ class FontSettingsDialog:
         headers_frame.pack(fill=tk.X, padx=5, pady=5)
 
         ttk.Label(headers_frame, text="Поле", width=20).pack(side=tk.LEFT)
-        ttk.Label(headers_frame, text="Размер шрифта(pt)", width=18).pack(side=tk.LEFT, padx=5)
+        ttk.Label(headers_frame, text="Размер шрифта", width=18).pack(side=tk.LEFT, padx=5)
         
         # Разделитель
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=5)
@@ -466,7 +458,8 @@ class FontSettingsDialog:
         ttk.Label(
             info_frame,
             text=f"Текущий шаблон: {box_display} ({current_box_pdf})",
-            font=("Arial", 12, "bold")
+            font=("Arial", 12, "bold"),
+            wraplength=450
         ).pack(side=tk.LEFT, padx=5)
 
     def _save_font_settings(self):

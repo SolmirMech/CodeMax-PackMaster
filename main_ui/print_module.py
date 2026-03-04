@@ -58,6 +58,10 @@ class PrintModule:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
 
+    def receive_status(self, message, color="green"):
+        """Получает статус из диалога настроек"""
+        self.set_status(message, color)
+
     # noinspection PyTypeChecker
     def create_print_ui(self):
         """Создает компактный интерфейс управления печатью"""
@@ -150,6 +154,7 @@ class PrintModule:
         if self.coordinator:
             self._settings_manager = self.coordinator.get_settings_manager()
             if self._settings_manager:
+                self._settings_manager.set_status_callback(self.receive_status)
                 self._settings_manager.show()
 
     def set_status(self, message, color="green"):
