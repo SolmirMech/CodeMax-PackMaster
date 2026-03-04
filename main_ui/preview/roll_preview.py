@@ -497,7 +497,11 @@ class RollPreview:
             return "rosinka_roll.pdf", "box.pdf"
 
         if "пермалко" in customer:
-            return "permalko_roll.pdf", "permalko_box.pdf"
+            # Проверяем, выбран ли шаблон 1_cex_small_roll
+            if roll_template == "1_cex_small_roll.pdf":
+                return "permalko_small_roll.pdf", "permalko_box.pdf"
+            else:
+                return "permalko_roll.pdf", "permalko_box.pdf"
 
         # Приоритет 2: Выбранные шаблоны для текущего цеха
         return roll_template, box_template

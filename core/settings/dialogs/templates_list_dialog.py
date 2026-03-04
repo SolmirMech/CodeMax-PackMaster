@@ -259,10 +259,11 @@ class TemplatesListDialog:
                 initial_templates = {
                     "roll_templates": {
                         "Обычный ролик 1 цех 90x72": "roll.pdf",
-                        "Маленький ролик 1 цех 80x57": "1_cex_small_roll.pdf",
+                        "Маленький ролик 1 цех 70x50": "1_cex_small_roll.pdf",
                         "Обычный ролик 2 цех 80x57": "2_cex_roll.pdf",
                         "Росинка 71х89": "rosinka_roll.pdf",
-                        "Пермалко ролик 90х72": "permalko_roll.pdf"
+                        "Пермалко ролик 90х72": "permalko_roll.pdf",
+                        "Пермалко малый ролик 70х50": "permalko_small_roll.pdf"
                     },
                     "box_templates": {
                         "Обычная коробка 98х72": "box.pdf",
