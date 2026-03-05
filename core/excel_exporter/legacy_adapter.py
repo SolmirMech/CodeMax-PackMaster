@@ -31,7 +31,8 @@ class LegacyExporterAdapter:
         self.data_provider = ExportDataProvider(
             roll_module, 
             self.config_manager,
-            excel_file_path=self.original_excel_path  # ← передаем excel_file_path
+            excel_file_path=self.original_excel_path,  # ← передаем excel_file_path
+            coordinator=self.coordinator
         )
         self.exporter = SmartExporter(self.data_provider, self.config_manager)
         
@@ -110,7 +111,7 @@ class LegacyExporterAdapter:
             return {'success': False, 'error': str(e)}
 
         # ========== ВЫПОЛНЕНИЕ ЭКСПОРТА ==========
-        file_path = self.data_provider.get_excel_file_path(workshop)
+        file_path = self.data_provider.get_excel_file_path(workshop, has_weight=self.has_weight)
 
         try:
             result = self.exporter.export_to_sheet(
@@ -196,7 +197,7 @@ class LegacyExporterAdapter:
             # ========== ПОЛУЧЕНИЕ МАППИНГА И ОЧИСТКА ==========
             try:
                 mapping = CellMappingRegistry.get_mapping(workshop, sheet_type, mode)
-                file_path = self.data_provider.get_excel_file_path(workshop)
+                file_path = self.data_provider.get_excel_file_path(workshop, has_weight=self.has_weight)
 
                 success = self.exporter.clear_sheet(file_path, mapping)
 

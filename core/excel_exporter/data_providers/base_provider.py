@@ -8,10 +8,11 @@ class BaseDataProvider:
     Базовый класс с общими методами сбора данных из UI.
     """
     
-    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None, excel_file_path: str = ""):
+    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None, excel_file_path: str = "", coordinator=None):
         self.roll_module = roll_module
         self.config_manager = config_manager or ConfigManager()
         self.original_excel_path = excel_file_path
+        self.coordinator = coordinator
         self._data_cache: Optional[Dict[str, Any]] = None
         
     def collect_all_data(self) -> Dict[str, Any]:
@@ -391,22 +392,25 @@ class BaseDataProvider:
             pass
         
         return None
-        
-    def get_excel_file_path(self, workshop: str) -> str:
+
+    def get_excel_file_path(self, workshop: str, has_weight: bool = True) -> str:
         """Определяет путь к файлу Excel"""
-        # Копируем логику из старого get_excel_file_path
         try:
             # Получаем путь из настроек
             settings = self.config_manager.load_json_settings("shared_utils.json")
             excel_folder = settings.get("weight_orders_xlsx", "")
-            
+
             if not excel_folder:
                 excel_folder = os.path.dirname(self.original_excel_path)
-            
-            # Определяем имя файла
-            filename = "weight_orders.xlsx" if workshop == "1" else "weight_orders_2.xlsx"
+
+            # Определяем имя файла на основе цеха и статуса веса
+            if workshop == "1":
+                filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
+            else:  # workshop == "2"
+                filename = "weight_orders_2.xlsx"
+
             full_path = os.path.join(excel_folder, filename)
-            
+
             # Проверяем существование файла
             if not os.path.exists(full_path):
                 # Копируем из assets
@@ -417,9 +421,9 @@ class BaseDataProvider:
                     print(f"Файл {filename} скопирован в {full_path}")
                 else:
                     raise FileNotFoundError(f"Файл {filename} не найден в assets")
-            
+
             return full_path
-            
+
         except Exception as e:
             print(f"Ошибка получения пути к Excel файлу: {e}")
             return self.original_excel_path

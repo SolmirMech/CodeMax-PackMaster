@@ -78,12 +78,18 @@ class ArchiveManager:
         if hasattr(self.coordinator, 'get_weight_status'):
             self.has_weight = self.coordinator.get_weight_status()
 
-    def get_excel_path(self, workshop=None):
-        """Получает путь к Excel файлу из настроек с учетом цеха"""
+    def get_excel_path(self, workshop=None, has_weight=None):
+        """Получает путь к Excel файлу из настроек с учетом цеха и статуса веса"""
         if workshop is None and self.coordinator:
             workshop = self.coordinator.get_workshop()
         elif workshop is None:
             workshop = "1"
+
+        # Если has_weight не передан, получаем из координатора
+        if has_weight is None and self.coordinator:
+            has_weight = self.coordinator.get_weight_status()
+        elif has_weight is None:
+            has_weight = True  # по умолчанию
 
         settings = self.config.load_json_settings("shared_utils.json")
         excel_folder = settings.get("weight_orders_xlsx", "")
@@ -91,7 +97,7 @@ class ArchiveManager:
         if workshop == "2":
             filename = "weight_orders_2.xlsx"
         else:
-            filename = "weight_orders.xlsx"
+            filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
 
         return os.path.join(excel_folder, filename)
 
@@ -139,7 +145,7 @@ class ArchiveManager:
             has_weight = self.has_weight
 
             # Определяем путь к файлу
-            excel_path = self.get_excel_path(workshop)
+            excel_path = self.get_excel_path(workshop, has_weight)
             if not os.path.exists(excel_path):
                 return {"success": False, "error": f"Файл не найден: {excel_path}"}
 

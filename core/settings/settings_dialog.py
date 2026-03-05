@@ -672,10 +672,11 @@ class SettingsDialog:
             return
         
         try:
-            # Копируем ОБА файла - для 1 и 2 цеха
+            # Копируем все файлы Excel
             files_to_copy = [
                 ("weight_orders.xlsx", "weight_orders.xlsx"),
-                ("weight_orders_2.xlsx", "weight_orders_2.xlsx")
+                ("weight_orders_2.xlsx", "weight_orders_2.xlsx"),
+                ("no_weight_orders.xlsx", "no_weight_orders.xlsx")
             ]
             
             copied_files = []

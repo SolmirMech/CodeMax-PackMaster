@@ -374,50 +374,52 @@ class ArchiveSearchWindow:
             pallet_num = self.selected_pallet.get("pallet_number", "—")
             order_num = self.selected_pallet.get("order", "—")
             self.status_var.set(f"Выбран поддон №{pallet_num} (заказ: {order_num})")
-    
+
     def restore_selected(self):
         """Восстанавливает выбранный поддон"""
         if not self.selected_pallet:
             self.status_var.set("❌ Не выбран поддон для восстановления")
             return
-        
+
         try:
             # Получаем данные архива
             archive_data = self.selected_pallet["archive_data"]
-            
+
             # Получаем цех из архива
             workshop = archive_data.get("workshop", "2")
-            
-            # Получаем правильный путь к файлу Excel для этого цеха
-            excel_path = self.archive_manager.get_excel_path(workshop)
-            
+
+            # Получаем статус веса из архива (если есть)
+            has_weight = archive_data.get("has_weight", True)
+
+            # Получаем правильный путь к файлу Excel для этого цеха с учётом веса
+            excel_path = self.archive_manager.get_excel_path(workshop, has_weight)
+
             # Проверяем существование файла
             if not excel_path or not os.path.exists(excel_path):
-                # Пробуем получить путь через конфигурацию (аналогично экспортеру)
+                # Пробуем получить путь через конфигурацию
                 settings = self.archive_manager.config.load_json_settings("shared_utils.json")
                 excel_folder = settings.get("weight_orders_xlsx", "")
-                
+
                 if workshop == "2":
                     filename = "weight_orders_2.xlsx"
                 else:
-                    filename = "weight_orders.xlsx"
-                
+                    filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
+
                 excel_path = os.path.join(excel_folder, filename)
-                
-                # Если файла нет, нужно скопировать из assets (как в экспортере)
+
+                # Если файла нет, нужно скопировать из assets
                 if not os.path.exists(excel_path):
                     self.status_var.set(f"❌ Файл не найден: {excel_path}")
-                    
-                    # Можно предложить создать файл или показать инструкцию
+
                     response = tk.messagebox.askyesno(
                         "Файл не найден",
                         f"Файл {filename} не найден по пути:\n{excel_folder}\n\n"
                         "Создать новый файл из шаблона?"
                     )
-                    
+
                     if response:
                         assets_file = self.config_manager.get_asset_path(filename)
-                        
+
                         if os.path.exists(assets_file):
                             import shutil
                             shutil.copy2(assets_file, excel_path)
@@ -427,39 +429,39 @@ class ArchiveSearchWindow:
                             return
                     else:
                         return
-            
+
             self.status_var.set("Восстанавливаю поддон...")
             self.window.update()
-            
+
             # Восстанавливаем
             result = self.archive_manager.restore_to_excel(
                 archive_data,
                 excel_path
             )
-            
+
             if result["success"]:
                 pallet_num = result.get("pallet_number", "неизвестно")
                 order_num = result.get("order", "неизвестно")
-                
+
                 self.status_var.set(f"✅ Поддон №{pallet_num} восстановлен (заказ: {order_num})")
-                
+
                 # Обновляем статус в основном окне
                 if hasattr(self.order_processor, 'multitype_status_label'):
                     self.order_processor.multitype_status_label.config(
                         text=f"Восстановлен поддон №{pallet_num} (заказ: {order_num})",
                         foreground="green"
                     )
-                
+
                 # Закрываем окно через 2 секунды
                 self.window.after(2000, self.window.destroy)
-                
+
             else:
                 error_msg = result.get("error", "Неизвестная ошибка")
                 self.status_var.set(f"❌ Ошибка восстановления: {error_msg}")
-                
+
         except Exception as e:
             self.status_var.set(f"❌ Ошибка: {str(e)}")
-            
+
     def _delete_archive(self, archive_data):
         """Удаляет архив из JSON файла"""
         try:

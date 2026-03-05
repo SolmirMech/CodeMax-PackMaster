@@ -137,27 +137,36 @@ class ExcelPreviewModule:
         except Exception as e:
             print(f"[ERROR] Ошибка получения принтеров: {e}")
             return []
-    
+
     def _get_excel_path(self):
-        """Получает путь к Excel файлу из настроек с учетом цеха"""
+        """Получает путь к Excel файлу из настроек с учетом цеха и статуса веса"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
             excel_folder = settings.get("weight_orders_xlsx", "")
-            
+
             if not excel_folder:
                 return None
-            
+
             # Определяем цех
             workshop = "1"
             if self.coordinator is not None:
                 workshop = self.coordinator.get_workshop()
-            
-            # Выбираем файл в зависимости от цеха
-            filename = "weight_orders.xlsx" if workshop == "1" else "weight_orders_2.xlsx"
+
+            # Определяем статус веса
+            has_weight = True
+            if self.coordinator is not None:
+                has_weight = self.coordinator.get_weight_status()
+
+            # Выбираем файл в зависимости от цеха и веса
+            if workshop == "1":
+                filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
+            else:  # workshop == "2"
+                filename = "weight_orders_2.xlsx"
+
             full_path = os.path.join(excel_folder, filename)
-            
+
             return full_path
-            
+
         except Exception as e:
             print(f"Ошибка получения пути к Excel файлу: {e}")
             return None

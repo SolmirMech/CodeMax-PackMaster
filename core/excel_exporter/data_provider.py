@@ -16,10 +16,11 @@ class ExportDataProvider:
     Внутри делегирует вызовы соответствующим провайдерам.
     """
     
-    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None, excel_file_path: str = ""):
+    def __init__(self, roll_module, config_manager: Optional[ConfigManager] = None, excel_file_path: str = "", coordinator=None):
         self.roll_module = roll_module
         self.config_manager = config_manager or ConfigManager()
         self.original_excel_path = excel_file_path
+        self.coordinator = coordinator
         
         # Создаём оба провайдера
         self._provider1 = Workshop1DataProvider(roll_module, config_manager, excel_file_path)
@@ -63,8 +64,8 @@ class ExportDataProvider:
         self._provider1.clear_cache()
         self._provider2.clear_cache()
     
-    def get_excel_file_path(self, workshop: str) -> str:
+    def get_excel_file_path(self, workshop: str, has_weight: bool = True) -> str:
         if workshop == "1":
-            return self._provider1.get_excel_file_path(workshop)
+            return self._provider1.get_excel_file_path(workshop, has_weight)
         else:
-            return self._provider2.get_excel_file_path(workshop)
+            return self._provider2.get_excel_file_path(workshop, has_weight)
