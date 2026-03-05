@@ -161,6 +161,10 @@ class SettingsDialog:
         workshop = self.coordinator.get_workshop()
         self.workshop_var.set(workshop)
 
+        # Убеждаемся, что файл шаблонов существует
+        self.config_manager.ensure_templates_list_exists()
+
+        # Загружаем текущие шаблоны и списки
         templates_data = self.config_manager.load_json_settings("templates_list.json")
         roll_templates = templates_data.get("roll_templates", {})
         box_templates = templates_data.get("box_templates", {})
@@ -209,7 +213,7 @@ class SettingsDialog:
 
         # РАЗДЕЛ: Папки и разное (первая колонка снизу)
         manufacturer_frame = ttk.LabelFrame(content_frame, text="Папки и разное", padding=5)
-        manufacturer_frame.grid(row=1, column=0, rowspan=4, sticky="w", padx=(5, 0), pady=(0, 5))
+        manufacturer_frame.grid(row=1, column=0, rowspan=6, sticky="w", padx=(5, 0), pady=(0, 5))
 
         # Загружаем из JSON
         shared_settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -239,6 +243,7 @@ class SettingsDialog:
             width=19
         ).grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="w")
         
+        # Раздел с кнопками для доступа к разным папкам.
         # Кнопка доступа к папке данных
         ttk.Button(
             manufacturer_frame,
@@ -253,11 +258,19 @@ class SettingsDialog:
             text="📁 Папка шаблонов",
             command=self.open_assets_folder,
             width=17
-        ).grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="w")       
+        ).grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+        # Кнопка открытия папки с Excel
+        ttk.Button(
+            manufacturer_frame,
+            text="📁 Папка с Excel",
+            command=self.open_excel_folder,
+            width=17
+        ).grid(row=6, column=0, columnspan=2, padx=5, pady=5, sticky="w")
         
         # 3. РАЗДЕЛ: Настройки архивации (вторая колонка снизу)
         archive_frame = ttk.LabelFrame(content_frame, text="Архивация листов при печати", padding=5)
-        archive_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 60))
+        archive_frame.grid(row=1, column=1, sticky="w", padx=(5, 0), pady=(0, 105))
         
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -280,7 +293,7 @@ class SettingsDialog:
         
         # 4. РАЗДЕЛ: Дополнительные элементы
         elements_frame = ttk.LabelFrame(content_frame, text="Дата и другие редкие настройки", padding=5)
-        elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=(5, 5))
+        elements_frame.grid(row=2, column=1, sticky="w", padx=(5, 0), pady=5)
 
         # Загружаем сохранённый статус
         settings = self.config_manager.load_json_settings("shared_utils.json")
@@ -323,7 +336,7 @@ class SettingsDialog:
             wraplength=700,
             anchor="w"
         )
-        self.message_status_label.grid(row=5, column=0, columnspan=3, sticky="we", padx=5, pady=(5, 0))
+        self.message_status_label.grid(row=7, column=0, columnspan=3, sticky="we", padx=5, pady=(5, 0))
         
         # Статус-бар внизу окна настроек
         status_label = ttk.Label(
@@ -344,6 +357,17 @@ class SettingsDialog:
         save_button.pack(side=tk.RIGHT, fill=tk.X, padx=10, pady=10)        
         
         self.update_folder_status()
+
+    def open_excel_folder(self):
+        """Открывает папку с Excel файлами в проводнике"""
+        if not self.excel_folder_path or not os.path.exists(self.excel_folder_path):
+            self.show_message("⚠️ Папка не выбрана", "orange")
+            return
+
+        try:
+            os.startfile(self.excel_folder_path)
+        except Exception as e:
+            self.show_message(f"❌ Ошибка открытия папки: {str(e)}", "red")
 
     def _load_templates_for_workshop(self, workshop):
         """Загружает шаблоны для указанного цеха из сохранённых настроек"""
@@ -458,6 +482,8 @@ class SettingsDialog:
                 self.message_status_label.configure(foreground="red")
             elif color == "green":
                 self.message_status_label.configure(foreground="green")
+            elif color == "orange":
+                self.message_status_label.configure(foreground="orange")
             
             # Очищаем через 5 секунд
             self.main_frame.after(5000, self.clear_message_after_delay)

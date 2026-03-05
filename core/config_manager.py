@@ -176,6 +176,48 @@ class ConfigManager:
         
         print(f"ВНИМАНИЕ: packaging_tu.json не найден!")
         return False
+
+    def ensure_templates_list_exists(self):
+        """Обеспечивает наличие templates_list.json в data/, копирует из assets если нужно"""
+        settings_path = self.get_settings_path("templates_list.json")
+
+        # Если файл уже существует - ок
+        if os.path.exists(settings_path):
+            return True
+
+        # Пробуем скопировать из assets
+        try:
+            asset_path = self.get_asset_path("templates_list.json")
+
+            if os.path.exists(asset_path):
+                import shutil
+                # noinspection PyTypeChecker
+                shutil.copy2(asset_path, settings_path)
+                print(f"Файл templates_list.json скопирован из {asset_path} в {settings_path}")
+                return True
+            else:
+                # Создаём начальный файл
+                initial_templates = {
+                    "roll_templates": {
+                        "Обычный ролик 1 цех 90x72": "roll.pdf",
+                        "Маленький ролик 1 цех 70x50": "1_cex_small_roll.pdf",
+                        "Обычный ролик 2 цех 80x57": "2_cex_roll.pdf",
+                        "Росинка 71х89": "rosinka_roll.pdf",
+                        "Пермалко ролик 90х72": "permalko_roll.pdf",
+                        "Пермалко малый ролик 70х50": "permalko_small_roll.pdf"
+                    },
+                    "box_templates": {
+                        "Обычная коробка 98х72": "box.pdf",
+                        "Пермалко коробка 98х72": "permalko_box.pdf"
+                    }
+                }
+                self.save_json_settings("templates_list.json", initial_templates)
+                print(f"Создан начальный файл templates_list.json в {settings_path}")
+                return True
+
+        except Exception as e:
+            print(f"Ошибка при создании templates_list.json: {e}")
+            return False
         
     def reload_settings(self):
         """Перезагружает настройки из файлов"""
@@ -258,6 +300,10 @@ class ConfigManager:
         # Для packaging_tu.json сначала обеспечиваем его наличие
         if filename == "packaging_tu.json":
             self.ensure_packaging_tu_exists()
+
+        # Для templates_list.json обеспечиваем наличие
+        if filename == "templates_list.json":
+            self.ensure_templates_list_exists()
             
         path = self.get_settings_path(filename)
         if os.path.exists(path):

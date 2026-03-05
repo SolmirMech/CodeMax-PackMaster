@@ -1,8 +1,8 @@
-import os
 import tkinter as tk
 from tkinter import ttk
 
 
+# noinspection PyTypeChecker
 class TemplatesListDialog:
     """Диалог редактирования списка шаблонов (ролики и коробки)"""
 
@@ -176,7 +176,8 @@ class TemplatesListDialog:
         )
         delete_btn.pack(side=tk.RIGHT)
 
-    def _remove_template_row(self, row_frame, name_entry, file_entry, name_list, file_list):
+    @staticmethod
+    def _remove_template_row(row_frame, name_entry, file_entry, name_list, file_list):
         """Удаляет строку с полями"""
         if len(name_list) > 1:
             row_frame.destroy()
@@ -219,7 +220,7 @@ class TemplatesListDialog:
 
     def _load_templates(self):
         """Загружает шаблоны из JSON"""
-        templates = self.load_templates_from_json()
+        templates = self.config_manager.load_json_settings("templates_list.json")
 
         # Загружаем ролики
         for name, file in templates.get("roll_templates", {}).items():
@@ -234,47 +235,6 @@ class TemplatesListDialog:
             self._add_template_row("roll", "", "")
         if not self.box_name_entries:
             self._add_template_row("box", "", "")
-
-    def load_templates_from_json(self):
-        """Загружает список шаблонов, копирует из assets если нет в data"""
-        settings_path = self.config_manager.get_settings_path("templates_list.json")
-
-        if not os.path.exists(settings_path):
-            self._copy_templates_from_assets()
-
-        return self.config_manager.load_json_settings("templates_list.json")
-
-    def _copy_templates_from_assets(self):
-        """Копирует файл templates_list.json из assets в data_dir"""
-        try:
-            asset_path = self.config_manager.get_asset_path("templates_list.json")
-            dest_path = self.config_manager.get_settings_path("templates_list.json")
-
-            if os.path.exists(asset_path):
-                import shutil
-                shutil.copy2(asset_path, dest_path)
-                print(f"Файл templates_list.json скопирован из {asset_path} в {dest_path}")
-            else:
-                # Создаём начальный файл из текущих шаблонов
-                initial_templates = {
-                    "roll_templates": {
-                        "Обычный ролик 1 цех 90x72": "roll.pdf",
-                        "Маленький ролик 1 цех 70x50": "1_cex_small_roll.pdf",
-                        "Обычный ролик 2 цех 80x57": "2_cex_roll.pdf",
-                        "Росинка 71х89": "rosinka_roll.pdf",
-                        "Пермалко ролик 90х72": "permalko_roll.pdf",
-                        "Пермалко малый ролик 70х50": "permalko_small_roll.pdf"
-                    },
-                    "box_templates": {
-                        "Обычная коробка 98х72": "box.pdf",
-                        "Пермалко коробка 98х72": "permalko_box.pdf"
-                    }
-                }
-                self.config_manager.save_json_settings("templates_list.json", initial_templates)
-                print(f"Создан начальный файл templates_list.json в {dest_path}")
-
-        except Exception as e:
-            print(f"Ошибка копирования templates_list.json: {e}")
 
     def save_templates(self):
         """Сохраняет измененный список шаблонов"""
