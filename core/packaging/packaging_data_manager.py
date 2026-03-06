@@ -133,7 +133,7 @@ class PackagingDataManager:
             with self._readers_lock:
                 self._readers_count -= 1
             conn.close()
-            
+
     def update_entry(self, entry_id, field, value):
         """Обновление конкретной ячейки - с блокировкой записи"""
         with self._write_lock:
