@@ -378,7 +378,7 @@ class ArchiveManager:
 
         except Exception as e:
             return {"success": False, "error": f"Ошибка восстановления: {str(e)}"}
-        
+
     @staticmethod
     def _restore_dynamic_section(sheet, section, section_data):
         """Восстанавливает данные в динамическую секцию"""

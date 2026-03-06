@@ -578,6 +578,11 @@ class SettingsDialog:
             shared_settings["workshop"] = workshop
             self.coordinator.set_workshop(workshop)
 
+            # === ДОБАВЛЯЕМ СОХРАНЕНИЕ ПУТЕЙ ===
+            shared_settings["weight_data_base"] = self.xml_folder_path.get()
+            if self.excel_folder_path:
+                shared_settings["weight_orders_xlsx"] = self.excel_folder_path
+
             # Сохраняем все изменения
             self.config_manager.save_json_settings("shared_utils.json", shared_settings)
 
@@ -601,26 +606,29 @@ class SettingsDialog:
             self.status_callback(message, color)
 
     def load_folder_paths(self):
+        """Загружает пути к папкам из настроек для отображения"""
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            
-            # Путь для XML
-            xml_path = settings.get("weight_data_base", "")
-            self.xml_folder_path.set(xml_path)
-            
-            # Путь для Excel
-            excel_path = settings.get("weight_orders_xlsx", "")
-            if excel_path and os.path.exists(excel_path):
-                self.excel_folder_path = excel_path
-            else:
-                self.excel_folder_path = ""
-            
-            self.update_folder_status()
-            
-        except Exception as e:
-            print(f"Ошибка загрузки путей папок: {e}")
-            self.excel_folder_path = ""
 
+            # Путь для XML - если есть в настройках, используем его, иначе data_dir (как строку)
+            xml_path = settings.get("weight_data_base", "")
+            if not xml_path:
+                xml_path = str(self.config_manager.data_dir)  # конвертируем Path в строку
+            self.xml_folder_path.set(xml_path)
+
+            # Путь для Excel - если есть в настройках, используем его, иначе data_dir
+            excel_path = settings.get("weight_orders_xlsx", "")
+            if not excel_path:
+                excel_path = str(self.config_manager.data_dir)
+            self.excel_folder_path = excel_path
+
+            self.update_folder_status()
+
+        except Exception as e:
+            print(f"Ошибка чтения shared_utils.json: {e}")
+            self.xml_folder_path.set(str(self.config_manager.data_dir))
+            self.excel_folder_path = str(self.config_manager.data_dir)
+            
     def select_xml_folder(self):
         """Выбирает папку для XML файлов"""
         folder = filedialog.askdirectory(title="Выберите папку с XML файлами")
