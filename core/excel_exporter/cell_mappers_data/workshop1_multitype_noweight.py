@@ -45,7 +45,7 @@ STATIC_CELLS = [
     ),
     
     CellMapping(
-        cell_reference="D8",
+        cell_reference="M1",
         data_key="order_number",
         data_type=DataType.TEXT,
         format=CellFormat(
@@ -56,7 +56,7 @@ STATIC_CELLS = [
     ),
     
     CellMapping(
-        cell_reference="F37",
+        cell_reference="F33",
         data_key="date",
         data_type=DataType.DATE,
         format=CellFormat(
@@ -67,7 +67,7 @@ STATIC_CELLS = [
     ),
     
     CellMapping(
-        cell_reference="E41",
+        cell_reference="E36",
         data_key="packer",
         data_type=DataType.TEXT,
         format=CellFormat(
@@ -78,7 +78,7 @@ STATIC_CELLS = [
     ),
     
     CellMapping(
-        cell_reference="E39",
+        cell_reference="E35",
         data_key="product_type",
         data_type=DataType.TEXT,
         format=CellFormat(
@@ -89,7 +89,7 @@ STATIC_CELLS = [
     ),
     
     CellMapping(
-        cell_reference="A39",
+        cell_reference="A35",
         data_key="tu_number",
         data_type=DataType.TEXT,
         format=CellFormat(
@@ -120,11 +120,21 @@ DYNAMIC_SECTIONS = [
             },
             {
                 "column": "B",
-                "data_key": "product_text",  # Это product_name
+                "data_key": "order_number",  # новый номер заказа
                 "data_type": DataType.TEXT,
                 "format": CellFormat(
                     horizontal_alignment=HorizontalAlignment.LEFT,
                     vertical_alignment=VerticalAlignment.CENTER
+                )
+            },
+            {
+                "column": "C",
+                "data_key": "product_text",  # Это product_name
+                "data_type": DataType.MULTILINE_TEXT,
+                "format": CellFormat(
+                    horizontal_alignment=HorizontalAlignment.LEFT,
+                    vertical_alignment=VerticalAlignment.CENTER,
+                    wrap_text=True
                 )
             },
             {

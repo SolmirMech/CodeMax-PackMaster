@@ -1,5 +1,5 @@
-# cell_mappers_data/workshop2_box.py
-"""Данные для маппинга поддона (технически как коробка) 2 цеха"""
+# cell_mappers_data/workshop1_box_noweight.py
+"""Данные для маппинга поддона ПоддонРолики 1 цеха"""
 
 from core.excel_exporter.cell_mappers_data.cell_mappers_models import (
     CellMapping, DynamicSection, CellFormat,

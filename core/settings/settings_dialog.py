@@ -628,7 +628,7 @@ class SettingsDialog:
             print(f"Ошибка чтения shared_utils.json: {e}")
             self.xml_folder_path.set(str(self.config_manager.data_dir))
             self.excel_folder_path = str(self.config_manager.data_dir)
-            
+
     def select_xml_folder(self):
         """Выбирает папку для XML файлов"""
         folder = filedialog.askdirectory(title="Выберите папку с XML файлами")

@@ -199,7 +199,7 @@ class Workshop1DataProvider(BaseDataProvider):
         """
         try:
             # Получаем путь к файлу ДЛЯ ЦЕХА 1 (фиксировано)
-            actual_file_path = self.get_excel_file_path("1")  # Явно указываем цех 1
+            actual_file_path = self.get_excel_file_path("1")
 
             if not os.path.exists(actual_file_path):
                 return {'boxes_count': 0, 'gross_total': 0, 'net_total': 0, 'labels_total': 0}
@@ -264,7 +264,6 @@ class Workshop1DataProvider(BaseDataProvider):
         """
         all_data = self.collect_all_data()
 
-        # Читаем данные из листа 'БезВеса'
         noweight_data = self._read_workshop1_noweight_sheet_data()
 
         return {
@@ -300,7 +299,8 @@ class Workshop1DataProvider(BaseDataProvider):
            - labels_total: сумма количеств из колонок C, F, I (для колонки G в Много видов)
         """
         try:
-            actual_file_path = self.get_excel_file_path("1")
+            actual_file_path = self.get_excel_file_path("1", has_weight=False)
+
             if not os.path.exists(actual_file_path):
                 return {'boxes_count': 0, 'labels_total': 0}
 

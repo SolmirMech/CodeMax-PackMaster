@@ -377,6 +377,7 @@ class FillMethods:
         """Заполняет одну секцию для multitype без веса"""
         data_mapper = {
             'boxes_count': 'boxes_count',
+            'order_number': 'order_number',
             'product_text': 'product_text',
             'labels_total': 'labels_total'
         }
