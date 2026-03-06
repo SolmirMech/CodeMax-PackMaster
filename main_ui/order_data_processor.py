@@ -127,15 +127,21 @@ class OrderDataProcessor:
         # Ручной ввод + сканирование кода
         detail_num_entry.bind("<Return>", self.handle_detail_num_enter)
         
-        # Кнопка поиска архива
+        # Кнопки поиска архива и журнала упаковки
         archive_frame = ttk.Frame(xml_frame)
-        archive_frame.grid(row=0, column=0, padx=(400, 0), sticky="w", pady=5)
+        archive_frame.grid(row=0, column=0, padx=(210, 0), sticky="w", pady=5)
 
         ttk.Button(
-            archive_frame, 
-            text="🔍 Найти архив", 
+            archive_frame,
+            text="🔍 Найти архив",
             command=self.open_archive_search_window
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT, padx=(10, 5))
+
+        ttk.Button(
+            archive_frame,
+            text="📦 Журнал упаковки",
+            command=self.open_packaging_log
+        ).pack(side=tk.LEFT, padx=5)
 
         # Строка статуса парсинга
         self.parse_status = ttk.Label(
@@ -205,6 +211,84 @@ class OrderDataProcessor:
         
         # Инициализируем статусы
         self.reset_status_messages()
+
+    def open_packaging_log(self):
+        """Открывает окно журнала упаковки"""
+        try:
+            from core.packaging.packaging_log_window import PackagingLogWindow
+            PackagingLogWindow(
+                parent=self.parent,
+                config_manager=self.config_manager,
+                order_processor=self
+            )
+        except Exception as e:
+            self.data_manager_status_label.config(
+                text=f"Не удалось открыть журнал упаковки: {str(e)}",
+                foreground="red"
+            )
+
+    def get_packaging_defaults(self):
+        """Возвращает словарь с данными для новой записи в журнале упаковки"""
+        defaults = {
+            'date': '',
+            'order_number': '',
+            'customer': '',
+            'product_name': '',
+            'packer_name': '',
+            'quantity_labels': None,
+            'large_boxes': None,
+            'small_boxes': None,
+            'aquaLife_boxes': None,
+            'note': ''
+        }
+
+        # Определяем источник данных
+        source_data = None
+
+        # 1. Сначала смотрим filtered_parsed_data (то, что на экране)
+        if hasattr(self, 'filtered_parsed_data') and self.filtered_parsed_data:
+            source_data = self.filtered_parsed_data[0]
+        # 2. Если нет filtered, но parsed_data содержит один вид
+        elif hasattr(self, 'parsed_data') and len(self.parsed_data) == 1:
+            source_data = self.parsed_data[0]
+
+        # Если нашли данные
+        if source_data:
+            defaults['product_name'] = source_data.get('name', '')
+            defaults['customer'] = source_data.get('customer', '')
+
+            tirazh = source_data.get('tirazh', '')
+            if tirazh:
+                try:
+                    defaults['quantity_labels'] = int(tirazh)
+                except:
+                    pass
+
+        # Полный номер заказа из roll_module
+        if self.roll_module:
+            prefix = self.roll_module.order_prefix.get().strip()
+            number = self.roll_module.order_number.get().strip()
+            suffix = self.roll_module.order_suffix.get().strip()
+
+            full_number = ""
+            if prefix:
+                full_number += prefix
+            if number:
+                full_number += number
+            if suffix:
+                full_number += suffix
+
+            defaults['order_number'] = full_number
+
+        # Упаковщик из roll_module
+        if self.roll_module and hasattr(self.roll_module, 'packer_var'):
+            defaults['packer_name'] = self.roll_module.packer_var.get()
+
+        # Дата сегодня
+        from datetime import datetime
+        defaults['date'] = datetime.now().strftime('%Y-%m-%d')
+
+        return defaults
 
     def _display_comments(self, comments, operations):
         """Отображает комментарии в интерфейсе"""
