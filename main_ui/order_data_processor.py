@@ -242,29 +242,7 @@ class OrderDataProcessor:
             'note': ''
         }
 
-        # Определяем источник данных
-        source_data = None
-
-        # 1. Сначала смотрим filtered_parsed_data (то, что на экране)
-        if hasattr(self, 'filtered_parsed_data') and self.filtered_parsed_data:
-            source_data = self.filtered_parsed_data[0]
-        # 2. Если нет filtered, но parsed_data содержит один вид
-        elif hasattr(self, 'parsed_data') and len(self.parsed_data) == 1:
-            source_data = self.parsed_data[0]
-
-        # Если нашли данные
-        if source_data:
-            defaults['product_name'] = source_data.get('name', '')
-            defaults['customer'] = source_data.get('customer', '')
-
-            tirazh = source_data.get('tirazh', '')
-            if tirazh:
-                try:
-                    defaults['quantity_labels'] = int(tirazh)
-                except:
-                    pass
-
-        # Полный номер заказа из roll_module
+        # Номер заказа из roll_module
         if self.roll_module:
             prefix = self.roll_module.order_prefix.get().strip()
             number = self.roll_module.order_number.get().strip()
@@ -280,9 +258,30 @@ class OrderDataProcessor:
 
             defaults['order_number'] = full_number
 
-        # Упаковщик из roll_module
-        if self.roll_module and hasattr(self.roll_module, 'packer_var'):
-            defaults['packer_name'] = self.roll_module.packer_var.get()
+            # Заказчик из roll_module
+            defaults['customer'] = self.roll_module.customer_var.get().strip()
+
+            # Упаковщик
+            if hasattr(self.roll_module, 'packer_var'):
+                defaults['packer_name'] = self.roll_module.packer_var.get()
+
+            # Наименование из многострочного поля
+            if hasattr(self.roll_module, 'product_text'):
+                product_text = self.roll_module.product_text.get("1.0", "end-1c")
+                defaults['product_name'] = product_text.strip()
+
+        # Сумма тиражей, если видов больше одного
+        if hasattr(self, 'parsed_data') and self.parsed_data:
+            total_tirazh = 0
+            for product in self.parsed_data:
+                tirazh = product.get('tirazh', '')
+                if tirazh:
+                    try:
+                        total_tirazh += int(tirazh)
+                    except:
+                        pass
+            if total_tirazh > 0:
+                defaults['quantity_labels'] = total_tirazh
 
         # Дата сегодня
         from datetime import datetime

@@ -117,7 +117,10 @@ class PackagingDataManager:
                 params = []
 
                 for key, value in filters.items():
-                    if key in ['date', 'order_number', 'customer', 'product_name']:
+                    if key == 'date':
+                        query += " AND date = ?"
+                        params.append(value)
+                    elif key in ['order_number', 'customer', 'product_name']:
                         query += f" AND {key} LIKE ?"
                         params.append(f'%{value}%')
 
@@ -130,7 +133,7 @@ class PackagingDataManager:
             with self._readers_lock:
                 self._readers_count -= 1
             conn.close()
-
+            
     def update_entry(self, entry_id, field, value):
         """Обновление конкретной ячейки - с блокировкой записи"""
         with self._write_lock:
@@ -201,6 +204,7 @@ class PackagingDataManager:
         imported = 0
 
         with self._write_lock:
+            conn = None
             try:
                 # Загружаем книгу
                 wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -213,7 +217,7 @@ class PackagingDataManager:
 
                 # Ищем заголовки в первой строке
                 headers = {}
-                for col_idx, cell in enumerate(list(sheet.rows)[0], 1):
+                for col_idx, cell in enumerate(next(sheet.iter_rows(max_row=1)), 1):
                     if cell.value and isinstance(cell.value, str):
                         header = cell.value.strip().lower()
                         if header in ["дата", "№ заказа", "заказчик", "наименование",
@@ -228,8 +232,12 @@ class PackagingDataManager:
                     wb.close()
                     return 0, [f"Не найдены обязательные колонки: {missing}"]
 
+                # Одно соединение на весь импорт
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+
                 # Проходим по строкам начиная со 2-й
-                for row_idx, row in enumerate(list(sheet.rows)[1:], 2):
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=2), 2):
                     try:
                         # Пропускаем полностью пустые строки
                         if all(cell.value is None for cell in row):
@@ -241,13 +249,13 @@ class PackagingDataManager:
                         if "дата" in headers:
                             date_cell = row[headers["дата"] - 1].value
                             if date_cell:
-                                # noinspection SpellCheckingInspection
                                 if hasattr(date_cell, 'strftime'):
-                                    data['date'] = date_cell.strftime('%Y-%m-%d')
+                                    data['date'] = date_cell.strftime('%d.%m.%Y')
                                 else:
-                                    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', str(date_cell))
+                                    date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
                                     if date_match:
-                                        data['date'] = date_match.group(1)
+                                        day, month, year = date_match.groups()
+                                        data['date'] = f"{day}.{month}.{year}"
                                     else:
                                         data['date'] = str(date_cell)[:10]
 
@@ -305,15 +313,39 @@ class PackagingDataManager:
 
                         # Проверяем, что есть хоть какие-то данные
                         if data.get('order_number') or data.get('date'):
-                            self.add_entry(data)
+                            cursor.execute("""
+                                INSERT INTO packaging_log 
+                                (date, order_number, customer, product_name, quantity_labels, 
+                                 packer_name, large_boxes, small_boxes, aquaLife_boxes, note)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                data.get('date', ''),
+                                data.get('order_number', ''),
+                                data.get('customer', ''),
+                                data.get('product_name', ''),
+                                data.get('quantity_labels'),
+                                data.get('packer_name', ''),
+                                data.get('large_boxes'),
+                                data.get('small_boxes'),
+                                data.get('aquaLife_boxes'),
+                                data.get('note', '')
+                            ))
                             imported += 1
+
+                        # Коммитим каждые 50 строк
+                        if imported % 50 == 0:
+                            conn.commit()
 
                     except Exception as e:
                         errors.append(f"Строка {row_idx}: {str(e)}")
 
+                conn.commit()
                 wb.close()
 
             except Exception as e:
                 errors.append(f"Ошибка при импорте: {str(e)}")
+            finally:
+                if conn:
+                    conn.close()
 
         return imported, errors

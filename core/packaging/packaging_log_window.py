@@ -1,4 +1,5 @@
 # core/packaging/packaging_log_window.py
+import re
 import tkinter as tk
 from tkinter import ttk, StringVar, messagebox
 
@@ -59,14 +60,33 @@ class PackagingLogWindow:
         
         # Дата
         ttk.Label(fields_frame, text="Дата:").grid(row=0, column=0, padx=(0, 5))
-        date_entry = ttk.Entry(fields_frame, textvariable=self.date_var, width=12)
+        date_entry = ttk.Entry(fields_frame, textvariable=self.date_var, width=10)
         date_entry.grid(row=0, column=1, padx=(0, 15))
+
+        def format_date(event):
+            """Форматирует дату при вводе: 22012026 -> 22.01.2026"""
+            entry = event.widget
+            text = entry.get().replace('.', '')  # убираем существующие точки
+
+            if len(text) > 8:
+                text = text[:8]
+
+            formatted = ""
+            for i, char in enumerate(text):
+                if i in [2, 4]:  # после 2 и 4 символов добавляем точку
+                    formatted += "."
+                formatted += char
+
+            entry.delete(0, tk.END)
+            entry.insert(0, formatted)
+
+        date_entry.bind("<KeyRelease>", format_date)
         date_entry.bind("<Return>", lambda e: self.search())
         date_entry.bind("<Control-KeyPress>", self.control_key_handler)
         
         # Номер заказа
         ttk.Label(fields_frame, text="№ заказа:").grid(row=0, column=2, padx=(0, 5))
-        order_entry = ttk.Entry(fields_frame, textvariable=self.order_var, width=15)
+        order_entry = ttk.Entry(fields_frame, textvariable=self.order_var, width=10)
         order_entry.grid(row=0, column=3, padx=(0, 15))
         order_entry.bind("<Return>", lambda e: self.search())
         order_entry.bind("<Control-KeyPress>", self.control_key_handler)
@@ -80,23 +100,14 @@ class PackagingLogWindow:
         
         # Наименование
         ttk.Label(fields_frame, text="Наименование:").grid(row=0, column=6, padx=(0, 5))
-        product_entry = ttk.Entry(fields_frame, textvariable=self.product_var, width=25)
+        product_entry = ttk.Entry(fields_frame, textvariable=self.product_var, width=40)
         product_entry.grid(row=0, column=7, padx=(0, 15))
         product_entry.bind("<Return>", lambda e: self.search())
         product_entry.bind("<Control-KeyPress>", self.control_key_handler)
         
-        fields_frame.columnconfigure(7, weight=1)
-        
         # Кнопки
         buttons_frame = ttk.Frame(search_frame)
         buttons_frame.pack(fill=tk.X)
-        
-        ttk.Button(
-            buttons_frame,
-            text="🔍 Искать",
-            command=self.search,
-            width=15
-        ).pack(side=tk.LEFT, padx=(0, 10))
         
         ttk.Button(
             buttons_frame,
@@ -129,15 +140,14 @@ class PackagingLogWindow:
             "quantity_labels", "packer_name", "large_boxes", "small_boxes",
             "aquaLife_boxes", "note"
         )
-        
+
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
             show="headings",
-            height=20,
+            height=35,
             selectmode="browse"
         )
-        
         # Настраиваем заголовки
         self.tree.heading("date", text="Дата")
         self.tree.heading("order_number", text="№ заказа")
@@ -151,21 +161,21 @@ class PackagingLogWindow:
         self.tree.heading("note", text="Примечание")
         
         # Ширина колонок
-        self.tree.column("date", width=100, anchor="center")
-        self.tree.column("order_number", width=100, anchor="center")
+        self.tree.column("date", width=70, anchor="center")
+        self.tree.column("order_number", width=65, anchor="center")
         self.tree.column("customer", width=150, anchor="w")
         self.tree.column("product_name", width=200, anchor="w")
-        self.tree.column("quantity_labels", width=80, anchor="center")
-        self.tree.column("packer_name", width=120, anchor="w")
-        self.tree.column("large_boxes", width=30, anchor="center")
-        self.tree.column("small_boxes", width=30, anchor="center")
-        self.tree.column("aquaLife_boxes", width=30, anchor="center")
+        self.tree.column("quantity_labels", width=70, anchor="center")
+        self.tree.column("packer_name", width=80, anchor="w")
+        self.tree.column("large_boxes", width=20, anchor="center")
+        self.tree.column("small_boxes", width=20, anchor="center")
+        self.tree.column("aquaLife_boxes", width=20, anchor="center")
         self.tree.column("note", width=50, anchor="w")
         
         # Скроллбар
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
-        
+
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
@@ -224,21 +234,20 @@ class PackagingLogWindow:
     def load_recent(self):
         """Загружает последние 10 записей"""
         try:
-            self.entries = self.manager.get_recent_entries(10)
+            self.entries = self.manager.get_recent_entries(30)
             self.refresh_table()
             self.status_var.set(f"Загружено {len(self.entries)} записей")
         except Exception as e:
             self.status_var.set(f"Ошибка загрузки: {str(e)}")
-    
+
     def refresh_table(self):
         """Обновляет отображение таблицы"""
         # Очищаем
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
-        # Заполняем
-        for entry in self.entries:
-            # Преобразуем дату из YYYY-MM-DD в DD.MM.YYYY
+
+        # Заполняем с чередованием цветов
+        for i, entry in enumerate(self.entries):
             date_str = entry["date"]
             if date_str and len(date_str) == 10 and date_str[4] == '-':
                 try:
@@ -258,34 +267,56 @@ class PackagingLogWindow:
                 entry["aquaLife_boxes"] if entry["aquaLife_boxes"] else "",
                 entry["note"]
             )
-            self.tree.insert("", "end", values=values, iid=entry["id"])
-    
+            # Чётные строки - белые, нечётные - светло-серые
+            if i % 2 == 0:
+                self.tree.insert("", "end", values=values, iid=entry["id"], tags=('even',))
+            else:
+                self.tree.insert("", "end", values=values, iid=entry["id"], tags=('odd',))
+
+        # Настраиваем цвета
+        self.tree.tag_configure('even', background='white')
+        self.tree.tag_configure('odd', background='#f0f0f0')
+
     def search(self):
         """Выполняет поиск по заполненным полям"""
         try:
             # Собираем только непустые поля
             filters = {}
             if self.date_var.get().strip():
-                filters["date"] = self.date_var.get().strip()
+                date_input = self.date_var.get().strip()
+                # Преобразуем DD.MM.YYYY в YYYY-MM-DD для поиска в БД
+                date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', date_input)
+                if date_match:
+                    day, month, year = date_match.groups()
+                    filters["date"] = f"{year}-{month}-{day}"
+                else:
+                    filters["date"] = date_input
+
             if self.order_var.get().strip():
-                filters["order_number"] = self.order_var.get().strip()
+                order = self.order_var.get().strip()
+                # Если введено 4 цифры, ищем частично
+                if re.match(r'^\d{4}$', order):
+                    filters["order_number"] = f"%{order}%"
+                else:
+                    filters["order_number"] = order
+
             if self.customer_var.get().strip():
                 filters["customer"] = self.customer_var.get().strip()
             if self.product_var.get().strip():
                 filters["product_name"] = self.product_var.get().strip()
-            
+
             self.status_var.set("Поиск...")
             self.window.update()
-            
+
             self.entries = self.manager.search_entries(**filters)
             self.refresh_table()
-            
+
             count = len(self.entries)
             if count == 0:
                 self.status_var.set("Ничего не найдено")
             else:
                 self.status_var.set(f"Найдено записей: {count}")
-                
+
         except Exception as e:
             self.status_var.set(f"Ошибка поиска: {str(e)}")
 
@@ -297,7 +328,7 @@ class PackagingLogWindow:
                 defaults = self.order_processor.get_packaging_defaults()
             else:
                 defaults = {
-                    'date': datetime.now().strftime('%Y-%m-%d'),
+                    'date': '',
                     'order_number': '', 'customer': '', 'product_name': '',
                     'packer_name': '', 'quantity_labels': None,
                     'large_boxes': None, 'small_boxes': None,
