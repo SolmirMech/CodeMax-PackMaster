@@ -1,7 +1,8 @@
 # data_providers/base_provider.py
-import os
 from typing import Dict, Any, Optional, Union
+
 from core.config_manager import ConfigManager
+
 
 class BaseDataProvider:
     """
@@ -394,38 +395,8 @@ class BaseDataProvider:
         return None
 
     def get_excel_file_path(self, workshop: str, has_weight: bool = True) -> str:
-        """Определяет путь к файлу Excel"""
-        try:
-            # Получаем путь из настроек
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            excel_folder = settings.get("weight_orders_xlsx", "")
-
-            if not excel_folder:
-                excel_folder = os.path.dirname(self.original_excel_path)
-
-            # Определяем имя файла на основе цеха и статуса веса
-            if workshop == "1":
-                filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
-            else:  # workshop == "2"
-                filename = "weight_orders_2.xlsx"
-
-            full_path = os.path.join(excel_folder, filename)
-
-            # Проверяем существование файла
-            if not os.path.exists(full_path):
-                # Копируем из assets
-                assets_file = self.config_manager.get_asset_path(filename)
-                if os.path.exists(assets_file):
-                    import shutil
-                    shutil.copy2(assets_file, full_path)
-                    print(f"Файл {filename} скопирован в {full_path}")
-                else:
-                    raise FileNotFoundError(f"Файл {filename} не найден в assets")
-
-            return full_path
-
-        except Exception as e:
-            print(f"Ошибка получения пути к Excel файлу: {e}")
-            return self.original_excel_path
+        """Определяет путь к файлу Excel через координатор"""
+        # Координатор всегда должен быть
+        return self.coordinator.get_excel_file_path(workshop, has_weight)
 
                     

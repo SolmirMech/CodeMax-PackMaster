@@ -2,8 +2,10 @@ import json
 import os
 import sys
 from pathlib import Path
+import shutil
 
-# noinspection SpellCheckingInspection
+
+# noinspection SpellCheckingInspection,PyTypeChecker
 class ConfigManager:
     def __init__(self):
         # Базовые пути
@@ -40,6 +42,42 @@ class ConfigManager:
             assets_file = os.path.join(project_root, "assets", filename)
 
         return assets_file
+
+    def ensure_excel_file_exists(self, filename: str, target_folder: str = None) -> str:
+        """
+        Проверяет существование Excel файла в целевой папке,
+        при необходимости копирует из assets
+
+        Args:
+            filename: Имя файла (weight_orders.xlsx, no_weight_orders.xlsx, weight_orders_2.xlsx)
+            target_folder: Папка назначения (обычно weight_orders_xlsx из настроек)
+
+        Returns:
+            Полный путь к файлу
+        """
+        if not target_folder:
+            # Если папка не указана, берём из настроек
+            settings = self.load_json_settings("shared_utils.json")
+            target_folder = settings.get("weight_orders_xlsx", "")
+
+        target_path = os.path.join(target_folder, filename)
+
+        # Если файл уже существует - возвращаем путь
+        if os.path.exists(target_path):
+            return target_path
+
+        # Пробуем скопировать из assets
+        asset_path = self.get_asset_path(filename)
+        if os.path.exists(asset_path):
+            import shutil
+            # Создаём целевую папку, если её нет
+            os.makedirs(target_folder, exist_ok=True)
+            shutil.copy2(asset_path, target_path)
+            print(f"Файл {filename} скопирован из assets в {target_path}")
+            return target_path
+
+        # Если файла нет ни в target, ни в assets - ошибка
+        raise FileNotFoundError(f"Файл {filename} не найден в {target_folder} и в assets")
 
     def get_preview_printers(self):
         """Возвращает сохраненные принтеры для предпросмотра Excel"""
@@ -144,7 +182,6 @@ class ConfigManager:
         
     def ensure_packaging_tu_exists(self):
         """Обеспечивает наличие packaging_tu.json в data/"""
-        import shutil
         
         data_file = self.data_dir / "packaging_tu.json"
         
@@ -190,7 +227,6 @@ class ConfigManager:
             asset_path = self.get_asset_path("templates_list.json")
 
             if os.path.exists(asset_path):
-                import shutil
                 # noinspection PyTypeChecker
                 shutil.copy2(asset_path, settings_path)
                 print(f"Файл templates_list.json скопирован из {asset_path} в {settings_path}")

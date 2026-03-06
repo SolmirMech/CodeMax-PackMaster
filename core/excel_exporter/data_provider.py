@@ -23,8 +23,8 @@ class ExportDataProvider:
         self.coordinator = coordinator
         
         # Создаём оба провайдера
-        self._provider1 = Workshop1DataProvider(roll_module, config_manager, excel_file_path)
-        self._provider2 = Workshop2DataProvider(roll_module, config_manager, excel_file_path)
+        self._provider1 = Workshop1DataProvider(roll_module, config_manager, excel_file_path, coordinator)
+        self._provider2 = Workshop2DataProvider(roll_module, config_manager, excel_file_path, coordinator)
     
     # Проброс методов цеха 1
 

@@ -79,27 +79,16 @@ class ArchiveManager:
             self.has_weight = self.coordinator.get_weight_status()
 
     def get_excel_path(self, workshop=None, has_weight=None):
-        """Получает путь к Excel файлу из настроек с учетом цеха и статуса веса"""
-        if workshop is None and self.coordinator:
-            workshop = self.coordinator.get_workshop()
-        elif workshop is None:
-            workshop = "1"
+        """Получает путь к Excel файлу через координатор"""
+        # Определяем параметры
+        if workshop is None:
+            workshop = self.workshop
 
-        # Если has_weight не передан, получаем из координатора
-        if has_weight is None and self.coordinator:
-            has_weight = self.coordinator.get_weight_status()
-        elif has_weight is None:
-            has_weight = True  # по умолчанию
+        if has_weight is None:
+            has_weight = self.has_weight
 
-        settings = self.config.load_json_settings("shared_utils.json")
-        excel_folder = settings.get("weight_orders_xlsx", "")
-
-        if workshop == "2":
-            filename = "weight_orders_2.xlsx"
-        else:
-            filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
-
-        return os.path.join(excel_folder, filename)
+        # Используем координатор (он всегда есть)
+        return self.coordinator.get_excel_file_path(workshop, has_weight)
 
     @staticmethod
     def _get_sheet_info(workshop, enable_pallet, multitype_mode, has_weight=True):
@@ -166,11 +155,12 @@ class ArchiveManager:
         workbook = load_workbook(excel_path)
         sheet = workbook[mapping.sheet_name]
 
-        # Статические поля
+        # Статические поля - сохраняем с логическими ключами!
         basic_fields = {}
         for cell_mapping in mapping.static_cells:
             cell_addr = cell_mapping.cell_reference
-            basic_fields[cell_addr] = sheet[cell_addr].value
+            # Сохраняем по data_key, а не по адресу ячейки
+            basic_fields[cell_mapping.data_key] = sheet[cell_addr].value
 
         # Динамические секции
         dynamic_data = {}
@@ -215,7 +205,7 @@ class ArchiveManager:
                 "workshop": mapping.workshop,
                 "archive_type": self._get_type_from_mapping(mapping),
                 "sheet_name": mapping.sheet_name,
-                "basic_fields": basic_fields,
+                "basic_fields": basic_fields,  # Теперь здесь ключи из маппинга!
                 "dynamic_data": dynamic_data,
                 "has_weight": has_weight,
                 "extraction_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -314,22 +304,23 @@ class ArchiveManager:
 
             sheet = workbook[mapping.sheet_name]
 
-            # Создаём словарь маппингов по cell_reference для быстрого доступа
-            mapping_by_cell = {cm.cell_reference: cm for cm in mapping.static_cells}
+            # Словарь значений из архива для быстрого доступа по data_key
+            basic_values = archive_data.get("basic_fields", {})
 
-            # Восстанавливаем статические поля с форматированием
-            basic_fields = archive_data.get("basic_fields", {})
-            for cell_addr, value in basic_fields.items():
-                if cell_addr and value is not None:
+            # Восстанавливаем статические поля - идём ПО МАППИНГУ!
+            for cell_mapping in mapping.static_cells:
+                # Берём значение по data_key из архива
+                value = basic_values.get(cell_mapping.data_key)
+
+                if value is not None:
+                    cell_addr = cell_mapping.cell_reference
                     sheet[cell_addr] = value
 
                     # Применяем форматирование из маппинга
-                    if cell_addr in mapping_by_cell:
-                        cell_mapping = mapping_by_cell[cell_addr]
-                        if cell_mapping.format.wrap_text:
-                            sheet[cell_addr].alignment = Alignment(
-                                wrap_text=True
-                            )
+                    if cell_mapping.format.wrap_text:
+                        sheet[cell_addr].alignment = Alignment(
+                            wrap_text=True
+                        )
 
             # Восстанавливаем динамические секции
             dynamic_data = archive_data.get("dynamic_data", {})
@@ -368,9 +359,10 @@ class ArchiveManager:
 
             # Формируем результат
             if workshop == "1":
-                order_num = basic_fields.get("E9" if mapping.sheet_name == "БезВеса" else "D8", "неизвестно")
+                # Пробуем получить номер заказа по data_key
+                order_num = basic_values.get("order_number", "неизвестно")
             else:
-                order_num = basic_fields.get("D6", "неизвестно")
+                order_num = basic_values.get("order_number", "неизвестно")
 
             result = {
                 "success": True,
@@ -379,14 +371,14 @@ class ArchiveManager:
             }
 
             if workshop == "2":
-                pallet_num = basic_fields.get("D5", "неизвестно")
+                pallet_num = basic_values.get("pallet_num", "неизвестно")
                 result["pallet_number"] = pallet_num
 
             return result
 
         except Exception as e:
             return {"success": False, "error": f"Ошибка восстановления: {str(e)}"}
-
+        
     @staticmethod
     def _restore_dynamic_section(sheet, section, section_data):
         """Восстанавливает данные в динамическую секцию"""

@@ -9,8 +9,8 @@ class Workshop2DataProvider(BaseDataProvider):
     Специализированные методы для цеха 2
     """
     
-    def __init__(self, roll_module, config_manager=None, excel_file_path=""):
-        super().__init__(roll_module, config_manager, excel_file_path)
+    def __init__(self, roll_module, config_manager=None, excel_file_path="", coordinator=None):
+        super().__init__(roll_module, config_manager, excel_file_path, coordinator)
     
     def get_data_for_workshop2_box(self) -> Dict[str, Any]:
         """

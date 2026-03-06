@@ -29,6 +29,29 @@ class SettingsCoordinator:
         self.settings_manager = None
         self.settings_dialog = None
 
+    def get_excel_file_path(self, workshop: str = None, has_weight: bool = None) -> str:
+        """
+        Возвращает путь к Excel файлу на основе цеха и статуса веса
+        """
+        if workshop is None:
+            workshop = self.get_workshop()
+
+        if has_weight is None:
+            has_weight = self.get_weight_status()
+
+        # Получаем папку из настроек
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        excel_folder = settings.get("weight_orders_xlsx", "")
+
+        # Определяем имя файла
+        if workshop == "2":
+            filename = "weight_orders_2.xlsx"
+        else:
+            filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
+
+        # Проверяем существование в целевой папке, при необходимости копируем
+        return self.config_manager.ensure_excel_file_exists(filename, excel_folder)
+
     def set_settings_manager(self, manager):
         """Устанавливает ссылку на менеджера настроек"""
         self.settings_manager = manager

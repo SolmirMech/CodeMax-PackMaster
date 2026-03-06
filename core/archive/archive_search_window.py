@@ -1,7 +1,7 @@
 # core/archive/archive_search_window.py
 import tkinter as tk
 from tkinter import ttk, StringVar, messagebox
-import os
+
 from core.archive.archive_manager import ArchiveManager
 
 
@@ -236,37 +236,24 @@ class ArchiveSearchWindow:
             workshop = archive_data.get("workshop", "1")
             archive_type = archive_data.get("archive_type", "box")
             sheet_name = archive_data.get("sheet_name", "")
+            extraction_date = archive_data.get("extraction_date", "")
 
             # Определяем тип для отображения
             type_display = self._get_archive_type_display(workshop, archive_type)
 
-            pallet_num = "—"
+            # Ищем по стандартным ключам из маппингов
+            order_num = basic_fields.get("order_number", "—")
+            product = basic_fields.get("product_text", "—")
+            date = basic_fields.get("date", "—")
+            pallet_num = basic_fields.get("pallet_num", "—")
 
-            if workshop == "1":
-                # Для noweight номер заказа в E9, дата в E37
-                if archive_type == "noweight":
-                    order_num = basic_fields.get("E9", "—")
-                    date = basic_fields.get("E37", "—")
-                # Для box_noweight (ПоддонРолики)
-                elif archive_type == "box_noweight":
-                    order_num = basic_fields.get("E9", "—")
-                    date = basic_fields.get("E37", "—")
-                    pallet_num = basic_fields.get("F5", "—")
-                else:
-                    order_num = basic_fields.get("D8", "—")
-                    date = basic_fields.get("F37", "—")
-
-                product = basic_fields.get("D10", "—")
-
-            else:  # workshop == "2"
-                order_num = basic_fields.get("D6", "—")
-                product = basic_fields.get("D8", "—")
-                date = basic_fields.get("D37", "—")
-                pallet_num = basic_fields.get("D5", "—")
+            # Если даты нет в basic_fields, берём из extraction_date
+            if date == "—" and extraction_date:
+                date = extraction_date[:10]
 
             product_preview = str(product)[:50] + "..." if len(str(product)) > 50 else str(product)
 
-            # Формируем строку для отображения с информацией о листе
+            # Формируем строку для отображения
             if pallet_num != "—":
                 display = f"{order_num} | №{pallet_num} | {date} | {type_display} | {product_preview}"
             else:
@@ -391,44 +378,11 @@ class ArchiveSearchWindow:
             # Получаем статус веса из архива (если есть)
             has_weight = archive_data.get("has_weight", True)
 
-            # Получаем правильный путь к файлу Excel для этого цеха с учётом веса
-            excel_path = self.archive_manager.get_excel_path(workshop, has_weight)
-
-            # Проверяем существование файла
-            if not excel_path or not os.path.exists(excel_path):
-                # Пробуем получить путь через конфигурацию
-                settings = self.archive_manager.config.load_json_settings("shared_utils.json")
-                excel_folder = settings.get("weight_orders_xlsx", "")
-
-                if workshop == "2":
-                    filename = "weight_orders_2.xlsx"
-                else:
-                    filename = "weight_orders.xlsx" if has_weight else "no_weight_orders.xlsx"
-
-                excel_path = os.path.join(excel_folder, filename)
-
-                # Если файла нет, нужно скопировать из assets
-                if not os.path.exists(excel_path):
-                    self.status_var.set(f"❌ Файл не найден: {excel_path}")
-
-                    response = tk.messagebox.askyesno(
-                        "Файл не найден",
-                        f"Файл {filename} не найден по пути:\n{excel_folder}\n\n"
-                        "Создать новый файл из шаблона?"
-                    )
-
-                    if response:
-                        assets_file = self.config_manager.get_asset_path(filename)
-
-                        if os.path.exists(assets_file):
-                            import shutil
-                            shutil.copy2(assets_file, excel_path)
-                            self.status_var.set(f"✅ Файл создан: {filename}")
-                        else:
-                            self.status_var.set(f"❌ Шаблон не найден в assets: {filename}")
-                            return
-                    else:
-                        return
+            # Получаем путь через координатор (он сам проверит существование)
+            if self.order_processor and hasattr(self.order_processor, 'coordinator'):
+                excel_path = self.order_processor.coordinator.get_excel_file_path(workshop, has_weight)
+            else:
+                excel_path = self.archive_manager.get_excel_path(workshop, has_weight)
 
             self.status_var.set("Восстанавливаю поддон...")
             self.window.update()
@@ -440,25 +394,27 @@ class ArchiveSearchWindow:
             )
 
             if result["success"]:
-                pallet_num = result.get("pallet_number", "неизвестно")
                 order_num = result.get("order", "неизвестно")
+                pallet_num = result.get("pallet_number", "")
 
-                self.status_var.set(f"✅ Поддон №{pallet_num} восстановлен (заказ: {order_num})")
+                self.status_var.set(f"✅ Поддон восстановлен (заказ: {order_num})")
 
                 # Обновляем статус в основном окне
                 if hasattr(self.order_processor, 'multitype_status_label'):
+                    status_text = f"Восстановлен поддон {pallet_num} (заказ: {order_num})" if pallet_num else f"Восстановлен поддон (заказ: {order_num})"
                     self.order_processor.multitype_status_label.config(
-                        text=f"Восстановлен поддон №{pallet_num} (заказ: {order_num})",
+                        text=status_text,
                         foreground="green"
                     )
 
                 # Закрываем окно через 2 секунды
                 self.window.after(2000, self.window.destroy)
-
             else:
                 error_msg = result.get("error", "Неизвестная ошибка")
                 self.status_var.set(f"❌ Ошибка восстановления: {error_msg}")
 
+        except FileNotFoundError as e:
+            self.status_var.set(f"❌ Файл не найден: {str(e)}")
         except Exception as e:
             self.status_var.set(f"❌ Ошибка: {str(e)}")
 
