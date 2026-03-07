@@ -599,7 +599,7 @@ class PDFTemplateFiller:
             )
             
             # Фиксированный размер в PDF-пунктах
-            qr_size_pdf_units = 53
+            qr_size_pdf_units = 52
             qr_size_pixels = int(qr_size_pdf_units * mat.a)
             
             # Масштабируем QR
@@ -618,9 +618,6 @@ class PDFTemplateFiller:
             rect_height = y1 - y0
             qr_x = x0 + (rect_width - qr_size_pixels) // 2
             qr_y = y0 + (rect_height - qr_size_pixels) // 2
-            
-            # Очищаем только область QR, а не весь плейсхолдер!
-            draw.rectangle([qr_x, qr_y, qr_x + qr_size_pixels, qr_y + qr_size_pixels], fill='white')
             
             # Вставляем QR-код
             # noinspection PyProtectedMember
