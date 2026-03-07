@@ -1,7 +1,8 @@
 # core/packaging/packaging_log_window.py
+import os
 import re
 import tkinter as tk
-from tkinter import ttk, StringVar, messagebox
+from tkinter import ttk, StringVar, filedialog
 
 from core.packaging.packaging_manager import PackagingManager
 
@@ -11,7 +12,8 @@ class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
     def __init__(self, parent, config_manager, order_processor=None):
-        self.status_var = None
+        self.packaging_log_file = None
+        self.status_label = None
         self.entries = []
         self.tree = None
         self.window = None
@@ -29,18 +31,19 @@ class PackagingLogWindow:
         self.manager = PackagingManager(config_manager)
         
         self.create_window()
-    
+
+    # noinspection SpellCheckingInspection
     def create_window(self):
         """Создаёт окно журнала упаковки"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("📦 Журнал учёта упаковки")
         self.window.geometry("1400x700")
         self.window.minsize(1000, 500)
-        
+
         # Делаем модальным
         self.window.transient(self.parent)
         self.window.grab_set()
-        
+
         # Центрирование
         self.window.update_idletasks()
         width = self.window.winfo_width()
@@ -49,15 +52,15 @@ class PackagingLogWindow:
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f"+{x}+{y}")
         self.window.bind("<Escape>", lambda e: self.window.destroy())
-        
+
         # Панель поиска
         search_frame = ttk.LabelFrame(self.window, text="Поиск записей", padding=10)
         search_frame.pack(fill=tk.X, padx=10, pady=10)
-        
+
         # Поля поиска в одну строку
         fields_frame = ttk.Frame(search_frame)
         fields_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
         # Дата
         ttk.Label(fields_frame, text="Дата:").grid(row=0, column=0, padx=(0, 5))
         date_entry = ttk.Entry(fields_frame, textvariable=self.date_var, width=10)
@@ -83,39 +86,43 @@ class PackagingLogWindow:
         date_entry.bind("<KeyRelease>", format_date)
         date_entry.bind("<Return>", lambda e: self.search())
         date_entry.bind("<Control-KeyPress>", self.control_key_handler)
-        
+
         # Номер заказа
         ttk.Label(fields_frame, text="№ заказа:").grid(row=0, column=2, padx=(0, 5))
         order_entry = ttk.Entry(fields_frame, textvariable=self.order_var, width=10)
         order_entry.grid(row=0, column=3, padx=(0, 15))
         order_entry.bind("<Return>", lambda e: self.search())
         order_entry.bind("<Control-KeyPress>", self.control_key_handler)
-        
+
         # Заказчик
         ttk.Label(fields_frame, text="Заказчик:").grid(row=0, column=4, padx=(0, 5))
-        customer_entry = ttk.Entry(fields_frame, textvariable=self.customer_var, width=20)
+        customer_entry = ttk.Entry(fields_frame, textvariable=self.customer_var, width=40)
         customer_entry.grid(row=0, column=5, padx=(0, 15))
         customer_entry.bind("<Return>", lambda e: self.search())
         customer_entry.bind("<Control-KeyPress>", self.control_key_handler)
-        
+
         # Наименование
         ttk.Label(fields_frame, text="Наименование:").grid(row=0, column=6, padx=(0, 5))
         product_entry = ttk.Entry(fields_frame, textvariable=self.product_var, width=40)
         product_entry.grid(row=0, column=7, padx=(0, 15))
         product_entry.bind("<Return>", lambda e: self.search())
         product_entry.bind("<Control-KeyPress>", self.control_key_handler)
-        
+
         # Кнопки
         buttons_frame = ttk.Frame(search_frame)
         buttons_frame.pack(fill=tk.X)
-        
+
+        if self.config_manager:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            self.packaging_log_file = settings.get("packaging_log_file", "")
+
         ttk.Button(
             buttons_frame,
             text="➕ Новая запись",
             command=self.add_new_entry,
             width=15
         ).pack(side=tk.LEFT, padx=(0, 10))
-        
+
         ttk.Button(
             buttons_frame,
             text="🗑️ Удалить",
@@ -136,11 +143,23 @@ class PackagingLogWindow:
             command=self.export_to_excel,
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
-        
+
+        # Статусная строка - теперь сверху
+        status_frame = ttk.Frame(self.window, height=25)
+        status_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
+        status_frame.pack_propagate(False)
+
+        self.status_label = ttk.Label(
+            status_frame,
+            text="",
+            anchor=tk.W
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+
         # Таблица
         table_frame = ttk.LabelFrame(self.window, text="Записи", padding=5)
         table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        
+
         # Создаём Treeview
         columns = (
             "date", "order_number", "customer", "product_name",
@@ -166,7 +185,7 @@ class PackagingLogWindow:
         self.tree.heading("small_boxes", text="Мал")
         self.tree.heading("aquaLife_boxes", text="Aqua")
         self.tree.heading("note", text="Примечание")
-        
+
         # Ширина колонок
         self.tree.column("date", width=70, anchor="center")
         self.tree.column("order_number", width=65, anchor="center")
@@ -178,109 +197,138 @@ class PackagingLogWindow:
         self.tree.column("small_boxes", width=20, anchor="center")
         self.tree.column("aquaLife_boxes", width=20, anchor="center")
         self.tree.column("note", width=50, anchor="w")
-        
+
         # Скроллбар
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
+
         # Привязка событий для редактирования
         self.tree.bind("<Double-Button-1>", self.on_double_click)
-        
-        # Статусная строка
-        self.status_var = StringVar(value="Готов")
-        status_label = ttk.Label(
-            self.window,
-            textvariable=self.status_var,
-            relief=tk.SUNKEN,
-            padding=5
-        )
-        status_label.pack(side=tk.BOTTOM, fill=tk.X)
-        
+
         # Загружаем последние записи
         self.load_recent()
 
+    # noinspection SpellCheckingInspection
+    def set_status(self, message, color="green"):
+        """Устанавливает статусное сообщение с цветом и автоочисткой через 5 секунд"""
+        self.status_label.config(text=message, foreground=color)
+        self.status_label.update()  # принудительное обновление
+        self.window.after(5000, lambda: self.status_label.config(text="", foreground="green"))
+
     def import_from_excel(self):
         """Импорт данных из Excel"""
-        from tkinter import filedialog, messagebox
+        # Получаем путь из настроек
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        file_path = settings.get("packaging_log_file", "")
 
+        # Если путь есть и файл существует - используем его без диалога
+        if file_path and os.path.exists(file_path):
+            self.set_status("⏳ Ожидайте, идёт импорт...")
+            self.window.update()
+
+            try:
+                imported, errors = self.manager.import_from_excel(file_path)
+
+                if imported > 0:
+                    self.set_status(f"✅ Импортировано записей: {imported}. Ошибок: {len(errors)}", "green")
+                    self.load_recent()
+                else:
+                    error_msg = "\n".join(errors) if errors else "Не удалось импортировать данные"
+                    self.set_status(f"❌ {error_msg}", "red")
+            except Exception as e:
+                self.set_status(f"❌ Ошибка: {str(e)}", "red")
+            return
+
+        # Если нет - показываем диалог выбора
         file_path = filedialog.askopenfilename(
-            title="Выберите файл УПАКОВКА2026.xlsx",
-            filetypes=[("Excel files", "*.xlsx *.xls")]
+            title="Выберите файл для импорта",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
         )
 
         if not file_path:
             return
 
         try:
-            self.status_var.set("Импорт...")
+            self.set_status("⏳ Ожидайте, идёт импорт...")
             self.window.update()
 
             imported, errors = self.manager.import_from_excel(file_path)
 
             if imported > 0:
-                messagebox.showinfo(
-                    "Импорт завершен",
-                    f"Импортировано записей: {imported}\n"
-                    f"Ошибок: {len(errors)}"
-                )
-                self.load_recent()  # Перезагружаем таблицу
+                self.set_status(f"✅ Импортировано записей: {imported}. Ошибок: {len(errors)}", "green")
+                self.load_recent()
             else:
-                messagebox.showerror(
-                    "Ошибка импорта",
-                    "\n".join(errors) if errors else "Не удалось импортировать данные"
-                )
+                error_msg = "\n".join(errors) if errors else "Не удалось импортировать данные"
+                self.set_status(f"❌ {error_msg}", "red")
 
         except Exception as e:
-            messagebox.showerror("Ошибка", str(e))
-        finally:
-            self.status_var.set("Готов")
+            self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     def export_to_excel(self):
         """Экспорт новых записей в Excel"""
-        from tkinter import filedialog, messagebox
+        # Получаем путь из настроек
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        file_path = settings.get("packaging_log_file", "")
 
+        # Если путь есть и файл существует - используем его без диалога
+        if file_path and os.path.exists(file_path):
+            # Проверяем, не открыт ли файл
+            try:
+                with open(file_path, 'r+b'):
+                    pass  # Файл доступен
+            except (PermissionError, OSError):
+                self.set_status("⚠️ Внимание: файл открыт в Exel, экспорт прерван", "orange")
+                return
+
+            self.set_status("⏳ Экспорт...")
+            self.window.update()
+
+            try:
+                exported = self.manager.export_unexported_to_excel(file_path)
+
+                if exported > 0:
+                    self.set_status(f"✅ Экспортировано новых записей: {exported}", "green")
+                    self.load_recent()
+                else:
+                    self.set_status("📭 Нет новых записей для экспорта", "blue")
+            except Exception as e:
+                self.set_status(f"❌ Ошибка: {str(e)}", "red")
+            return
+
+        # Если нет - показываем диалог выбора
         file_path = filedialog.askopenfilename(
-            title="Выберите файл УПАКОВКА2026.xlsx",
-            filetypes=[("Excel files", "*.xlsx *.xls")]
+            title="Выберите файл Excel для добавления записей",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
         )
 
         if not file_path:
             return
 
         try:
-            self.status_var.set("Экспорт...")
+            self.set_status("⏳ Экспорт...")
             self.window.update()
 
             exported = self.manager.export_unexported_to_excel(file_path)
 
             if exported > 0:
-                messagebox.showinfo(
-                    "Экспорт завершен",
-                    f"Экспортировано новых записей: {exported}"
-                )
+                self.set_status(f"✅ Экспортировано новых записей: {exported}", "green")
                 self.load_recent()
             else:
-                messagebox.showinfo(
-                    "Экспорт",
-                    "Нет новых записей для экспорта"
-                )
+                self.set_status("📭 Нет новых записей для экспорта", "blue")
 
         except Exception as e:
-            messagebox.showerror("Ошибка", str(e))
-        finally:
-            self.status_var.set("Готов")
+            self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     def load_recent(self):
         """Загружает последние 10 записей"""
         try:
-            self.entries = self.manager.get_recent_entries(30)
+            self.entries = self.manager.get_recent_entries(20)
             self.refresh_table()
-            self.status_var.set(f"Загружено {len(self.entries)} записей")
         except Exception as e:
-            self.status_var.set(f"Ошибка загрузки: {str(e)}")
+            self.set_status(f"Ошибка загрузки: {str(e)}")
 
     def refresh_table(self):
         """Обновляет отображение таблицы"""
@@ -347,7 +395,7 @@ class PackagingLogWindow:
             if self.product_var.get().strip():
                 filters["product_name"] = self.product_var.get().strip()
 
-            self.status_var.set("Поиск...")
+            self.set_status("Поиск...")
             self.window.update()
 
             self.entries = self.manager.search_entries(**filters)
@@ -355,12 +403,12 @@ class PackagingLogWindow:
 
             count = len(self.entries)
             if count == 0:
-                self.status_var.set("Ничего не найдено")
+                self.set_status("Ничего не найдено")
             else:
-                self.status_var.set(f"Найдено записей: {count}")
+                self.set_status(f"Найдено записей: {count}")
 
         except Exception as e:
-            self.status_var.set(f"Ошибка поиска: {str(e)}")
+            self.set_status(f"Ошибка поиска: {str(e)}")
 
     def add_new_entry(self):
         """Добавляет новую запись с предзаполненными данными"""
@@ -392,16 +440,16 @@ class PackagingLogWindow:
             self.tree.focus(entry_id)
             self.tree.see(entry_id)
 
-            self.status_var.set("✅ Новая запись добавлена")
+            self.set_status("✅ Новая запись добавлена")
 
         except Exception as e:
-            self.status_var.set(f"❌ Ошибка: {str(e)}")
+            self.set_status(f"❌ Ошибка: {str(e)}")
     
     def delete_selected(self):
         """Удаляет выбранную запись"""
         selection = self.tree.selection()
         if not selection:
-            self.status_var.set("❌ Не выбрана запись для удаления")
+            self.set_status("❌ Не выбрана запись для удаления")
             return
         
         entry_id = int(selection[0])
@@ -416,11 +464,6 @@ class PackagingLogWindow:
         if not entry:
             return
         
-        # Подтверждение
-        msg = f"Удалить запись?\n\nЗаказ: {entry['order_number']}\nДата: {entry['date']}"
-        if not messagebox.askyesno("Подтверждение удаления", msg):
-            return
-        
         try:
             self.manager.delete_entry(entry_id)
             
@@ -429,10 +472,10 @@ class PackagingLogWindow:
             
             # Обновляем таблицу
             self.refresh_table()
-            self.status_var.set("✅ Запись удалена")
+            self.set_status("✅ Запись удалена")
             
         except Exception as e:
-            self.status_var.set(f"❌ Ошибка удаления: {str(e)}")
+            self.set_status(f"❌ Ошибка удаления: {str(e)}")
     
     def on_double_click(self, event):
         """Обрабатывает двойной клик по ячейке для редактирования"""
@@ -492,10 +535,10 @@ class PackagingLogWindow:
                 values[col_index] = new_value
                 self.tree.item(item, values=values)
                 
-                self.status_var.set(f"✅ Ячейка обновлена")
+                self.set_status(f"✅ Ячейка обновлена")
                 
             except Exception as e:
-                self.status_var.set(f"❌ Ошибка сохранения: {str(e)}")
+                self.set_status(f"❌ Ошибка сохранения: {str(e)}")
         
         entry.bind("<Return>", save_edit)
         entry.bind("<Control-KeyPress>", self.control_key_handler)

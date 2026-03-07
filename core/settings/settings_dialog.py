@@ -16,6 +16,7 @@ class SettingsDialog:
     """Диалог настроек"""
 
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
+        self.packaging_log_file = None
         self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -135,6 +136,10 @@ class SettingsDialog:
         folder_menu_btn.menu.add_command(
             label="Выбрать папку для экспорта в Excel",
             command=self.select_excel_folder
+        )
+        folder_menu_btn.menu.add_command(
+            label="Выбрать файл журнала упаковки",
+            command=self.select_packaging_log_file
         )
 
         # Загружаем текущие пути
@@ -358,6 +363,29 @@ class SettingsDialog:
         
         self.update_folder_status()
 
+    def select_packaging_log_file(self):
+        """Выбирает файл журнала упаковки"""
+        file_path = filedialog.askopenfilename(
+            title="Выберите файл журнала упаковки",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return
+
+        # Сохраняем путь в настройки
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        settings["packaging_log_file"] = file_path
+        self.packaging_log_file = file_path
+        self.config_manager.save_json_settings("shared_utils.json", settings)
+
+        file_name = os.path.basename(file_path)
+        self.show_message(f"✅ Выбран файл: {file_name}", "green")
+
+    def get_packaging_log_file(self):
+        """Возвращает путь к файлу журнала упаковки"""
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        return settings.get("packaging_log_file", "")
+
     def open_excel_folder(self):
         """Открывает папку с Excel файлами в проводнике"""
         if not self.excel_folder_path or not os.path.exists(self.excel_folder_path):
@@ -557,8 +585,11 @@ class SettingsDialog:
             all_settings["weight_box_print"] = print_settings
             self.config_manager.save_json_settings("print_settings.json", all_settings)
 
-            # Сохраняем настройки номера заказа
+            # Сохраняем остальные настройки
             shared_settings = self.config_manager.load_json_settings("shared_utils.json")
+
+            # Путь к файлу журнала упаковки
+            shared_settings["packaging_log_file"] = self.packaging_log_file
 
             # Номер заказа
             shared_settings["order_number"] = {

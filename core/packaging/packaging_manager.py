@@ -38,7 +38,7 @@ class PackagingManager:
     def import_from_excel(self, file_path):
         """
         Импорт из Excel с валидацией.
-        В БД попадают ТОЛЬКО полностью валидные записи.
+        Импортированные записи сразу помечаются как экспортированные.
 
         Returns:
             tuple: (imported_count, errors_list)
@@ -60,14 +60,20 @@ class PackagingManager:
             else:
                 valid_entries.append(entry)
 
-        # Сохраняем только валидные
+        # Сохраняем валидные записи и сразу помечаем как экспортированные
         imported = 0
+        imported_ids = []
         for entry in valid_entries:
             try:
-                self.data_manager.add_entry(entry)
+                entry_id = self.data_manager.add_entry(entry)
+                imported_ids.append(entry_id)
                 imported += 1
             except Exception as e:
                 validation_errors.append(f"Ошибка сохранения записи: {str(e)}")
+
+        # Помечаем все импортированные записи как экспортированные
+        if imported_ids:
+            self.data_manager.mark_as_exported(imported_ids)
 
         # Объединяем все ошибки
         all_errors = errors + validation_errors
