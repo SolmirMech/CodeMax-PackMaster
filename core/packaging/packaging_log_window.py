@@ -171,7 +171,7 @@ class PackagingLogWindow:
             table_frame,
             columns=columns,
             show="headings",
-            height=35,
+            height=40,
             selectmode="browse"
         )
         # Настраиваем заголовки
@@ -202,6 +202,8 @@ class PackagingLogWindow:
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
+        style = ttk.Style()
+        style.configure("Treeview", rowheight=30)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -210,13 +212,28 @@ class PackagingLogWindow:
 
         # Загружаем последние записи
         self.load_recent()
+        # Показываем путь к файлу в статусе
+        self.update_status_with_file_path()
+
+    def update_status_with_file_path(self):
+        """Обновляет статусную строку с полным путём к файлу"""
+        if self.packaging_log_file:
+            self.status_label.config(
+                text=f"📁 Текущий файл: {self.packaging_log_file}",
+                foreground="blue"
+            )
+        else:
+            self.status_label.config(
+                text="📁 Файл журнала не настроен",
+                foreground="orange"
+            )
 
     # noinspection SpellCheckingInspection
     def set_status(self, message, color="green"):
         """Устанавливает статусное сообщение с цветом и автоочисткой через 5 секунд"""
         self.status_label.config(text=message, foreground=color)
         self.status_label.update()  # принудительное обновление
-        self.window.after(5000, lambda: self.status_label.config(text="", foreground="green"))
+        self.window.after(5000, self.update_status_with_file_path)
 
     def import_from_excel(self):
         """Импорт данных из Excel"""

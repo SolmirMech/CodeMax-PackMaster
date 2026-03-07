@@ -1,5 +1,6 @@
 # core/packaging/packaging_excel.py
 import re
+
 import openpyxl
 
 # Маппинг прямо здесь (как в плане)
@@ -14,7 +15,7 @@ PACKAGING_EXCEL_MAPPING = {
         "large_boxes": 7,  # колонка G
         "small_boxes": 8,  # колонка H
         "aquaLife_boxes": 9,  # колонка I
-        "note": 10,  # колонка J
+        "note": 12,  # колонка L
     },
     "start_row": 2,
     "date_format": "%d.%m.%Y"
@@ -179,24 +180,20 @@ class PackagingExcel:
         return entry
 
     @staticmethod
-    def export_to_excel(file_path, entries, sheet_name="янв 26"):
+    def export_to_excel(file_path, entries):
         """
-        Экспорт записей в Excel (дозапись в конец)
+        Экспорт записей в Excel (дозапись в конец активного листа)
         Возвращает количество записанных записей
         """
         if not entries:
             return 0
 
         mapping = PACKAGING_EXCEL_MAPPING
+        wb = None
 
         try:
             wb = openpyxl.load_workbook(file_path)
-
-            if sheet_name not in wb.sheetnames:
-                wb.close()
-                raise Exception(f"Лист '{sheet_name}' не найден")
-
-            sheet = wb[sheet_name]
+            sheet = wb.active
 
             # Находим первую пустую строку
             row = mapping["start_row"]
@@ -214,10 +211,18 @@ class PackagingExcel:
                         value = f"{d}.{m}.{y}"
 
                     sheet.cell(row=row, column=col).value = value
+
                 row += 1
 
             wb.save(file_path)
+            wb.close()
+
             return len(entries)
 
         except Exception as e:
+            if wb:
+                try:
+                    wb.close()
+                except:
+                    pass
             raise Exception(f"Ошибка экспорта: {str(e)}")

@@ -114,7 +114,7 @@ class PackagingManager:
 
         return errors
 
-    def export_unexported_to_excel(self, file_path, sheet_name="янв 26"):
+    def export_unexported_to_excel(self, file_path):
         """
         Экспортирует все неэкспортированные записи в Excel.
         Возвращает количество экспортированных записей
@@ -125,7 +125,7 @@ class PackagingManager:
             return 0
 
         # Экспортируем
-        exported_count = PackagingExcel.export_to_excel(file_path, entries, sheet_name)
+        exported_count = PackagingExcel.export_to_excel(file_path, entries)
 
         # Помечаем как экспортированные
         if exported_count > 0:
