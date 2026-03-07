@@ -129,6 +129,13 @@ class PackagingLogWindow:
             command=self.import_from_excel,
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
+
+        ttk.Button(
+            buttons_frame,
+            text="📤 Экспорт в Excel",
+            command=self.export_to_excel,
+            width=18
+        ).pack(side=tk.LEFT, padx=(10, 0))
         
         # Таблица
         table_frame = ttk.LabelFrame(self.window, text="Записи", padding=5)
@@ -211,7 +218,7 @@ class PackagingLogWindow:
             self.status_var.set("Импорт...")
             self.window.update()
 
-            imported, errors = self.manager.data_manager.import_from_excel(file_path)
+            imported, errors = self.manager.import_from_excel(file_path)
 
             if imported > 0:
                 messagebox.showinfo(
@@ -230,7 +237,42 @@ class PackagingLogWindow:
             messagebox.showerror("Ошибка", str(e))
         finally:
             self.status_var.set("Готов")
-    
+
+    def export_to_excel(self):
+        """Экспорт новых записей в Excel"""
+        from tkinter import filedialog, messagebox
+
+        file_path = filedialog.askopenfilename(
+            title="Выберите файл УПАКОВКА2026.xlsx",
+            filetypes=[("Excel files", "*.xlsx *.xls")]
+        )
+
+        if not file_path:
+            return
+
+        try:
+            self.status_var.set("Экспорт...")
+            self.window.update()
+
+            exported = self.manager.export_unexported_to_excel(file_path)
+
+            if exported > 0:
+                messagebox.showinfo(
+                    "Экспорт завершен",
+                    f"Экспортировано новых записей: {exported}"
+                )
+                self.load_recent()
+            else:
+                messagebox.showinfo(
+                    "Экспорт",
+                    "Нет новых записей для экспорта"
+                )
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+        finally:
+            self.status_var.set("Готов")
+
     def load_recent(self):
         """Загружает последние 10 записей"""
         try:

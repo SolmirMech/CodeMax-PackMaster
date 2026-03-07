@@ -1,9 +1,6 @@
 # core/packaging/packaging_data_manager.py
-import re
 import sqlite3
 import threading
-
-import openpyxl
 
 
 class PackagingDataManager:
@@ -64,15 +61,18 @@ class PackagingDataManager:
                         large_boxes INTEGER DEFAULT 0,
                         small_boxes INTEGER DEFAULT 0,
                         aquaLife_boxes INTEGER DEFAULT 0,
-                        note TEXT
+                        note TEXT,
+                        exported INTEGER DEFAULT 0  -- 0 = не экспортирован, 1 = экспортирован
                     )
                 """)
 
-                # Индексы для поиска
+                # Индексы
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_date ON packaging_log(date)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")  # новый индекс
 
                 conn.commit()
 
@@ -81,6 +81,66 @@ class PackagingDataManager:
             finally:
                 if 'conn' in locals():
                     conn.close()
+
+    def get_unexported_entries(self):
+        """Возвращает все неэкспортированные записи"""
+        with self._readers_lock:
+            self._readers_count += 1
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM packaging_log 
+                    WHERE exported = 0 
+                    ORDER BY id ASC
+                """)
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]  # Всегда возвращаем список
+        except Exception as e:
+            print(f"Ошибка в get_unexported_entries: {e}")
+            return []  # При ошибке возвращаем пустой список
+        finally:
+            with self._readers_lock:
+                self._readers_count -= 1
+            conn.close()
+
+    def mark_as_exported(self, entry_ids):
+        """
+        Помечает записи как экспортированные
+
+        Args:
+            entry_ids: список ID или одно число
+
+        Returns:
+            int: количество обновленных записей (0 если ничего не обновлено)
+        """
+        if not entry_ids:
+            return 0  # Явно возвращаем 0, если нет ID
+
+        if isinstance(entry_ids, (int, str)):
+            entry_ids = [entry_ids]
+
+        with self._write_lock:
+            try:
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join(['?'] * len(entry_ids))
+                    cursor.execute(f"""
+                        UPDATE packaging_log 
+                        SET exported = 1 
+                        WHERE id IN ({placeholders})
+                    """, entry_ids)
+                    conn.commit()
+                    updated = cursor.rowcount
+                    return updated  # Всегда возвращаем число
+            except Exception as e:
+                print(f"Ошибка в mark_as_exported: {e}")
+                return 0  # Возвращаем 0 при ошибке
+            finally:
+                conn.close()
 
     def get_recent(self, limit=10):
         """Последние записи - копируем блокировки и подход из XMLDataManager"""
@@ -148,7 +208,7 @@ class PackagingDataManager:
                 conn.close()
 
     def add_entry(self, data):
-        """Добавление новой записи - с блокировкой записи"""
+        """Добавление новой записи - exported всегда 0"""
         with self._write_lock:
             try:
                 with self._lock:
@@ -157,8 +217,8 @@ class PackagingDataManager:
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
-                         packer_name, large_boxes, small_boxes, aquaLife_boxes, note)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         packer_name, large_boxes, small_boxes, aquaLife_boxes, note, exported)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)  -- exported = 0
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -188,164 +248,3 @@ class PackagingDataManager:
                     return cursor.rowcount > 0
             finally:
                 conn.close()
-
-    def import_from_excel(self, file_path, sheet_name="янв 26"):
-        """
-        Импорт данных из Excel файла.
-
-        Args:
-            file_path: Путь к Excel файлу
-            sheet_name: Имя листа с данными (по умолчанию "янв 26")
-
-        Returns:
-            tuple: (количество импортированных записей, список ошибок)
-        """
-        errors = []
-        imported = 0
-
-        with self._write_lock:
-            conn = None
-            try:
-                # Загружаем книгу
-                wb = openpyxl.load_workbook(file_path, data_only=True)
-
-                if sheet_name not in wb.sheetnames:
-                    wb.close()
-                    return 0, [f"Лист '{sheet_name}' не найден в файле"]
-
-                sheet = wb[sheet_name]
-
-                # Ищем заголовки в первой строке
-                headers = {}
-                for col_idx, cell in enumerate(next(sheet.iter_rows(max_row=1)), 1):
-                    if cell.value and isinstance(cell.value, str):
-                        header = cell.value.strip().lower()
-                        if header in ["дата", "№ заказа", "заказчик", "наименование",
-                                      "тираж", "упаковщик", "большие", "маленькие",
-                                      "аквалайф", "примечание"]:
-                            headers[header] = col_idx
-
-                # Проверяем наличие обязательных колонок
-                required = ["дата", "№ заказа"]
-                missing = [r for r in required if r not in headers]
-                if missing:
-                    wb.close()
-                    return 0, [f"Не найдены обязательные колонки: {missing}"]
-
-                # Одно соединение на весь импорт
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-
-                # Проходим по строкам начиная со 2-й
-                for row_idx, row in enumerate(sheet.iter_rows(min_row=2), 2):
-                    try:
-                        # Пропускаем полностью пустые строки
-                        if all(cell.value is None for cell in row):
-                            continue
-
-                        data = {}
-
-                        # Дата
-                        if "дата" in headers:
-                            date_cell = row[headers["дата"] - 1].value
-                            if date_cell:
-                                if hasattr(date_cell, 'strftime'):
-                                    data['date'] = date_cell.strftime('%d.%m.%Y')
-                                else:
-                                    date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
-                                    if date_match:
-                                        day, month, year = date_match.groups()
-                                        data['date'] = f"{day}.{month}.{year}"
-                                    else:
-                                        data['date'] = str(date_cell)[:10]
-
-                        # Номер заказа
-                        if "№ заказа" in headers:
-                            data['order_number'] = str(row[headers["№ заказа"] - 1].value or "")
-
-                        # Заказчик
-                        if "заказчик" in headers:
-                            data['customer'] = str(row[headers["заказчик"] - 1].value or "")
-
-                        # Наименование
-                        if "наименование" in headers:
-                            data['product_name'] = str(row[headers["наименование"] - 1].value or "")
-
-                        # Тираж
-                        if "тираж" in headers:
-                            val = row[headers["тираж"] - 1].value
-                            try:
-                                data['quantity_labels'] = int(float(val)) if val else None
-                            except (ValueError, TypeError):
-                                data['quantity_labels'] = None
-
-                        # Упаковщик
-                        if "упаковщик" in headers:
-                            data['packer_name'] = str(row[headers["упаковщик"] - 1].value or "")
-
-                        # Большие коробки
-                        if "большие" in headers:
-                            val = row[headers["большие"] - 1].value
-                            try:
-                                data['large_boxes'] = int(float(val)) if val else None
-                            except (ValueError, TypeError):
-                                data['large_boxes'] = None
-
-                        # Маленькие коробки
-                        if "маленькие" in headers:
-                            val = row[headers["маленькие"] - 1].value
-                            try:
-                                data['small_boxes'] = int(float(val)) if val else None
-                            except (ValueError, TypeError):
-                                data['small_boxes'] = None
-
-                        # Аквалайф
-                        if "аквалайф" in headers:
-                            val = row[headers["аквалайф"] - 1].value
-                            try:
-                                data['aquaLife_boxes'] = int(float(val)) if val else None
-                            except (ValueError, TypeError):
-                                data['aquaLife_boxes'] = None
-
-                        # Примечание
-                        if "примечание" in headers:
-                            data['note'] = str(row[headers["примечание"] - 1].value or "")
-
-                        # Проверяем, что есть хоть какие-то данные
-                        if data.get('order_number') or data.get('date'):
-                            cursor.execute("""
-                                INSERT INTO packaging_log 
-                                (date, order_number, customer, product_name, quantity_labels, 
-                                 packer_name, large_boxes, small_boxes, aquaLife_boxes, note)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (
-                                data.get('date', ''),
-                                data.get('order_number', ''),
-                                data.get('customer', ''),
-                                data.get('product_name', ''),
-                                data.get('quantity_labels'),
-                                data.get('packer_name', ''),
-                                data.get('large_boxes'),
-                                data.get('small_boxes'),
-                                data.get('aquaLife_boxes'),
-                                data.get('note', '')
-                            ))
-                            imported += 1
-
-                        # Коммитим каждые 50 строк
-                        if imported % 50 == 0:
-                            conn.commit()
-
-                    except Exception as e:
-                        errors.append(f"Строка {row_idx}: {str(e)}")
-
-                conn.commit()
-                wb.close()
-
-            except Exception as e:
-                errors.append(f"Ошибка при импорте: {str(e)}")
-            finally:
-                if conn:
-                    conn.close()
-
-        return imported, errors
