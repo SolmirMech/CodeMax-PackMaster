@@ -3,33 +3,21 @@ import re
 
 import openpyxl
 
-# Маппинг прямо здесь (как в плане)
-PACKAGING_EXCEL_MAPPING = {
-    "columns": {
-        "date": 1,  # колонка A
-        "order_number": 2,  # колонка B
-        "customer": 3,  # колонка C
-        "product_name": 4,  # колонка D
-        "quantity_labels": 5,  # колонка E
-        "packer_name": 6,  # колонка F
-        "large_boxes": 7,  # колонка G
-        "small_boxes": 8,  # колонка H
-        "aquaLife_boxes": 9,  # колонка I
-        "note": 12,  # колонка L
-    },
-    "start_row": 2,
-    "date_format": "%d.%m.%Y"
-}
+from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
 
 
 class PackagingExcel:
     """ВСЯ работа с Excel для журнала упаковки"""
 
     @staticmethod
-    def import_from_excel(file_path):
+    def import_from_excel(file_path, only_first_sheet=True):
         """
         Импорт данных из Excel.
-        Проверяет ВСЕ листы, импортирует с тех, где структура совпадает с БД.
+        Проверяет листы, импортирует с тех, где структура совпадает с БД.
+
+        Args:
+            file_path: путь к файлу
+            only_first_sheet: если True - импорт только из первого листа
 
         Returns:
             tuple: (imported_count, errors_list, entries_list)
@@ -42,8 +30,14 @@ class PackagingExcel:
         try:
             wb = openpyxl.load_workbook(file_path, data_only=True)
 
+            # Определяем листы для обработки
+            if only_first_sheet:
+                sheets_to_process = [wb.sheetnames[0]] if wb.sheetnames else []
+            else:
+                sheets_to_process = wb.sheetnames
+
             # Проверяем каждый лист
-            for sheet_name in wb.sheetnames:
+            for sheet_name in sheets_to_process:
                 sheet = wb[sheet_name]
 
                 # Проверяем структуру листа
@@ -202,7 +196,8 @@ class PackagingExcel:
 
             # Записываем
             for entry in entries:
-                for field, col in mapping["columns"].items():
+                for field, col_mapping in mapping["columns"].items():
+                    col = col_mapping.column
                     value = entry.get(field, "")
 
                     # Спецобработка даты: YYYY-MM-DD -> DD.MM.YYYY
@@ -210,7 +205,18 @@ class PackagingExcel:
                         y, m, d = str(value).split('-')
                         value = f"{d}.{m}.{y}"
 
-                    sheet.cell(row=row, column=col).value = value
+                    cell = sheet.cell(row=row, column=col, value=value)
+
+                    # Применяем стили
+                    if col_mapping.style:
+                        if col_mapping.style.font:
+                            cell.font = col_mapping.style.font
+                        if col_mapping.style.border:
+                            cell.border = col_mapping.style.border
+                        if col_mapping.style.alignment:
+                            cell.alignment = col_mapping.style.alignment
+                        if col_mapping.style.number_format:
+                            cell.number_format = col_mapping.style.number_format
 
                 row += 1
 

@@ -35,16 +35,23 @@ class PackagingManager:
         return self.data_manager.mark_as_exported(entry_ids)
 
     # === Методы Excel ===
-    def import_from_excel(self, file_path):
+    def import_from_excel(self, file_path, only_first_sheet=True):
         """
         Импорт из Excel с валидацией.
         Импортированные записи сразу помечаются как экспортированные.
+
+        Args:
+            file_path: путь к файлу
+            only_first_sheet: если True - импорт только из первого листа
 
         Returns:
             tuple: (imported_count, errors_list)
         """
         # Получаем все записи из Excel (включая потенциально ошибочные)
-        total_found, errors, all_entries = PackagingExcel.import_from_excel(file_path)
+        total_found, errors, all_entries = PackagingExcel.import_from_excel(
+            file_path,
+            only_first_sheet=only_first_sheet
+        )
 
         if not all_entries:
             return 0, errors or ["Нет данных для импорта"]

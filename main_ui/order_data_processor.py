@@ -270,18 +270,35 @@ class OrderDataProcessor:
                 product_text = self.roll_module.product_text.get("1.0", "end-1c")
                 defaults['product_name'] = product_text.strip()
 
-        # Сумма тиражей, если видов больше одного
+        # Сумма тиражей, если видов больше одного И НЕ ВЫБРАН КОНКРЕТНЫЙ ВИД
         if hasattr(self, 'parsed_data') and self.parsed_data:
-            total_tirazh = 0
-            for product in self.parsed_data:
-                tirazh = product.get('tirazh', '')
-                if tirazh:
-                    try:
-                        total_tirazh += int(tirazh)
-                    except:
-                        pass
-            if total_tirazh > 0:
-                defaults['quantity_labels'] = total_tirazh
+            # Проверяем, выбран ли конкретный вид
+            selected_name = self.selected_name.get().strip()
+            has_selected = bool(selected_name) and selected_name in [p.get('name', '') for p in self.parsed_data]
+
+            if not has_selected:
+                # Вид не выбран - суммируем все тиражи
+                total_tirazh = 0
+                for product in self.parsed_data:
+                    tirazh = product.get('tirazh', '')
+                    if tirazh:
+                        try:
+                            total_tirazh += int(tirazh)
+                        except:
+                            pass
+                if total_tirazh > 0:
+                    defaults['quantity_labels'] = total_tirazh
+            else:
+                # Вид выбран - берём тираж выбранного вида
+                for product in self.parsed_data:
+                    if product.get('name', '') == selected_name:
+                        tirazh = product.get('tirazh', '')
+                        if tirazh:
+                            try:
+                                defaults['quantity_labels'] = int(tirazh)
+                            except:
+                                pass
+                        break
 
         # Дата сегодня
         from datetime import datetime

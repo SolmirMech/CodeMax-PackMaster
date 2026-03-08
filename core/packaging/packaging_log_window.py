@@ -12,6 +12,7 @@ class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
     def __init__(self, parent, config_manager, order_processor=None):
+        self.only_first_sheet_var = None
         self.packaging_log_file = None
         self.status_label = None
         self.entries = []
@@ -137,6 +138,13 @@ class PackagingLogWindow:
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
 
+        self.only_first_sheet_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            buttons_frame,
+            text="Только первый лист",
+            variable=self.only_first_sheet_var
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
         ttk.Button(
             buttons_frame,
             text="📤 Экспорт в Excel",
@@ -247,7 +255,10 @@ class PackagingLogWindow:
             self.window.update()
 
             try:
-                imported, errors = self.manager.import_from_excel(file_path)
+                imported, errors = self.manager.import_from_excel(
+                    file_path,
+                    only_first_sheet=self.only_first_sheet_var.get()
+                )
 
                 if imported > 0:
                     self.set_status(f"✅ Импортировано записей: {imported}. Ошибок: {len(errors)}", "green")
