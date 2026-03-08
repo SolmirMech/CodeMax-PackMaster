@@ -4,6 +4,23 @@ import re
 import openpyxl
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
+# Старый простой маппинг для импорта
+IMPORT_MAPPING = {
+    "columns": {
+        "date": 1,
+        "order_number": 2,
+        "customer": 3,
+        "product_name": 4,
+        "quantity_labels": 5,
+        "packer_name": 6,
+        "large_boxes": 7,
+        "small_boxes": 8,
+        "aquaLife_boxes": 9,
+        "note": 12,
+    },
+    "start_row": 2,
+    "date_format": "%d.%m.%Y"
+}
 
 
 class PackagingExcel:
@@ -25,7 +42,7 @@ class PackagingExcel:
         errors = []
         all_entries = []
         imported_total = 0
-        mapping = PACKAGING_EXCEL_MAPPING
+        mapping = IMPORT_MAPPING
 
         try:
             wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -78,7 +95,7 @@ class PackagingExcel:
         Проверяет, соответствует ли структура листа ожидаемой.
         Проверяет первые 3 непустые строки на наличие данных в нужных колонках.
         """
-        mapping = PACKAGING_EXCEL_MAPPING
+        mapping = IMPORT_MAPPING
         start_row = mapping["start_row"]
         sample_rows = 0
         max_samples = 3

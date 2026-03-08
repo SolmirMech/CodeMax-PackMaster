@@ -12,7 +12,7 @@ class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
     def __init__(self, parent, config_manager, order_processor=None):
-        self.only_first_sheet_var = None
+        self.only_first_sheet_var = tk.BooleanVar(value=True)
         self.packaging_log_file = None
         self.status_label = None
         self.entries = []
@@ -138,12 +138,15 @@ class PackagingLogWindow:
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
 
+        """
+        пока убрал опцию, нужно решить проблему зависания
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             buttons_frame,
             text="Только первый лист",
             variable=self.only_first_sheet_var
         ).pack(side=tk.LEFT, padx=(10, 0))
+        """
 
         ttk.Button(
             buttons_frame,
