@@ -176,12 +176,15 @@ class PackagingLogWindow:
             "aquaLife_boxes", "note"
         )
 
+        style = ttk.Style()
+        style.configure("PackagingLog.Treeview", rowheight=30)
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
             show="headings",
             height=40,
-            selectmode="browse"
+            selectmode="browse",
+            style="PackagingLog.Treeview"
         )
         # Настраиваем заголовки
         self.tree.heading("date", text="Дата")
@@ -211,8 +214,6 @@ class PackagingLogWindow:
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        style = ttk.Style()
-        style.configure("Treeview", rowheight=30)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 

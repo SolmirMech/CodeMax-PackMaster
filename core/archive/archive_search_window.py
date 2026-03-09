@@ -37,14 +37,20 @@ class ArchiveSearchWindow:
         # Делаем модальным
         self.window.transient(self.parent)
         self.window.grab_set()
-        
+
         # Центрирование окна
         self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
+
+        # ПРИНУДИТЕЛЬНО устанавливаем минимальный размер ДО центрирования
+        self.window.geometry("1100x700")
+        self.window.minsize(800, 500)
+
+        # Теперь центрируем
+        width = 1100  # фиксированная ширина
+        height = 700  # фиксированная высота
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry(f"+{x}+{y}")
+        self.window.geometry(f"{width}x{height}+{x}+{y}")
         self.window.bind("<Escape>", lambda e: self.window.destroy())        
         
         # Заголовок
@@ -178,6 +184,16 @@ class ArchiveSearchWindow:
             padding=5
         )
         status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Принудительно обновляем геометрию и показываем все элементы
+        self.window.update()
+        self.window.update_idletasks()
+
+        # Убеждаемся, что control_frame отобразился
+        control_frame.update()
+        self.restore_btn.update()
+        self.delete_btn.update()
+        self.status_var.set("Готов к поиску")
         
         # Загружаем все поддоны при открытии
         self.show_all()
