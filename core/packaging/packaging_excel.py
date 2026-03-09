@@ -1,6 +1,7 @@
 # core/packaging/packaging_excel.py
 import re
-
+import os
+import time
 import openpyxl
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
@@ -27,67 +28,145 @@ class PackagingExcel:
     """ВСЯ работа с Excel для журнала упаковки"""
 
     @staticmethod
-    def import_from_excel(file_path, only_first_sheet=True):
+    def import_from_excel(file_path, db_callback=None, progress_callback=None, only_first_sheet=True):
         """
-        Импорт данных из Excel.
-        Проверяет листы, импортирует с тех, где структура совпадает с БД.
+        Импорт данных из Excel с поэтапной передачей в БД и прогрессом
 
         Args:
             file_path: путь к файлу
+            db_callback: функция для сохранения записи в БД (принимает entry)
+            progress_callback: функция для обновления прогресса (принимает sheet_name, count)
             only_first_sheet: если True - импорт только из первого листа
 
         Returns:
-            tuple: (imported_count, errors_list, entries_list)
+            tuple: (imported_count, errors_list)
         """
+        import gc
         errors = []
-        all_entries = []
         imported_total = 0
-        mapping = IMPORT_MAPPING
 
         try:
-            wb = openpyxl.load_workbook(file_path, data_only=True)
+            # Открываем файл
+            wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)  # ← read_only режим!
 
-            # Определяем листы для обработки
             if only_first_sheet:
                 sheets_to_process = [wb.sheetnames[0]] if wb.sheetnames else []
             else:
                 sheets_to_process = wb.sheetnames
 
-            # Проверяем каждый лист
-            for sheet_name in sheets_to_process:
+            for sheet_idx, sheet_name in enumerate(sheets_to_process):
+                # Открываем лист
                 sheet = wb[sheet_name]
 
-                # Проверяем структуру листа
-                if not PackagingExcel._validate_sheet_structure(sheet):
-                    errors.append(f"Лист '{sheet_name}' пропущен: несоответствие структуры")
+                if progress_callback:
+                    progress_callback(f"Обработка листа {sheet_idx + 1}/{len(sheets_to_process)}: {sheet_name}", None)
+
+                # Простая проверка первой строки с данными
+                first_data_row = None
+                for row in sheet.iter_rows(min_row=2, max_row=5, values_only=True):
+                    if row[0] is not None:
+                        first_data_row = row
+                        break
+
+                if not first_data_row:
+                    errors.append(f"Лист '{sheet_name}' пропущен: нет данных")
                     continue
 
                 # Импортируем данные с листа
-                sheet_entries = []
-
-                for row_idx, row in enumerate(sheet.iter_rows(min_row=mapping["start_row"]), mapping["start_row"]):
-                    # Пропускаем пустые строки
-                    if row[0].value is None:
+                sheet_imported = 0
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
+                    if row[0] is None:  # пустая строка
                         continue
 
                     try:
-                        entry = PackagingExcel._row_to_entry(row, mapping)
-                        if entry.get('order_number') or entry.get('date'):  # Хотя бы одно поле заполнено
-                            sheet_entries.append(entry)
+                        entry = PackagingExcel._row_to_entry_simple(row)
+                        if entry.get('order_number') or entry.get('date'):
+                            if db_callback:
+                                db_callback(entry)
+                            sheet_imported += 1
+
+                            # Каждые 50 записей - обновляем прогресс и чистим память
+                            if sheet_imported % 50 == 0:
+                                if progress_callback:
+                                    progress_callback(f"Лист '{sheet_name}'", sheet_imported)
+                                import gc
+                                gc.collect()
+
                     except Exception as e:
                         errors.append(f"Лист '{sheet_name}', строка {row_idx}: {str(e)}")
 
-                if sheet_entries:
-                    all_entries.extend(sheet_entries)
-                    imported_total += len(sheet_entries)
-                    errors.append(f"Лист '{sheet_name}': импортировано {len(sheet_entries)} записей")
+                if sheet_imported > 0:
+                    imported_total += sheet_imported
+                    if progress_callback:
+                        progress_callback(f"✓ Лист '{sheet_name}' завершён", sheet_imported)
+                    errors.append(f"Лист '{sheet_name}': импортировано {sheet_imported} записей")
+
+                # Принудительно закрываем лист и чистим память
+                # noinspection PyUnusedLocal
+                sheet = None
+                gc.collect()
 
             wb.close()
 
+            if progress_callback:
+                progress_callback("complete", (len(sheets_to_process), imported_total))
+
         except Exception as e:
             errors.append(f"Ошибка открытия файла: {str(e)}")
+            if progress_callback:
+                progress_callback("error", str(e))
 
-        return imported_total, errors, all_entries
+        return imported_total, errors
+
+    @staticmethod
+    def _row_to_entry_simple(row):
+        """Упрощённое преобразование строки для read_only режима"""
+        entry = {}
+
+        # Дата
+        date_cell = row[0]
+        if date_cell:
+            if hasattr(date_cell, 'strftime'):
+                entry['date'] = date_cell.strftime('%Y-%m-%d')
+            else:
+                date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
+                if date_match:
+                    day, month, year = date_match.groups()
+                    entry['date'] = f"{year}-{month}-{day}"
+                else:
+                    entry['date'] = str(date_cell)[:10]
+
+        # Остальные поля по индексам
+        entry['order_number'] = str(row[1]) if row[1] else ""
+        entry['customer'] = str(row[2]) if row[2] else ""
+        entry['product_name'] = str(row[3]) if row[3] else ""
+
+        # Числовые поля
+        try:
+            entry['quantity_labels'] = int(float(row[4])) if row[4] else None
+        except:
+            entry['quantity_labels'] = None
+
+        entry['packer_name'] = str(row[5]) if row[5] else ""
+
+        try:
+            entry['large_boxes'] = int(float(row[6])) if row[6] else None
+        except:
+            entry['large_boxes'] = None
+
+        try:
+            entry['small_boxes'] = int(float(row[7])) if row[7] else None
+        except:
+            entry['small_boxes'] = None
+
+        try:
+            entry['aquaLife_boxes'] = int(float(row[8])) if row[8] else None
+        except:
+            entry['aquaLife_boxes'] = None
+
+        entry['note'] = str(row[11]) if len(row) > 11 and row[11] else ""
+
+        return entry
 
     @staticmethod
     def _validate_sheet_structure(sheet):
@@ -191,17 +270,40 @@ class PackagingExcel:
         return entry
 
     @staticmethod
-    def export_to_excel(file_path, entries):
+    def export_to_excel(file_path, entries, max_retries=3):
         """
-        Экспорт записей в Excel (дозапись в конец активного листа)
-        Возвращает количество записанных записей
+        Экспорт записей в Excel с файловой блокировкой
         """
         if not entries:
             return 0
 
         mapping = PACKAGING_EXCEL_MAPPING
-        wb = None
+        lock_file = file_path + ".lock"
 
+        # Ждём освобождения, если файл заблокирован
+        for attempt in range(max_retries):
+            if not os.path.exists(lock_file):
+                break
+            lock_age = time.time() - os.path.getmtime(lock_file)
+            if lock_age > 60:  # Зависший lock (старше минуты)
+                try:
+                    os.remove(lock_file)
+                    break
+                except:
+                    pass
+            if attempt < max_retries - 1:
+                time.sleep(1)
+            else:
+                raise Exception("Файл заблокирован другим процессом")
+
+        # Пытаемся создать свой lock-файл
+        try:
+            with open(lock_file, 'x') as f:
+                f.write(str(os.getpid()))
+        except FileExistsError:
+            raise Exception("Файл заблокирован другим процессом")
+
+        # Основная операция
         try:
             wb = openpyxl.load_workbook(file_path)
             sheet = wb.active
@@ -217,14 +319,12 @@ class PackagingExcel:
                     col = col_mapping.column
                     value = entry.get(field, "")
 
-                    # Спецобработка даты: YYYY-MM-DD -> DD.MM.YYYY
                     if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
                         y, m, d = str(value).split('-')
                         value = f"{d}.{m}.{y}"
 
                     cell = sheet.cell(row=row, column=col, value=value)
 
-                    # Применяем стили
                     if col_mapping.style:
                         if col_mapping.style.font:
                             cell.font = col_mapping.style.font
@@ -237,15 +337,18 @@ class PackagingExcel:
 
                 row += 1
 
+            # Сохраняем прямо в исходный файл (не через временный)
             wb.save(file_path)
             wb.close()
 
             return len(entries)
 
         except Exception as e:
-            if wb:
+            raise Exception(f"Ошибка экспорта: {str(e)}")
+        finally:
+            # Всегда удаляем lock
+            if os.path.exists(lock_file):
                 try:
-                    wb.close()
+                    os.remove(lock_file)
                 except:
                     pass
-            raise Exception(f"Ошибка экспорта: {str(e)}")

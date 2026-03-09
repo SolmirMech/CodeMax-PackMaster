@@ -1,6 +1,7 @@
 # core/packaging/packaging_log_window.py
 import os
 import re
+import time
 import tkinter as tk
 from tkinter import ttk, StringVar, filedialog
 
@@ -138,15 +139,12 @@ class PackagingLogWindow:
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
 
-        """
-        пока убрал опцию, нужно решить проблему зависания
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             buttons_frame,
             text="Только первый лист",
             variable=self.only_first_sheet_var
         ).pack(side=tk.LEFT, padx=(10, 0))
-        """
 
         ttk.Button(
             buttons_frame,
@@ -254,23 +252,7 @@ class PackagingLogWindow:
 
         # Если путь есть и файл существует - используем его без диалога
         if file_path and os.path.exists(file_path):
-            self.set_status("⏳ Ожидайте, идёт импорт...")
-            self.window.update()
-
-            try:
-                imported, errors = self.manager.import_from_excel(
-                    file_path,
-                    only_first_sheet=self.only_first_sheet_var.get()
-                )
-
-                if imported > 0:
-                    self.set_status(f"✅ Импортировано записей: {imported}. Ошибок: {len(errors)}", "green")
-                    self.load_recent()
-                else:
-                    error_msg = "\n".join(errors) if errors else "Не удалось импортировать данные"
-                    self.set_status(f"❌ {error_msg}", "red")
-            except Exception as e:
-                self.set_status(f"❌ Ошибка: {str(e)}", "red")
+            self._do_import(file_path)
             return
 
         # Если нет - показываем диалог выбора
@@ -282,11 +264,69 @@ class PackagingLogWindow:
         if not file_path:
             return
 
-        try:
-            self.set_status("⏳ Ожидайте, идёт импорт...")
-            self.window.update()
+        self._do_import(file_path)
 
-            imported, errors = self.manager.import_from_excel(file_path)
+    def _do_import(self, file_path):
+        """Внутренний метод импорта с прогрессом"""
+        # Создаём окно прогресса
+        progress_window = tk.Toplevel(self.window)
+        progress_window.title("Импорт из Excel")
+        progress_window.geometry("400x150")
+        progress_window.transient(self.window)
+        progress_window.grab_set()
+
+        # Центрируем
+        progress_window.update_idletasks()
+        x = self.window.winfo_x() + (self.window.winfo_width() - 400) // 2
+        y = self.window.winfo_y() + (self.window.winfo_height() - 150) // 2
+        progress_window.geometry(f"+{x}+{y}")
+
+        # Элементы прогресса
+        ttk.Label(progress_window, text="Импорт данных из Excel", font=("Arial", 10, "bold")).pack(pady=5)
+
+        status_label = ttk.Label(progress_window, text="Подготовка...")
+        status_label.pack(pady=5)
+
+        progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
+        progress_bar.pack(pady=5, padx=20, fill=tk.X)
+        progress_bar.start(10)
+
+        # Метка для счётчика
+        counter_label = ttk.Label(progress_window, text="")
+        counter_label.pack(pady=5)
+
+        progress_window.update()
+
+        # Функция обновления прогресса
+        def update_progress(message, count):
+            if message == "complete":
+                sheets, total = count
+                progress_window.destroy()
+                self.set_status(f"✅ Импорт завершён: {sheets} листов, {total} записей", "green")
+                self.load_recent()
+            elif message == "error":
+                progress_window.destroy()
+                self.set_status(f"❌ Ошибка импорта: {count}", "red")
+            elif count is None:
+                # Начало обработки листа
+                status_label.config(text=message)
+                counter_label.config(text="")
+            else:
+                # Завершён лист
+                status_label.config(text=message)
+                counter_label.config(text=f"➕ Добавлено записей: {count}")
+            progress_window.update()
+
+        try:
+            imported, errors = self.manager.import_from_excel(
+                file_path,
+                progress_callback=update_progress,
+                only_first_sheet=self.only_first_sheet_var.get()
+            )
+
+            # Если окно ещё не закрыто (например, при ошибке)
+            if progress_window.winfo_exists():
+                progress_window.destroy()
 
             if imported > 0:
                 self.set_status(f"✅ Импортировано записей: {imported}. Ошибок: {len(errors)}", "green")
@@ -296,6 +336,8 @@ class PackagingLogWindow:
                 self.set_status(f"❌ {error_msg}", "red")
 
         except Exception as e:
+            if progress_window.winfo_exists():
+                progress_window.destroy()
             self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     def export_to_excel(self):
@@ -306,12 +348,26 @@ class PackagingLogWindow:
 
         # Если путь есть и файл существует - используем его без диалога
         if file_path and os.path.exists(file_path):
-            # Проверяем, не открыт ли файл
+            # Проверяем блокировку файла
+            lock_file = file_path + ".lock"
+            if os.path.exists(lock_file):
+                lock_age = time.time() - os.path.getmtime(lock_file)
+                if lock_age < 60:  # Менее минуты - возможно, другой экземпляр пишет
+                    self.set_status("⚠️ Файл занят другим процессом, попробуйте позже", "orange")
+                    return
+                else:
+                    # Старый lock-файл (больше минуты) - удаляем
+                    try:
+                        os.remove(lock_file)
+                    except:
+                        pass
+
+            # Проверяем, не открыт ли файл в Excel
             try:
                 with open(file_path, 'r+b'):
                     pass  # Файл доступен
             except (PermissionError, OSError):
-                self.set_status("⚠️ Внимание: файл открыт в Exel, экспорт прерван", "orange")
+                self.set_status("⚠️ Внимание: файл открыт в Excel, экспорт прерван", "orange")
                 return
 
             self.set_status("⏳ Экспорт...")

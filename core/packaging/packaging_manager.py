@@ -35,56 +35,52 @@ class PackagingManager:
         return self.data_manager.mark_as_exported(entry_ids)
 
     # === Методы Excel ===
-    def import_from_excel(self, file_path, only_first_sheet=True):
+    # noinspection SpellCheckingInspection
+    def import_from_excel(self, file_path, progress_callback=None, only_first_sheet=True):
         """
-        Импорт из Excel с валидацией.
-        Импортированные записи сразу помечаются как экспортированные.
+        Импорт из Excel с валидацией и прогрессом
 
         Args:
             file_path: путь к файлу
+            progress_callback: функция для обновления прогресса
             only_first_sheet: если True - импорт только из первого листа
 
         Returns:
             tuple: (imported_count, errors_list)
         """
-        # Получаем все записи из Excel (включая потенциально ошибочные)
-        total_found, errors, all_entries = PackagingExcel.import_from_excel(
-            file_path,
-            only_first_sheet=only_first_sheet
-        )
+        imported = 0
+        all_errors = []
+        imported_ids = []
 
-        if not all_entries:
-            return 0, errors or ["Нет данных для импорта"]
-
-        # Фильтруем только валидные записи
-        valid_entries = []
-        validation_errors = []
-
-        for idx, entry in enumerate(all_entries, 1):
+        def save_entry(entry):
+            nonlocal imported, all_errors, imported_ids
+            # Валидируем
             entry_errors = self._validate_entry(entry)
             if entry_errors:
-                validation_errors.append(f"Запись {idx}: {', '.join(entry_errors)}")
-            else:
-                valid_entries.append(entry)
+                all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
+                return
 
-        # Сохраняем валидные записи и сразу помечаем как экспортированные
-        imported = 0
-        imported_ids = []
-        for entry in valid_entries:
+            # Сохраняем
             try:
                 entry_id = self.data_manager.add_entry(entry)
                 imported_ids.append(entry_id)
                 imported += 1
             except Exception as e:
-                validation_errors.append(f"Ошибка сохранения записи: {str(e)}")
+                all_errors.append(f"Ошибка сохранения записи: {str(e)}")
 
-        # Помечаем все импортированные записи как экспортированные
+        # Запускаем импорт с callback'ами
+        total_found, errors = PackagingExcel.import_from_excel(
+            file_path,
+            db_callback=save_entry,
+            progress_callback=progress_callback,
+            only_first_sheet=only_first_sheet
+        )
+
+        # Помечаем как экспортированные
         if imported_ids:
             self.data_manager.mark_as_exported(imported_ids)
 
-        # Объединяем все ошибки
-        all_errors = errors + validation_errors
-
+        all_errors.extend(errors)
         return imported, all_errors
 
     @staticmethod
