@@ -154,6 +154,7 @@ class PDFTemplateFiller:
         "Нетто:": "$netto",
         "Кол-во этикеток:": "$rol",
         "—": "$roul_num",
+        "№ съема /№ ролика:": "$batch_num",
     }    
     
     def __init__(self, template_path: str):

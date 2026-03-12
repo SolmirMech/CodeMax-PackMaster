@@ -548,7 +548,7 @@ class RollLabelPrinter:
         self.batch_label = ttk.Label(data_frame, text="№ съёма:")
         self.batch_label.grid(row=7, column=1, sticky="w", pady=3)
         self.batch_entry = ttk.Entry(data_frame, textvariable=self.batch_num_var, width=6)
-        self.batch_entry.grid(row=7, column=1, padx=(100, 0), pady=3, sticky="w")
+        self.batch_entry.grid(row=7, column=1, padx=(115, 0), pady=3, sticky="w")
 
         # № ролика
         self.roll_label = ttk.Label(data_frame, text="№ ролика:")
@@ -1302,16 +1302,12 @@ class RollLabelPrinter:
             # Цех 1 - скрываем поля
             self.batch_label.grid_remove()
             self.batch_entry.grid_remove()
-            self.roll_label.grid_remove()
-            self.roll_entry.grid_remove()
             self.roll_length_label.grid_remove()
             self.roll_length_entry.grid_remove()
         else:  # цех 2
             # Цех 2 - показываем все поля
             self.batch_label.grid()
             self.batch_entry.grid()
-            self.roll_label.grid()
-            self.roll_entry.grid()
             self.roll_length_label.grid()
             self.roll_length_entry.grid()
             
@@ -1392,6 +1388,9 @@ class RollLabelPrinter:
                     self.label_length_entry.grid()
                     self.emission_label.grid()
                     self.emission_entry.grid()
+                    self.roll_label.grid()
+                    self.roll_entry.grid()
+
                 else:
                     self.winding_label.grid_remove()
                     self.winding_entry.grid_remove()
@@ -1405,6 +1404,8 @@ class RollLabelPrinter:
                     self.label_length_entry.grid_remove()
                     self.emission_label.grid_remove()
                     self.emission_entry.grid_remove()
+                    self.roll_label.grid_remove()
+                    self.roll_entry.grid_remove()
                     
                     
         except Exception as e:
