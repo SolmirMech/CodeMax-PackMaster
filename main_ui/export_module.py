@@ -9,6 +9,7 @@ class ExportModule:
     """Модуль управления экспортом в Excel"""
     
     def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
+        self.multitype_frame = None
         self.excel_preview_module = None
         self.pallet_num_entry = None
         self.pallet_label = None
@@ -188,6 +189,7 @@ class ExportModule:
         """Создает секцию экспорта в Лист Много видов"""
         multitype_frame = ttk.LabelFrame(parent, text="Упак.лист Много видов", padding=10)
         multitype_frame.pack(fill=tk.X, pady=(0, 10))
+        self.multitype_frame = multitype_frame
         
         # Конфигурация колонок
         multitype_frame.columnconfigure(0, weight=1)
@@ -216,23 +218,37 @@ class ExportModule:
             width=18,
             style="Accent.TButton"
         ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
-        
+
     def _update_section_titles(self):
-        """Обновляет названия разделов в зависимости от цеха"""
+        """Обновляет названия разделов в зависимости от цеха и наличия веса"""
         workshop = self.coordinator.get_workshop()
-        
+
+        # Проверяем статус веса через координатор
+        has_weight = False
+        if hasattr(self.coordinator, 'get_weight_status'):
+            has_weight = self.coordinator.get_weight_status()
+
         if workshop == "1":
-            box_title = "Упак.лист на коробку"
-            pallet_title = "Упак.лист на поддон"
+            if has_weight:
+                box_title = "Упак.лист на коробку"
+                pallet_title = "Упак.лист на поддон"
+                multitype_title = "Упак.лист Много видов"
+            else:
+                box_title = "Упак.лист ПоддонРолики"
+                pallet_title = "Упак.лист поддон БезВеса"
+                multitype_title = "Упак.лист Много видов (без веса)"
         else:  # цех 2
             box_title = "Упак.лист на поддон"
             pallet_title = "Упак.лист Список поддонов"
-        
+            multitype_title = "Упак.лист Много видов"
+
         # Обновляем текст напрямую
         if hasattr(self, 'box_frame'):
             self.box_frame.config(text=box_title)
         if hasattr(self, 'pallet_frame'):
             self.pallet_frame.config(text=pallet_title)
+        if hasattr(self, 'multitype_frame'):
+            self.multitype_frame.config(text=multitype_title)
 
     def show_multitype_preview(self):
         """Открывает предпросмотр для листа 'Много видов'"""

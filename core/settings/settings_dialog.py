@@ -588,8 +588,12 @@ class SettingsDialog:
             # Сохраняем остальные настройки
             shared_settings = self.config_manager.load_json_settings("shared_utils.json")
 
-            # Путь к файлу журнала упаковки
-            shared_settings["packaging_log_file"] = self.packaging_log_file
+            # Путь к файлу журнала упаковки - сохраняем существующий, если не был изменён
+            if self.packaging_log_file:
+                shared_settings["packaging_log_file"] = self.packaging_log_file
+            elif "packaging_log_file" not in shared_settings:
+                # Если нет ни в памяти, ни в файле - оставляем пустым
+                shared_settings["packaging_log_file"] = ""
 
             # Номер заказа
             shared_settings["order_number"] = {
@@ -609,7 +613,7 @@ class SettingsDialog:
             shared_settings["workshop"] = workshop
             self.coordinator.set_workshop(workshop)
 
-            # === ДОБАВЛЯЕМ СОХРАНЕНИЕ ПУТЕЙ ===
+            # Сохраняем пути к папкам
             shared_settings["weight_data_base"] = self.xml_folder_path.get()
             if self.excel_folder_path:
                 shared_settings["weight_orders_xlsx"] = self.excel_folder_path
@@ -626,7 +630,7 @@ class SettingsDialog:
         except Exception as e:
             self.last_status = f"❌ Ошибка сохранения общих настроек: {str(e)}"
             return False
-    
+
     def set_status_callback(self, callback):
         """Устанавливает колбэк для обновления статуса"""
         self.status_callback = callback
@@ -653,12 +657,16 @@ class SettingsDialog:
                 excel_path = str(self.config_manager.data_dir)
             self.excel_folder_path = excel_path
 
+            # Загружаем путь к файлу журнала упаковки
+            self.packaging_log_file = settings.get("packaging_log_file", "")
+
             self.update_folder_status()
 
         except Exception as e:
             print(f"Ошибка чтения shared_utils.json: {e}")
             self.xml_folder_path.set(str(self.config_manager.data_dir))
             self.excel_folder_path = str(self.config_manager.data_dir)
+            self.packaging_log_file = ""
 
     def select_xml_folder(self):
         """Выбирает папку для XML файлов"""
