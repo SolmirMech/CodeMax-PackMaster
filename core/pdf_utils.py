@@ -164,6 +164,7 @@ class PDFTemplateFiller:
         self.doc = None
         self.zoom_level = 1.5
         self.font_settings = None
+        self._current_printer_dpi = None
         
         # Кэш для оптимизации
         self._preview_cache = OrderedDict()  # ключ -> (weakref, timestamp)
@@ -352,9 +353,10 @@ class PDFTemplateFiller:
         
         return positions
 
-    def render_page_with_data(self, data_map: Dict[str, str], for_print: bool = False) -> Image.Image:
+    def render_page_with_data(self, data_map: Dict[str, str], for_print: bool = False, printer_dpi: int = 300) -> Image.Image:
         """Рендерит страницу PDF с подставленными данными (оптимизированная версия)"""
         with self._lock:
+            self._current_printer_dpi = printer_dpi if for_print else None
             if not self.doc:
                 self.open_template()
             
@@ -372,7 +374,7 @@ class PDFTemplateFiller:
             cache_key = self._generate_cache_key(data_map, for_print)
             
             # Пытаемся получить из кэша
-            base_img = self._get_from_cache(cache_key, for_print)
+            base_img = self._precache_page_image(for_print=for_print, printer_dpi=printer_dpi)
             
             if base_img is None:
                 # Очищаем мертвые ссылки
@@ -433,7 +435,7 @@ class PDFTemplateFiller:
             
             return base_img
         
-    def _precache_page_image(self, for_print=False):
+    def _precache_page_image(self, for_print=False, printer_dpi=300):
         """Предварительно рендерит страницу и кэширует изображение"""
         if not self.doc:
             return None
@@ -441,7 +443,7 @@ class PDFTemplateFiller:
         page = self.doc[0]
         
         if for_print:
-            dpi = 300
+            dpi = printer_dpi
             mat = fitz.Matrix(dpi/72, dpi/72)
         else:
             # Для превью используем увеличение, как в оригинале
@@ -778,20 +780,34 @@ class PDFTemplateFiller:
             text_y = start_y + (i * line_height)
 
             draw.text((text_x, text_y), line, fill='black', font=font)
-    
+
     def _get_font_size_from_settings(self, field_type: str, for_print: bool) -> int:
         """Получает размер шрифта из настроек"""
         if not self.font_settings:
             return 18
-            
-        setting_type = "print" if for_print else "preview"     
-        
-        # Ищем настройку для конкретного поля
+
+        if for_print:
+            # Получаем preview размер
+            preview_size = self._get_preview_size_from_settings(field_type)
+            # Используем сохраненный DPI принтера или значение по умолчанию
+            printer_dpi = getattr(self, '_current_printer_dpi', 300)
+            preview_dpi = 72 * self.zoom_level  # 108
+            # Пересчитываем размер для печати
+            return int(preview_size * (printer_dpi / preview_dpi))
+        else:
+            return self._get_preview_size_from_settings(field_type)
+
+    def _get_preview_size_from_settings(self, field_type: str) -> int:
+        """Получает размер шрифта для предпросмотра из настроек"""
+        if not self.font_settings:
+            return 18
+
+        # Ищем в настройках поля
         if field_type in self.font_settings:
-            return self.font_settings[field_type].get(setting_type, 18)
-        
-        # Если поле не найдено, используем настройку "other"
-        return self.font_settings.get("other", {}).get(setting_type, 18)
+            return self.font_settings[field_type].get("preview", 18)
+
+        # Если поле не найдено, используем "other"
+        return self.font_settings.get("other", {}).get("preview", 18)
     
     @staticmethod
     def _get_font(font_size: int, style: str = 'normal', font_family: str = "Arial"):
@@ -842,10 +858,10 @@ class PDFTemplateFiller:
     def generate_preview(self, data_map: Dict[str, str]) -> Image.Image:
         """Генерирует изображение для предпросмотра"""
         return self.render_page_with_data(data_map, for_print=False)
-    
-    def generate_print_image(self, data_map: Dict[str, str]) -> Image.Image:
-        """Генерирует изображение для печати"""
-        return self.render_page_with_data(data_map, for_print=True)
+
+    def generate_print_image(self, data_map: Dict[str, str], printer_dpi: int = 300) -> Image.Image:
+        """Генерирует изображение для печати с указанным DPI"""
+        return self.render_page_with_data(data_map, for_print=True, printer_dpi=printer_dpi)
     
     def close(self):
         """Закрывает документ"""

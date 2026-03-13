@@ -249,7 +249,7 @@ class PrintModule:
     def print_current_item(self, stream_count):
         """Печатает текущий элемент после обновления данных"""
         try:
-            # Получаем множитель из copies_var (то, что ввел пользователь)
+            # Получаем множитель из copies_var
             copies_var_value = self.copies_var.get().strip()
             copies_multiplier = int(copies_var_value) if copies_var_value else 1
 
@@ -259,24 +259,27 @@ class PrintModule:
             # Получаем принтер в зависимости от типа этикетки
             if self.selected_preview == "roll":
                 printer_name = self._get_printer("roll")
-            else:  # box
+            else:
                 printer_name = self._get_printer("box")
 
             if not printer_name:
                 self.print_status_label.config(text="Принтер не найден!", foreground="red")
                 return
 
+            printer_dpi = self._get_printer_dpi(printer_name)
+
             if self.selected_preview == "roll":
                 data_map = self.preview_module._prepare_roll_data_map()
-                print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+                print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map,
+                                                                                       printer_dpi=printer_dpi)
                 pdf_filler = self.preview_module.roll_pdf_filler
             else:
                 data_map = self.preview_module._prepare_box_data_map()
-                print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+                print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map, printer_dpi=printer_dpi)
                 pdf_filler = self.preview_module.box_pdf_filler
 
             for i in range(total_copies):
-                self._print_image_gdi(print_image, printer_name, pdf_filler)
+                self._print_image_gdi(print_image, printer_name, pdf_filler, printer_dpi)
 
             # Следующий вид
             self.current_batch_index += 1
@@ -353,54 +356,46 @@ class PrintModule:
                 self.print_status_label.config(text="Принтеры не найдены!", foreground="red")
                 return
 
+            # Получаем DPI принтеров
+            roll_printer_dpi = self._get_printer_dpi(roll_printer)
+            box_printer_dpi = self._get_printer_dpi(box_printer)
+
             # === печать роликов (rolls_count = 1) ===
-            # Временно ставим 1 ролик для печати этикеток роликов
             self.connected_roll_module.rolls_count_var.set("1")
             self.connected_roll_module.calculate_total_quantity()
-
-            # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
 
-            # Готовим данные для ролика (rolls_count = 1)
             data_map = self.preview_module._prepare_roll_data_map()
-            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map,
+                                                                                   printer_dpi=roll_printer_dpi)
 
-            # Печатаем N копий ролика на принтере для роликов
             for i in range(copies):
-                self._print_image_gdi(print_image, roll_printer, self.preview_module.roll_pdf_filler)
+                self._print_image_gdi(print_image, roll_printer, self.preview_module.roll_pdf_filler, roll_printer_dpi)
 
             # === Печать коробки (rolls_count = copies) ===
-            # Меняем rolls_count на copies для коробки
             self.connected_roll_module.rolls_count_var.set(str(copies))
-            # Пересчитываем общее количество мимо таймера
             self.connected_roll_module.force_recalculate_total()
-
-            # Принудительно обновляем данные в preview_module
             self.preview_module._update_from_connected_roll_module()
 
-            # Готовим данные для коробки (rolls_count = copies)
             box_data_map = self.preview_module._prepare_box_data_map()
-            box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map)
+            box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map,
+                                                                                      printer_dpi=box_printer_dpi)
 
-            # Печатаем одну коробку на принтере для коробок
-            self._print_image_gdi(box_print_image, box_printer, self.preview_module.box_pdf_filler)
+            self._print_image_gdi(box_print_image, box_printer, self.preview_module.box_pdf_filler, box_printer_dpi)
 
             # === Восстанавливаем оригинальное значение ===
             self.connected_roll_module.rolls_count_var.set(original_rolls_count)
             self.connected_roll_module.calculate_total_quantity()
             self.preview_module._update_from_connected_roll_module()
 
-            # === Статус завершения ===
             self.set_status(f"✅ Печать завершена: {copies} роликов + 1 коробка", "green")
 
         except Exception as e:
-            # Восстанавливаем в случае ошибки
             if self.connected_roll_module is not None and 'original_rolls_count' in locals():
                 self.connected_roll_module.rolls_count_var.set(original_rolls_count)
                 self.connected_roll_module.calculate_total_quantity()
                 if self.preview_module is not None:
                     self.preview_module._update_from_connected_roll_module()
-
             self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")
 
     def print_label(self):
@@ -518,7 +513,7 @@ class PrintModule:
         # Выбираем принтер в зависимости от типа этикетки
         if self.selected_preview == "roll":
             printer_name = self._get_printer("roll")
-        else:  # box
+        else:
             printer_name = self._get_printer("box")
 
         if not printer_name:
@@ -526,17 +521,19 @@ class PrintModule:
             self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
             return
 
+        printer_dpi = self._get_printer_dpi(printer_name)
+
         if self.selected_preview == "roll":
             data_map = self.preview_module._prepare_roll_data_map()
-            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map)
+            print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map, printer_dpi=printer_dpi)
             pdf_filler = self.preview_module.roll_pdf_filler
         else:
             data_map = self.preview_module._prepare_box_data_map()
-            print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map)
+            print_image = self.preview_module.box_pdf_filler.generate_print_image(data_map, printer_dpi=printer_dpi)
             pdf_filler = self.preview_module.box_pdf_filler
 
         for i in range(copies):
-            self._print_image_gdi(print_image, printer_name, pdf_filler)
+            self._print_image_gdi(print_image, printer_name, pdf_filler, printer_dpi)
 
     @staticmethod
     def _parse_range(range_str):
@@ -594,56 +591,59 @@ class PrintModule:
             return None
 
     @staticmethod
-    def _print_image_gdi(img: Image.Image, printer_name: str, pdf_filler):
-        """печатает изображение через GDI с размерами из PDF шаблона"""
+    def _print_image_gdi(img: Image.Image, printer_name: str, pdf_filler, printer_dpi: int = 300):
+        """Улучшенная печать с сохранением качества"""
         try:
-            # создаём контекст устройства для принтера
             hdc = win32ui.CreateDC()
             hdc.CreatePrinterDC(printer_name)
 
-            if not hdc:
-                raise Exception(f"не удалось создать контекст устройства для: {printer_name}")
-
-            # получаем разрешение принтера в dpi
-            printer_dpi_x = hdc.GetDeviceCaps(88)  # LOGPIXELSX
-            printer_dpi_y = hdc.GetDeviceCaps(90)  # LOGPIXELSY
-
-            # получаем размер этикетки из PDF шаблона
+            # Получаем размер этикетки в мм
             width_mm, height_mm = pdf_filler.get_template_size_mm()
-            if width_mm <= 0 or height_mm <= 0:
-                raise Exception(f"не удалось получить размер из PDF шаблона")
 
-            # конвертируем миллиметры в пиксели с учётом DPI принтера
-            paper_width_pixels = int(width_mm / 25.4 * printer_dpi_x)
-            paper_height_pixels = int(height_mm / 25.4 * printer_dpi_y)
+            # Рассчитываем целевой размер в пикселях
+            target_width = int(width_mm / 25.4 * printer_dpi)
+            target_height = int(height_mm / 25.4 * printer_dpi)
 
-            # рассчитываем масштаб для вписывания изображения в размер этикетки
-            img_width, img_height = img.size
-            scale_x = paper_width_pixels / img_width
-            scale_y = paper_height_pixels / img_height
-            scale = min(scale_x, scale_y)
+            # Если изображение уже имеет нужный размер - используем как есть
+            if img.size != (target_width, target_height):
+                # Ресайзим с высоким качеством
+                img = img.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS
+                )
 
-            new_width = int(img_width * scale)
-            new_height = int(img_height * scale)
-
-            # центрируем изображение на листе
-            x_offset = (paper_width_pixels - new_width) // 2
-            y_offset = (paper_height_pixels - new_height) // 2
-
-            # отправляем на печать
             doc_name = "Label Print"
             hdc.StartDoc(doc_name)
             hdc.StartPage()
 
             from PIL import ImageWin
+
+            # Конвертируем в режим с высоким качеством
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
             dib = ImageWin.Dib(img)
-            dib.draw(hdc.GetHandleOutput(), (x_offset, y_offset, x_offset + new_width, y_offset + new_height))
+            # Печатаем на всю область
+            dib.draw(hdc.GetHandleOutput(), (0, 0, target_width, target_height))
 
             hdc.EndPage()
             hdc.EndDoc()
+            hdc.DeleteDC()
 
         except Exception as e:
-            raise Exception(f"ошибка печати GDI: {str(e)}")
+            raise Exception(f"Ошибка печати: {str(e)}")
+
+    @staticmethod
+    def _get_printer_dpi(printer_name: str) -> int:
+        """Получает DPI принтера"""
+        try:
+            hdc = win32ui.CreateDC()
+            hdc.CreatePrinterDC(printer_name)
+            dpi_x = hdc.GetDeviceCaps(88)  # LOGPIXELSX
+            hdc.DeleteDC()
+            return dpi_x
+        except:
+            return 300
 
     def call_roll_module_method(self, method_name, *args, **kwargs):
         """Универсальный метод для вызовов методов подключенного модуля ролика"""
