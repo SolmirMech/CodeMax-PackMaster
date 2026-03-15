@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+import chardet
 
 # Импорт существующего парсера
 from core.parse.xml_order_parser import parse_xml
@@ -49,6 +50,8 @@ class XMLDataManager:
         self._solmark_orders = set()       # Solmark заказы (ID 321)
         self._multi_customer_orders = []       # Заказы с множественными заказчиками
         self._processed_files = 0          # Счетчик обработанных файлов
+        self._diameter_orders = set()  # Заказы с diameter_mm и оттисков > 1
+        self._labels_per_roll_orders = set()  # Заказы с max_labels_per_roll и оттисков > 1
         
         # Атрибуты для управления потоками
         self._readers_count = 0             # Счётчик активных читателей
@@ -111,7 +114,6 @@ class XMLDataManager:
 
     def _notify_status(self, message: str):
         """Отправляет статусное сообщение в UI"""
-        import threading
 
         if not self.status_callback:
             return
@@ -293,7 +295,6 @@ class XMLDataManager:
                 except UnicodeDecodeError:
                     # Пробуем другие кодировки
                     try:
-                        import chardet
                         encoding = chardet.detect(raw_data)['encoding'] or 'windows-1251'
                         content = raw_data.decode(encoding)
                     except:
@@ -354,6 +355,27 @@ class XMLDataManager:
                 'selected_customer': customer_info.get('customer', ''),
                 'selection_method': customer_info.get('selection_method', '')
             })
+
+        # 4. Статистика по diameter_mm и max_labels_per_roll
+        # Проверяем количество уникальных оттисков
+        operations = parsed_data.get('operations', {})
+        unique_sheets = set()
+
+        # Собираем уникальные номера оттисков
+        for product in products:
+            sheet_num = product.get('sheet_number', '')
+            if sheet_num:
+                unique_sheets.add(sheet_num)
+
+        # Если оттисков больше одного, проверяем наличие нужных параметров
+        if len(unique_sheets) > 1:
+            # Проверяем наличие diameter_mm
+            if operations.get('diameter_mm'):
+                self._diameter_orders.add(order_number)
+
+            # Проверяем наличие max_labels_per_roll
+            if operations.get('max_labels_per_roll'):
+                self._labels_per_roll_orders.add(order_number)
         
         # Увеличиваем счетчик (БЕЗ промежуточного логирования)
         self._processed_files += 1
@@ -416,6 +438,24 @@ class XMLDataManager:
                     logging.info(f"  {order_num}: выбрано '{selected}' из {all_count} (метод: {method})")              
                 
                 logging.info("")  # Пустая строка
+
+            # 4. Заказы с diameter_mm (более одного оттиска)
+            if len(self._diameter_orders) > 0:
+                diameter_with_customers = self._get_orders_with_customers(self._diameter_orders)
+                self._log_compact_list(
+                    title="Заказы с diameter_mm (оттисков > 1)",
+                    items=diameter_with_customers,
+                    items_per_line=5
+                )
+
+            # 5. Заказы с max_labels_per_roll (более одного оттиска)
+            if len(self._labels_per_roll_orders) > 0:
+                labels_with_customers = self._get_orders_with_customers(self._labels_per_roll_orders)
+                self._log_compact_list(
+                    title="Заказы с max_labels_per_roll (оттисков > 1)",
+                    items=labels_with_customers,
+                    items_per_line=5
+                )
             
             # Общая статистика
             logging.info(f"Обработано файлов: {self._processed_files}")
@@ -425,7 +465,11 @@ class XMLDataManager:
                 logging.info(f"Solmark заказов: {len(self._solmark_orders)}")
             if has_multi_customer:
                 logging.info(f"Заказов с множественными заказчиками: {len(self._multi_customer_orders)}")
-            
+            # Статистика по оттискам
+            if len(self._diameter_orders) > 0:
+                logging.info(f"Заказов с diameter_mm (>1 оттиска): {len(self._diameter_orders)}")
+            if len(self._labels_per_roll_orders) > 0:
+                logging.info(f"Заказов с max_labels_per_roll (>1 оттиска): {len(self._labels_per_roll_orders)}")
             logging.info("=" * 70)
             logging.info("")  # Пустая строка для разделения
             
@@ -719,7 +763,9 @@ class XMLDataManager:
     def _collect_statistics_for_file(parsed_data: Dict[str, Any],
                                      emission_set: set,
                                      solmark_set: set,
-                                     multi_customer_list: list):
+                                     multi_customer_list: list,
+                                     diameter_set: set,
+                                     labels_set: set):
         """
         Собирает статистику для одного файла в указанные коллекции.
         
@@ -755,6 +801,22 @@ class XMLDataManager:
                 'selected_customer': customer_info.get('customer', ''),
                 'selection_method': customer_info.get('selection_method', '')
             })
+
+        # 4. Статистика по diameter_mm и max_labels_per_roll
+        products = parsed_data.get('products', [])
+        operations = parsed_data.get('operations', {})
+        unique_sheets = set()
+
+        for product in products:
+            sheet_num = product.get('sheet_number', '')
+            if sheet_num:
+                unique_sheets.add(sheet_num)
+
+        if len(unique_sheets) > 1:
+            if operations.get('diameter_mm'):
+                diameter_set.add(order_number)
+            if operations.get('max_labels_per_roll'):
+                labels_set.add(order_number)
     
     def _check_xml_source_available(self) -> bool:
         """
@@ -763,7 +825,6 @@ class XMLDataManager:
         Returns:
             True если источник доступен, False если недоступен
         """
-        import threading
         
         def check_folder():
             try:
@@ -1001,6 +1062,8 @@ class XMLDataManager:
                     new_solmark_orders = set()           # Solmark заказы (ID 321)
                     new_multi_customer_orders = []       # Заказы с множественными заказчиками
                     processed_files = 0                  # Счётчик обработанных файлов
+                    new_diameter_orders = set()
+                    new_labels_per_roll_orders = set()
                     
                     # Сканирование файловой системы
                     xml_files = list(self.xml_folder.glob("*.xml"))
@@ -1045,7 +1108,9 @@ class XMLDataManager:
                                         parsed_data=parsed_data,
                                         emission_set=new_emission_orders,
                                         solmark_set=new_solmark_orders,
-                                        multi_customer_list=new_multi_customer_orders
+                                        multi_customer_list=new_multi_customer_orders,
+                                        diameter_set=new_diameter_orders,  # новый
+                                        labels_set=new_labels_per_roll_orders  # новый
                                     )
 
                         except (PermissionError, FileNotFoundError) as e:
@@ -1065,6 +1130,8 @@ class XMLDataManager:
                         self._solmark_orders = new_solmark_orders
                         self._multi_customer_orders = new_multi_customer_orders
                         self._processed_files = processed_files
+                        self._diameter_orders = new_diameter_orders
+                        self._labels_per_roll_orders = new_labels_per_roll_orders
                         
                         # Логирование итоговой статистики (всегда в файл)
                         self._log_collected_statistics("обновление")
