@@ -60,7 +60,7 @@ class PackagingManager:
         all_errors = []
         imported_ids = []
 
-        def save_entry(entry):
+        def save_entry(entry, sheet_name):
             nonlocal imported, all_errors, imported_ids
             # Валидируем
             entry_errors = self._validate_entry(entry)
@@ -70,6 +70,7 @@ class PackagingManager:
 
             # ВАЖНО: добавляем source_type
             entry['source_type'] = 'excel'
+            entry['source_sheet'] = sheet_name
 
             # Сохраняем
             try:
@@ -148,16 +149,17 @@ class PackagingManager:
 
         return exported_count
 
-    @staticmethod
-    def export_entries_to_excel(entries, file_path):
+    # noinspection PyIncorrectDocstring,PyUnusedLocal,PyMethodMayBeStatic
+    def export_entries_to_excel(self, entries_by_sheet, template_path, output_path):
         """
-        Экспортирует список записей в Excel файл
+        Экспортирует записи в Excel файл с сохранением структуры листов
 
         Args:
-            entries: список записей
-            file_path: путь к файлу (уже должен существовать)
+            entries_by_sheet: словарь {имя_листа: [список_записей]}
+            template_path: путь к файлу-шаблону
+            output_path: путь для сохранения результата
 
         Returns:
             int: количество экспортированных записей
         """
-        return PackagingExcel.export_entries(file_path, entries)
+        return PackagingExcel.export_entries(entries_by_sheet, template_path, output_path)

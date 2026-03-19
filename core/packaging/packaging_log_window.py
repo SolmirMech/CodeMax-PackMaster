@@ -13,6 +13,7 @@ class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
     def __init__(self, parent, config_manager, order_processor=None):
+        self.rare_button = None
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         self.packaging_log_file = None
         self.status_label = None
@@ -134,38 +135,49 @@ class PackagingLogWindow:
 
         ttk.Button(
             buttons_frame,
-            text="🗑️ Удалить журнал",
-            command=self.clear_database,
-            width=18
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        ttk.Button(
-            buttons_frame,
-            text="🔄 Восстановить журнал",
-            command=self.restore_journal,
-            width=18
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        ttk.Button(
-            buttons_frame,
-            text="📥 Импорт из Excel",
-            command=self.import_from_excel,
-            width=18
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        self.only_first_sheet_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            buttons_frame,
-            text="Только первый лист",
-            variable=self.only_first_sheet_var
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        ttk.Button(
-            buttons_frame,
             text="📤 Экспорт в Excel",
             command=self.export_to_excel,
             width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
+
+        # Кнопка "Редкие функции"
+        self.rare_button = ttk.Menubutton(
+            buttons_frame,
+            text="⚙️ Редкие функции",
+            width=18
+        )
+        self.rare_button.pack(side=tk.LEFT, padx=(10, 0))
+
+        # Создаем меню для редких функций
+        rare_menu = tk.Menu(self.rare_button, tearoff=0)
+        self.rare_button.configure(menu=rare_menu)
+
+        # Добавляем пункты в меню
+        rare_menu.add_command(
+            label="📥 Импорт из Excel",
+            command=self.import_from_excel
+        )
+
+        # Подменю для импорта с галочкой
+        import_submenu = tk.Menu(rare_menu, tearoff=0)
+        self.only_first_sheet_var = tk.BooleanVar(value=True)
+        import_submenu.add_checkbutton(
+            label="Только первый лист",
+            variable=self.only_first_sheet_var
+        )
+        rare_menu.add_cascade(label="Настройки импорта", menu=import_submenu)
+
+        rare_menu.add_separator()
+
+        rare_menu.add_command(
+            label="🗑️ Удалить журнал",
+            command=self.clear_database
+        )
+
+        rare_menu.add_command(
+            label="🔄 Восстановить журнал",
+            command=self.restore_journal
+        )
 
         # Статусная строка - теперь сверху
         status_frame = ttk.Frame(self.window, height=25)
@@ -241,9 +253,8 @@ class PackagingLogWindow:
 
     def restore_journal(self):
         """Восстанавливает журнал из БД в новый Excel файл"""
-
-        entries = self.manager.get_restorable_entries()
-        if not entries:
+        entries_by_sheet = self.manager.get_restorable_entries()
+        if not entries_by_sheet:
             self.set_status("📭 Нет записей для восстановления", "blue")
             return
 
@@ -254,33 +265,45 @@ class PackagingLogWindow:
             self.set_status("❌ Шаблон журнала не найден", "red")
             return
 
-        try:
-            import shutil
-            shutil.copy2(template, new_file)
+        # Создаём окно прогресса
+        progress_window = tk.Toplevel(self.window)
+        progress_window.title("Восстановление журнала")
+        progress_window.geometry("400x120")
+        progress_window.transient(self.window)
+        progress_window.grab_set()
 
-            exported = self.manager.export_entries_to_excel(entries, new_file)
+        # Центрируем
+        progress_window.update_idletasks()
+        x = self.window.winfo_x() + (self.window.winfo_width() - 400) // 2
+        y = self.window.winfo_y() + (self.window.winfo_height() - 120) // 2
+        progress_window.geometry(f"+{x}+{y}")
+
+        ttk.Label(progress_window, text="Восстановление записей в Excel", font=("Arial", 10, "bold")).pack(pady=10)
+
+        progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
+        progress_bar.pack(pady=10, padx=20, fill=tk.X)
+        progress_bar.start(10)
+
+        status_label = ttk.Label(progress_window, text="Подготовка...")
+        status_label.pack(pady=5)
+
+        progress_window.update()
+
+        try:
+            # Запускаем восстановление
+            exported = self.manager.export_entries_to_excel(entries_by_sheet, template, new_file)
+
+            progress_window.destroy()
 
             if exported > 0:
                 self.set_status(f"✅ Журнал восстановлен: {new_file}", "green")
-
-                # Получаем путь из настроек
-                settings_path = self.config_manager.get_packaging_log_path()
-
-                if settings_path and os.path.exists(os.path.dirname(settings_path)):
-                    # Папка из настроек существует - открываем её
-                    folder_to_open = os.path.dirname(settings_path)
-                else:
-                    # Папки из настроек нет - открываем data_dir
-                    folder_to_open = self.config_manager.data_dir
-
-                # Открываем папку
-                import subprocess
-                subprocess.Popen(f'explorer "{folder_to_open}"')
-
+                folder_to_open = os.path.dirname(new_file)
+                os.startfile(folder_to_open)
             else:
                 self.set_status("❌ Ошибка при восстановлении", "red")
 
         except Exception as e:
+            progress_window.destroy()
             self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     def clear_database(self):

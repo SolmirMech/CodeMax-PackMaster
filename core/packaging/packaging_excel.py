@@ -1,11 +1,12 @@
 # core/packaging/packaging_excel.py
 import os
 import re
+import shutil
 import time
+from copy import copy
 
 import openpyxl
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
 
@@ -56,7 +57,7 @@ class PackagingExcel:
             if only_first_sheet:
                 sheets_to_process = [wb.sheetnames[0]] if wb.sheetnames else []
             else:
-                sheets_to_process = wb.sheetnames
+                sheets_to_process = list(reversed(wb.sheetnames))
 
             for sheet_idx, sheet_name in enumerate(sheets_to_process):
                 # Открываем лист
@@ -86,7 +87,7 @@ class PackagingExcel:
                         entry = PackagingExcel._row_to_entry_simple(row)
                         if entry.get('order_number') or entry.get('date'):
                             if db_callback:
-                                db_callback(entry)
+                                db_callback(entry, sheet_name)
                             sheet_imported += 1
 
                             # Каждые 50 записей - обновляем прогресс и чистим память
@@ -358,39 +359,87 @@ class PackagingExcel:
                     pass
 
     @staticmethod
-    def export_entries(file_path, entries):
-        """Экспортирует записи в Excel с правильным форматированием"""
+    def export_entries(entries_by_sheet, template_path, output_path):
+        """
+        Экспортирует записи в Excel с сохранением структуры листов
+
+        Args:
+            entries_by_sheet: словарь {имя_листа: [список_записей]}
+            template_path: путь к файлу-шаблону
+            output_path: путь для сохранения результата
+
+        Returns:
+            int: количество экспортированных записей
+        """
         try:
-            wb = load_workbook(file_path)
-            ws = wb.active
+
+            # Копируем шаблон
+            shutil.copy2(template_path, output_path)
+
+            # Открываем копию
+            wb = load_workbook(output_path)
 
             mapping = PACKAGING_EXCEL_MAPPING
             start_row = mapping["start_row"]
 
-            for i, entry in enumerate(entries):
-                row_num = start_row + i
+            total_exported = 0
 
-                for field, col_map in mapping["columns"].items():
-                    value = entry.get(field, "")
-                    col_letter = get_column_letter(col_map.column)
+            # Для каждой группы создаём свой лист
+            for sheet_idx, (sheet_name, entries) in enumerate(entries_by_sheet.items()):
+                if not entries:
+                    continue
 
-                    cell = ws[f"{col_letter}{row_num}"]
-                    cell.value = value
+                # Для первого листа используем активный, для остальных создаём новый
+                if sheet_idx == 0:
+                    ws = wb.active
+                    ws.title = sheet_name[:31]  # Ограничение длины имени листа в Excel
+                else:
+                    # Копируем структуру из первого листа
+                    ws = wb.copy_worksheet(wb.active)
+                    ws.title = sheet_name[:31]
 
-                    # Применяем стили
-                    if col_map.style.font:
-                        cell.font = col_map.style.font
-                    if col_map.style.border:
-                        cell.border = col_map.style.border
-                    if col_map.style.alignment:
-                        cell.alignment = col_map.style.alignment
-                    if col_map.style.number_format:
-                        cell.number_format = col_map.style.number_format
+                # Заполняем данными
+                for i, entry in enumerate(entries):
+                    row_num = start_row + i
 
-            wb.save(file_path)
-            return len(entries)
+                    for field, col_map in mapping["columns"].items():
+                        value = entry.get(field, "")
+
+                        # Форматируем дату
+                        if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
+                            y, m, d = str(value).split('-')
+                            value = f"{d}.{m}.{y}"
+
+                        cell = ws.cell(row=row_num, column=col_map.column)
+
+                        # Проверяем, не входит ли ячейка в объединённый диапазон
+                        skip_cell = False
+                        for merged_range in ws.merged_cells.ranges:
+                            if cell.coordinate in merged_range:
+                                skip_cell = True
+                                break
+
+                        if skip_cell:
+                            continue
+
+                        cell.value = value
+
+                        # Применяем стили из маппинга
+                        if col_map.style.font:
+                            cell.font = copy(col_map.style.font)
+                        if col_map.style.border:
+                            cell.border = copy(col_map.style.border)
+                        if col_map.style.alignment:
+                            cell.alignment = copy(col_map.style.alignment)
+                        if col_map.style.number_format:
+                            cell.number_format = col_map.style.number_format
+
+                total_exported += len(entries)
+
+            wb.save(output_path)
+            wb.close()
+            return total_exported
 
         except Exception as e:
             print(f"Ошибка экспорта в Excel: {e}")
             return 0
-

@@ -48,7 +48,7 @@ class ConfigManager:
         else:
             target_dir = self.data_dir
 
-        filename = f"packaging_log_восстановлено_{date_str}.xlsx"
+        filename = f"Восстановленный_журнал_{date_str}.xlsx"
         return os.path.join(target_dir, filename)
 
     @staticmethod

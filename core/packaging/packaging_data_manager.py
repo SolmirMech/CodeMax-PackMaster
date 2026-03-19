@@ -327,7 +327,7 @@ class PackagingDataManager:
                 conn.close()
 
     def get_restorable_entries(self):
-        """Возвращает записи для восстановления в Excel"""
+        """Возвращает записи для восстановления в Excel, сгруппированные по листам"""
         with self._readers_lock:
             self._readers_count += 1
         try:
@@ -336,16 +336,29 @@ class PackagingDataManager:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
+                # Получаем все восстанавливаемые записи
                 cursor.execute("""
                     SELECT * FROM packaging_log 
                     WHERE source_type = 'excel' OR restore_flag = 1
-                    ORDER BY id ASC
+                    ORDER BY source_sheet, source_row, id ASC
                 """)
                 rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+
+                # Группируем по листам
+                sheets_dict = {}
+                for row in rows:
+                    row_dict = dict(row)
+                    sheet_name = row_dict.get('source_sheet', '').strip()
+                    if not sheet_name:  # Если имя пустое
+                        sheet_name = "Лист1"
+                    if sheet_name not in sheets_dict:
+                        sheets_dict[sheet_name] = []
+                    sheets_dict[sheet_name].append(row_dict)
+
+                return sheets_dict
         except Exception as e:
             print(f"Ошибка в get_restorable_entries: {e}")
-            return []
+            return {}
         finally:
             with self._readers_lock:
                 self._readers_count -= 1
