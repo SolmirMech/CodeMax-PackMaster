@@ -166,18 +166,19 @@ class PackagingDataManager:
                 self._readers_count -= 1
             conn.close()
 
-    def mark_as_exported(self, entry_ids):
+    def mark_as_exported(self, entry_ids, sheet_name=None):
         """
-        Помечает записи как экспортированные
+        Помечает записи как экспортированные и сохраняет имя листа
 
         Args:
             entry_ids: список ID или одно число
+            sheet_name: имя листа, в который экспортировали
 
         Returns:
-            int: количество обновленных записей (0 если ничего не обновлено)
+            int: количество обновленных записей
         """
         if not entry_ids:
-            return 0  # Явно возвращаем 0, если нет ID
+            return 0
 
         if isinstance(entry_ids, (int, str)):
             entry_ids = [entry_ids]
@@ -188,17 +189,25 @@ class PackagingDataManager:
                     conn = sqlite3.connect(self.db_path)
                     cursor = conn.cursor()
                     placeholders = ','.join(['?'] * len(entry_ids))
-                    cursor.execute(f"""
-                        UPDATE packaging_log 
-                        SET exported = 1 
-                        WHERE id IN ({placeholders})
-                    """, entry_ids)
+
+                    if sheet_name:
+                        cursor.execute(f"""
+                            UPDATE packaging_log 
+                            SET exported = 1, source_sheet = ?, sheet_index = 0
+                            WHERE id IN ({placeholders})
+                        """, [sheet_name] + entry_ids)
+                    else:
+                        cursor.execute(f"""
+                            UPDATE packaging_log 
+                            SET exported = 1
+                            WHERE id IN ({placeholders})
+                        """, entry_ids)
+
                     conn.commit()
-                    updated = cursor.rowcount
-                    return updated  # Всегда возвращаем число
+                    return cursor.rowcount
             except Exception as e:
                 print(f"Ошибка в mark_as_exported: {e}")
-                return 0  # Возвращаем 0 при ошибке
+                return 0
             finally:
                 conn.close()
 
@@ -347,7 +356,7 @@ class PackagingDataManager:
                 cursor.execute("""
                     SELECT DISTINCT source_sheet, sheet_index 
                     FROM packaging_log 
-                    WHERE source_type = 'excel' OR restore_flag = 1
+                    WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
                     ORDER BY sheet_index ASC
                 """)
                 sheets = cursor.fetchall()
@@ -358,11 +367,12 @@ class PackagingDataManager:
                     sheet_name = sheet['source_sheet'].strip() or "Лист1"
                     sheet_index = sheet['sheet_index']
 
-                    # БЕЗ ORDER BY - записи в том порядке, в котором добавлялись
+                    # Получаем записи для этого листа
                     cursor.execute("""
                         SELECT * FROM packaging_log 
-                        WHERE (source_type = 'excel' OR restore_flag = 1)
+                        WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
                         AND source_sheet = ? AND sheet_index = ?
+                        ORDER BY id ASC
                     """, (sheet_name, sheet_index))
 
                     rows = cursor.fetchall()

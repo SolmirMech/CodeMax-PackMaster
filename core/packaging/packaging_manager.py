@@ -60,47 +60,61 @@ class PackagingManager:
         imported = 0
         all_errors = []
         imported_ids = []
+        wb = None  # Явно инициализируем
 
-        # Получаем список листов для определения индексов
-        wb = openpyxl.load_workbook(file_path, read_only=True)
-        sheet_index_map = {name: idx for idx, name in enumerate(wb.sheetnames)}
-        wb.close()
+        try:
+            # Получаем список листов для определения индексов
+            wb = openpyxl.load_workbook(file_path, read_only=True)
+            sheet_index_map = {name: idx for idx, name in enumerate(wb.sheetnames)}
+            wb.close()
+            wb = None
 
-        def save_entry(entry, sheet_name):
-            nonlocal imported, all_errors, imported_ids
-            # Валидируем
-            entry_errors = self._validate_entry(entry)
-            if entry_errors:
-                all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
-                return
+            def save_entry(entry, sheet_name):
+                nonlocal imported, all_errors, imported_ids
+                # Валидируем
+                entry_errors = self._validate_entry(entry)
+                if entry_errors:
+                    all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
+                    return
 
-            # ВАЖНО: добавляем source_type и sheet_index
-            entry['source_type'] = 'excel'
-            entry['source_sheet'] = sheet_name
-            entry['sheet_index'] = sheet_index_map.get(sheet_name, 0)  # сохраняем индекс листа
+                # ВАЖНО: добавляем source_type и sheet_index
+                entry['source_type'] = 'excel'
+                entry['source_sheet'] = sheet_name
+                entry['sheet_index'] = sheet_index_map.get(sheet_name, 0)  # сохраняем индекс листа
 
-            # Сохраняем
-            try:
-                entry_id = self.data_manager.add_entry(entry)
-                imported_ids.append(entry_id)
-                imported += 1
-            except Exception as e:
-                all_errors.append(f"Ошибка сохранения записи: {str(e)}")
+                # Сохраняем
+                try:
+                    entry_id = self.data_manager.add_entry(entry)
+                    imported_ids.append(entry_id)
+                    imported += 1
+                except Exception as e:
+                    all_errors.append(f"Ошибка сохранения записи: {str(e)}")
 
-        # Запускаем импорт с callback'ами
-        total_found, errors = PackagingExcel.import_from_excel(
-            file_path,
-            db_callback=save_entry,
-            progress_callback=progress_callback,
-            only_first_sheet=only_first_sheet
-        )
+            # Запускаем импорт с callback'ами
+            total_found, errors = PackagingExcel.import_from_excel(
+                file_path,
+                db_callback=save_entry,
+                progress_callback=progress_callback,
+                only_first_sheet=only_first_sheet
+            )
 
-        # Помечаем как экспортированные
-        if imported_ids:
-            self.data_manager.mark_as_exported(imported_ids)
+            # Помечаем как экспортированные
+            if imported_ids:
+                self.data_manager.mark_as_exported(imported_ids)
 
-        all_errors.extend(errors)
-        return imported, all_errors
+            all_errors.extend(errors)
+            return imported, all_errors
+
+        finally:
+            # Гарантированное закрытие в случае ошибки
+            if wb:
+                try:
+                    wb.close()
+                except:
+                    pass
+            # Принудительная сборка мусора
+            import gc
+            gc.collect()
 
     @staticmethod
     def _validate_entry(entry):
@@ -149,10 +163,17 @@ class PackagingManager:
         # Экспортируем
         exported_count = PackagingExcel.export_to_excel(file_path, entries)
 
-        # Помечаем как экспортированные
+        # Помечаем как экспортированные и сохраняем имя листа
         if exported_count > 0:
             entry_ids = [e['id'] for e in entries]
-            self.data_manager.mark_as_exported(entry_ids)
+
+            # Получаем имя активного листа из файла
+            wb = openpyxl.load_workbook(file_path)
+            sheet_name = wb.active.title
+            wb.close()
+
+            # Обновляем записи: проставляем exported=1 и source_sheet
+            self.data_manager.mark_as_exported(entry_ids, sheet_name)
 
         return exported_count
 

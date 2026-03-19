@@ -284,6 +284,7 @@ class PackagingExcel:
 
         mapping = PACKAGING_EXCEL_MAPPING
         lock_file = file_path + ".lock"
+        wb = None  # Явно инициализируем
 
         # Ждём освобождения, если файл заблокирован
         for attempt in range(max_retries):
@@ -342,21 +343,31 @@ class PackagingExcel:
 
                 row += 1
 
-            # Сохраняем прямо в исходный файл (не через временный)
+            # Сохраняем и закрываем
             wb.save(file_path)
             wb.close()
+            wb = None  # Явно обнуляем
 
             return len(entries)
 
         except Exception as e:
             raise Exception(f"Ошибка экспорта: {str(e)}")
         finally:
+            # Гарантированное закрытие в случае ошибки
+            if wb:
+                try:
+                    wb.close()
+                except:
+                    pass
             # Всегда удаляем lock
             if os.path.exists(lock_file):
                 try:
                     os.remove(lock_file)
                 except:
                     pass
+            # Принудительная сборка мусора
+            import gc
+            gc.collect()
 
     @staticmethod
     def export_entries(entries_by_sheet, template_path, output_path):
@@ -371,8 +382,8 @@ class PackagingExcel:
         Returns:
             int: количество экспортированных записей
         """
+        wb = None  # Явно инициализируем
         try:
-
             # Копируем шаблон
             shutil.copy2(template_path, output_path)
 
@@ -431,10 +442,24 @@ class PackagingExcel:
 
                 total_exported += len(entries)
 
+            # Сохраняем и закрываем
             wb.save(output_path)
             wb.close()
+            wb = None  # Явно обнуляем
+
+            # Принудительная сборка мусора для освобождения файла
+            import gc
+            gc.collect()
+
             return total_exported
 
         except Exception as e:
             print(f"Ошибка экспорта в Excel: {e}")
             return 0
+        finally:
+            # Гарантированное закрытие в случае ошибки
+            if wb:
+                try:
+                    wb.close()
+                except:
+                    pass
