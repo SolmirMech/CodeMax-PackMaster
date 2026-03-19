@@ -336,28 +336,12 @@ class PackagingDataManager:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                # ДИАГНОСТИКА: посмотрим всё
-                cursor.execute("SELECT COUNT(*) as total FROM packaging_log")
-                total = cursor.fetchone()['total']
-                print(f"Всего записей в БД: {total}")
-
-                cursor.execute("SELECT COUNT(*) as excel FROM packaging_log WHERE source_type = 'excel'")
-                excel = cursor.fetchone()['excel']
-                print(f"source_type='excel': {excel}")
-
-                cursor.execute("SELECT COUNT(*) as restore FROM packaging_log WHERE restore_flag = 1")
-                restore = cursor.fetchone()['restore']
-                print(f"restore_flag=1: {restore}")
-
-                # Теперь сам запрос
                 cursor.execute("""
                     SELECT * FROM packaging_log 
                     WHERE source_type = 'excel' OR restore_flag = 1
                     ORDER BY id ASC
                 """)
                 rows = cursor.fetchall()
-                print(f"Найдено для восстановления: {len(rows)}")
-
                 return [dict(row) for row in rows]
         except Exception as e:
             print(f"Ошибка в get_restorable_entries: {e}")

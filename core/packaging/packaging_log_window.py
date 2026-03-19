@@ -263,7 +263,6 @@ class PackagingLogWindow:
             if exported > 0:
                 self.set_status(f"✅ Журнал восстановлен: {new_file}", "green")
 
-                # ========== ИЗМЕНЕНИЕ ЗДЕСЬ ==========
                 # Получаем путь из настроек
                 settings_path = self.config_manager.get_packaging_log_path()
 
@@ -277,14 +276,13 @@ class PackagingLogWindow:
                 # Открываем папку
                 import subprocess
                 subprocess.Popen(f'explorer "{folder_to_open}"')
-                # ======================================
 
             else:
                 self.set_status("❌ Ошибка при восстановлении", "red")
 
         except Exception as e:
             self.set_status(f"❌ Ошибка: {str(e)}", "red")
-            
+
     def clear_database(self):
         """Очищает содержимое базы данных журнала упаковки"""
         # Создаём окно подтверждения
