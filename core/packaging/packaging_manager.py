@@ -2,6 +2,7 @@
 from core.packaging.packaging_data_manager import PackagingDataManager
 from core.packaging.packaging_excel import PackagingExcel
 import re
+import openpyxl
 
 
 class PackagingManager:
@@ -60,6 +61,11 @@ class PackagingManager:
         all_errors = []
         imported_ids = []
 
+        # Получаем список листов для определения индексов
+        wb = openpyxl.load_workbook(file_path, read_only=True)
+        sheet_index_map = {name: idx for idx, name in enumerate(wb.sheetnames)}
+        wb.close()
+
         def save_entry(entry, sheet_name):
             nonlocal imported, all_errors, imported_ids
             # Валидируем
@@ -68,9 +74,10 @@ class PackagingManager:
                 all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
                 return
 
-            # ВАЖНО: добавляем source_type
+            # ВАЖНО: добавляем source_type и sheet_index
             entry['source_type'] = 'excel'
             entry['source_sheet'] = sheet_name
+            entry['sheet_index'] = sheet_index_map.get(sheet_name, 0)  # сохраняем индекс листа
 
             # Сохраняем
             try:

@@ -385,22 +385,17 @@ class PackagingExcel:
             total_exported = 0
 
             # Для каждой группы создаём свой лист
-            for sheet_idx, (sheet_name, entries) in enumerate(entries_by_sheet.items()):
+            for sheet_idx, (sheet_name, entries) in enumerate(entries_by_sheet):
                 if not entries:
                     continue
 
-                # Для первого листа используем активный, для остальных создаём новый
-                if sheet_idx == 0:
-                    ws = wb.active
-                    ws.title = sheet_name[:31]  # Ограничение длины имени листа в Excel
-                else:
-                    # Копируем структуру из первого листа
-                    ws = wb.copy_worksheet(wb.active)
-                    ws.title = sheet_name[:31]
+                # Копируем структуру из листа-шаблона (который называется "Шаблон")
+                ws = wb.copy_worksheet(wb['Шаблон'])
+                ws.title = sheet_name[:31]
 
                 # Заполняем данными
-                for i, entry in enumerate(entries):
-                    row_num = start_row + i
+                for idx, entry in enumerate(entries):
+                    row_num = start_row + idx
 
                     for field, col_map in mapping["columns"].items():
                         value = entry.get(field, "")

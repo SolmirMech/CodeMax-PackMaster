@@ -45,7 +45,7 @@ class PackagingDataManager:
                     # Удаляем старую таблицу
                     cursor.execute("DROP TABLE IF EXISTS packaging_log")
 
-                    # Создаём заново с новой структурой
+                    # Создаём заново с новой структурой (добавлен sheet_index)
                     cursor.execute("""
                         CREATE TABLE packaging_log (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,6 +64,7 @@ class PackagingDataManager:
                             source_file TEXT,
                             source_sheet TEXT,
                             source_row INTEGER,
+                            sheet_index INTEGER DEFAULT 0,  -- порядковый номер листа при импорте
                             restore_flag INTEGER DEFAULT 0
                         )
                     """)
@@ -75,6 +76,7 @@ class PackagingDataManager:
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
 
                     conn.commit()
                     return True
@@ -84,7 +86,7 @@ class PackagingDataManager:
                 return False
             finally:
                 conn.close()
-        
+
     def on_settings_changed(self, context=None):
         pass
         
@@ -99,7 +101,7 @@ class PackagingDataManager:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
 
-                # Создаём таблицу packaging_log с новыми полями
+                # Создаём таблицу packaging_log с новыми полями (добавлен sheet_index)
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS packaging_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,11 +116,12 @@ class PackagingDataManager:
                         aquaLife_boxes INTEGER DEFAULT 0,
                         note TEXT,
                         exported INTEGER DEFAULT 0,
-                        source_type TEXT DEFAULT 'manual',  -- 'excel' или 'manual'
-                        source_file TEXT,                    -- путь к исходному Excel
-                        source_sheet TEXT,                    -- название листа
-                        source_row INTEGER,                    -- номер строки в листе
-                        restore_flag INTEGER DEFAULT 0        -- 1 = для восстановления
+                        source_type TEXT DEFAULT 'manual',
+                        source_file TEXT,
+                        source_sheet TEXT,
+                        source_row INTEGER,
+                        sheet_index INTEGER DEFAULT 0,
+                        restore_flag INTEGER DEFAULT 0
                     )
                 """)
 
@@ -128,7 +131,8 @@ class PackagingDataManager:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")  # новый
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
 
                 conn.commit()
 
@@ -277,20 +281,22 @@ class PackagingDataManager:
                         source_file = data.get('source_file', '')
                         source_sheet = data.get('source_sheet', '')
                         source_row = data.get('source_row')
+                        sheet_index = data.get('sheet_index', 0)  # добавляем индекс листа
                         exported = 1  # импортированные сразу помечаем
                     else:
                         source_type = 'manual'
                         source_file = ''
                         source_sheet = ''
                         source_row = None
+                        sheet_index = 0
                         exported = 0  # ручные ждут экспорта
 
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
                          packer_name, large_boxes, small_boxes, aquaLife_boxes, note, 
-                         exported, source_type, source_file, source_sheet, source_row)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         exported, source_type, source_file, source_sheet, source_row, sheet_index)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -306,7 +312,8 @@ class PackagingDataManager:
                         source_type,
                         source_file,
                         source_sheet,
-                        source_row
+                        source_row,
+                        sheet_index
                     ))
                     conn.commit()
                     return cursor.lastrowid
@@ -327,7 +334,7 @@ class PackagingDataManager:
                 conn.close()
 
     def get_restorable_entries(self):
-        """Возвращает записи для восстановления в Excel, сгруппированные по листам"""
+        """Возвращает записи для восстановления в Excel"""
         with self._readers_lock:
             self._readers_count += 1
         try:
@@ -336,29 +343,37 @@ class PackagingDataManager:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                # Получаем все восстанавливаемые записи
+                # Получаем уникальные листы с их индексами
                 cursor.execute("""
-                    SELECT * FROM packaging_log 
+                    SELECT DISTINCT source_sheet, sheet_index 
+                    FROM packaging_log 
                     WHERE source_type = 'excel' OR restore_flag = 1
-                    ORDER BY source_sheet, source_row, id ASC
+                    ORDER BY sheet_index ASC
                 """)
-                rows = cursor.fetchall()
+                sheets = cursor.fetchall()
 
-                # Группируем по листам
-                sheets_dict = {}
-                for row in rows:
-                    row_dict = dict(row)
-                    sheet_name = row_dict.get('source_sheet', '').strip()
-                    if not sheet_name:  # Если имя пустое
-                        sheet_name = "Лист1"
-                    if sheet_name not in sheets_dict:
-                        sheets_dict[sheet_name] = []
-                    sheets_dict[sheet_name].append(row_dict)
+                result = []
 
-                return sheets_dict
+                for sheet in sheets:
+                    sheet_name = sheet['source_sheet'].strip() or "Лист1"
+                    sheet_index = sheet['sheet_index']
+
+                    # БЕЗ ORDER BY - записи в том порядке, в котором добавлялись
+                    cursor.execute("""
+                        SELECT * FROM packaging_log 
+                        WHERE (source_type = 'excel' OR restore_flag = 1)
+                        AND source_sheet = ? AND sheet_index = ?
+                    """, (sheet_name, sheet_index))
+
+                    rows = cursor.fetchall()
+                    if rows:
+                        entries = [dict(row) for row in rows]
+                        result.append((sheet_name, entries))
+
+                return result
         except Exception as e:
             print(f"Ошибка в get_restorable_entries: {e}")
-            return {}
+            return []
         finally:
             with self._readers_lock:
                 self._readers_count -= 1
