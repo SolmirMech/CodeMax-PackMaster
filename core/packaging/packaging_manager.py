@@ -13,6 +13,14 @@ class PackagingManager:
         self.data_manager = PackagingDataManager(config_manager, coordinator)
 
     # === Методы БД ===
+    def get_restorable_entries(self):
+        """Возвращает записи для восстановления"""
+        return self.data_manager.get_restorable_entries()
+
+    def mark_manual_as_restorable(self, entry_ids):
+        """Помечает экспортированные ручные записи"""
+        return self.data_manager.mark_manual_as_restorable(entry_ids)
+
     def get_recent_entries(self, limit=10):
         return self.data_manager.get_recent(limit)
 
@@ -59,6 +67,9 @@ class PackagingManager:
             if entry_errors:
                 all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
                 return
+
+            # ВАЖНО: добавляем source_type
+            entry['source_type'] = 'excel'
 
             # Сохраняем
             try:
@@ -136,3 +147,17 @@ class PackagingManager:
             self.data_manager.mark_as_exported(entry_ids)
 
         return exported_count
+
+    @staticmethod
+    def export_entries_to_excel(entries, file_path):
+        """
+        Экспортирует список записей в Excel файл
+
+        Args:
+            entries: список записей
+            file_path: путь к файлу (уже должен существовать)
+
+        Returns:
+            int: количество экспортированных записей
+        """
+        return PackagingExcel.export_entries(file_path, entries)

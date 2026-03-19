@@ -35,16 +35,50 @@ class PackagingDataManager:
             self.coordinator.subscribe(self.on_settings_changed)
 
     def clear_database(self):
-        """Полностью очищает таблицу packaging_log"""
+        """Полностью очищает БД и пересоздаёт таблицу с новой структурой"""
         with self._write_lock:
             try:
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM packaging_log")
-                    cursor.execute("VACUUM")  # сжимает файл БД
+
+                    # Удаляем старую таблицу
+                    cursor.execute("DROP TABLE IF EXISTS packaging_log")
+
+                    # Создаём заново с новой структурой
+                    cursor.execute("""
+                        CREATE TABLE packaging_log (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            date TEXT,
+                            order_number TEXT,
+                            customer TEXT,
+                            product_name TEXT,
+                            quantity_labels INTEGER DEFAULT 0,
+                            packer_name TEXT,
+                            large_boxes INTEGER DEFAULT 0,
+                            small_boxes INTEGER DEFAULT 0,
+                            aquaLife_boxes INTEGER DEFAULT 0,
+                            note TEXT,
+                            exported INTEGER DEFAULT 0,
+                            source_type TEXT DEFAULT 'manual',
+                            source_file TEXT,
+                            source_sheet TEXT,
+                            source_row INTEGER,
+                            restore_flag INTEGER DEFAULT 0
+                        )
+                    """)
+
+                    # Индексы
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_date ON packaging_log(date)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
+
                     conn.commit()
                     return True
+
             except Exception as e:
                 print(f"Ошибка очистки БД: {e}")
                 return False
@@ -65,7 +99,7 @@ class PackagingDataManager:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
 
-                # Создаём таблицу packaging_log
+                # Создаём таблицу packaging_log с новыми полями
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS packaging_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,7 +113,12 @@ class PackagingDataManager:
                         small_boxes INTEGER DEFAULT 0,
                         aquaLife_boxes INTEGER DEFAULT 0,
                         note TEXT,
-                        exported INTEGER DEFAULT 0  -- 0 = не экспортирован, 1 = экспортирован
+                        exported INTEGER DEFAULT 0,
+                        source_type TEXT DEFAULT 'manual',  -- 'excel' или 'manual'
+                        source_file TEXT,                    -- путь к исходному Excel
+                        source_sheet TEXT,                    -- название листа
+                        source_row INTEGER,                    -- номер строки в листе
+                        restore_flag INTEGER DEFAULT 0        -- 1 = для восстановления
                     )
                 """)
 
@@ -88,8 +127,8 @@ class PackagingDataManager:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
-                cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")  # новый индекс
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")  # новый
 
                 conn.commit()
 
@@ -225,17 +264,33 @@ class PackagingDataManager:
                 conn.close()
 
     def add_entry(self, data):
-        """Добавление новой записи - exported всегда 0"""
+        """Добавление новой записи"""
         with self._write_lock:
             try:
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
                     cursor = conn.cursor()
+
+                    # Определяем source_type
+                    if data.get('source_type') == 'excel':
+                        source_type = 'excel'
+                        source_file = data.get('source_file', '')
+                        source_sheet = data.get('source_sheet', '')
+                        source_row = data.get('source_row')
+                        exported = 1  # импортированные сразу помечаем
+                    else:
+                        source_type = 'manual'
+                        source_file = ''
+                        source_sheet = ''
+                        source_row = None
+                        exported = 0  # ручные ждут экспорта
+
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
-                         packer_name, large_boxes, small_boxes, aquaLife_boxes, note, exported)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)  -- exported = 0
+                         packer_name, large_boxes, small_boxes, aquaLife_boxes, note, 
+                         exported, source_type, source_file, source_sheet, source_row)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -246,7 +301,12 @@ class PackagingDataManager:
                         data.get('large_boxes') if data.get('large_boxes') not in (None, '') else None,
                         data.get('small_boxes') if data.get('small_boxes') not in (None, '') else None,
                         data.get('aquaLife_boxes') if data.get('aquaLife_boxes') not in (None, '') else None,
-                        data.get('note', '')
+                        data.get('note', ''),
+                        exported,
+                        source_type,
+                        source_file,
+                        source_sheet,
+                        source_row
                     ))
                     conn.commit()
                     return cursor.lastrowid
@@ -263,5 +323,73 @@ class PackagingDataManager:
                     cursor.execute("DELETE FROM packaging_log WHERE id = ?", (entry_id,))
                     conn.commit()
                     return cursor.rowcount > 0
+            finally:
+                conn.close()
+
+    def get_restorable_entries(self):
+        """Возвращает записи для восстановления в Excel"""
+        with self._readers_lock:
+            self._readers_count += 1
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                # ДИАГНОСТИКА: посмотрим всё
+                cursor.execute("SELECT COUNT(*) as total FROM packaging_log")
+                total = cursor.fetchone()['total']
+                print(f"Всего записей в БД: {total}")
+
+                cursor.execute("SELECT COUNT(*) as excel FROM packaging_log WHERE source_type = 'excel'")
+                excel = cursor.fetchone()['excel']
+                print(f"source_type='excel': {excel}")
+
+                cursor.execute("SELECT COUNT(*) as restore FROM packaging_log WHERE restore_flag = 1")
+                restore = cursor.fetchone()['restore']
+                print(f"restore_flag=1: {restore}")
+
+                # Теперь сам запрос
+                cursor.execute("""
+                    SELECT * FROM packaging_log 
+                    WHERE source_type = 'excel' OR restore_flag = 1
+                    ORDER BY id ASC
+                """)
+                rows = cursor.fetchall()
+                print(f"Найдено для восстановления: {len(rows)}")
+
+                return [dict(row) for row in rows]
+        except Exception as e:
+            print(f"Ошибка в get_restorable_entries: {e}")
+            return []
+        finally:
+            with self._readers_lock:
+                self._readers_count -= 1
+            conn.close()
+
+    def mark_manual_as_restorable(self, entry_ids):
+        """Помечает экспортированные ручные записи как восстанавливаемые"""
+        if not entry_ids:
+            return 0
+
+        if isinstance(entry_ids, (int, str)):
+            entry_ids = [entry_ids]
+
+        with self._write_lock:
+            try:
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join(['?'] * len(entry_ids))
+                    cursor.execute(f"""
+                        UPDATE packaging_log 
+                        SET restore_flag = 1 
+                        WHERE id IN ({placeholders}) AND source_type = 'manual'
+                    """, entry_ids)
+                    conn.commit()
+                    return cursor.rowcount
+            except Exception as e:
+                print(f"Ошибка в mark_manual_as_restorable: {e}")
+                return 0
             finally:
                 conn.close()

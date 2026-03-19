@@ -141,6 +141,13 @@ class PackagingLogWindow:
 
         ttk.Button(
             buttons_frame,
+            text="🔄 Восстановить журнал",
+            command=self.restore_journal,
+            width=18
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        ttk.Button(
+            buttons_frame,
             text="📥 Импорт из Excel",
             command=self.import_from_excel,
             width=18
@@ -232,6 +239,52 @@ class PackagingLogWindow:
         # Показываем путь к файлу в статусе
         self.update_status_with_file_path()
 
+    def restore_journal(self):
+        """Восстанавливает журнал из БД в новый Excel файл"""
+
+        entries = self.manager.get_restorable_entries()
+        if not entries:
+            self.set_status("📭 Нет записей для восстановления", "blue")
+            return
+
+        new_file = self.config_manager.create_restored_log_path()
+        template = self.config_manager.get_packaging_log_template()
+
+        if not os.path.exists(template):
+            self.set_status("❌ Шаблон журнала не найден", "red")
+            return
+
+        try:
+            import shutil
+            shutil.copy2(template, new_file)
+
+            exported = self.manager.export_entries_to_excel(entries, new_file)
+
+            if exported > 0:
+                self.set_status(f"✅ Журнал восстановлен: {new_file}", "green")
+
+                # ========== ИЗМЕНЕНИЕ ЗДЕСЬ ==========
+                # Получаем путь из настроек
+                settings_path = self.config_manager.get_packaging_log_path()
+
+                if settings_path and os.path.exists(os.path.dirname(settings_path)):
+                    # Папка из настроек существует - открываем её
+                    folder_to_open = os.path.dirname(settings_path)
+                else:
+                    # Папки из настроек нет - открываем data_dir
+                    folder_to_open = self.config_manager.data_dir
+
+                # Открываем папку
+                import subprocess
+                subprocess.Popen(f'explorer "{folder_to_open}"')
+                # ======================================
+
+            else:
+                self.set_status("❌ Ошибка при восстановлении", "red")
+
+        except Exception as e:
+            self.set_status(f"❌ Ошибка: {str(e)}", "red")
+            
     def clear_database(self):
         """Очищает содержимое базы данных журнала упаковки"""
         # Создаём окно подтверждения

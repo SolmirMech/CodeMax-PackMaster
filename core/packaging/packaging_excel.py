@@ -1,10 +1,14 @@
 # core/packaging/packaging_excel.py
-import re
 import os
+import re
 import time
+
 import openpyxl
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
+
 # Старый простой маппинг для импорта
 IMPORT_MAPPING = {
     "columns": {
@@ -352,3 +356,41 @@ class PackagingExcel:
                     os.remove(lock_file)
                 except:
                     pass
+
+    @staticmethod
+    def export_entries(file_path, entries):
+        """Экспортирует записи в Excel с правильным форматированием"""
+        try:
+            wb = load_workbook(file_path)
+            ws = wb.active
+
+            mapping = PACKAGING_EXCEL_MAPPING
+            start_row = mapping["start_row"]
+
+            for i, entry in enumerate(entries):
+                row_num = start_row + i
+
+                for field, col_map in mapping["columns"].items():
+                    value = entry.get(field, "")
+                    col_letter = get_column_letter(col_map.column)
+
+                    cell = ws[f"{col_letter}{row_num}"]
+                    cell.value = value
+
+                    # Применяем стили
+                    if col_map.style.font:
+                        cell.font = col_map.style.font
+                    if col_map.style.border:
+                        cell.border = col_map.style.border
+                    if col_map.style.alignment:
+                        cell.alignment = col_map.style.alignment
+                    if col_map.style.number_format:
+                        cell.number_format = col_map.style.number_format
+
+            wb.save(file_path)
+            return len(entries)
+
+        except Exception as e:
+            print(f"Ошибка экспорта в Excel: {e}")
+            return 0
+

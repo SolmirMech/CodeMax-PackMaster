@@ -27,6 +27,30 @@ class ConfigManager:
         # Список упаковщиков по умолчанию
         self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]
 
+    def get_packaging_log_path(self):
+        """Возвращает текущий путь к журналу из настроек"""
+        settings = self.load_json_settings("shared_utils.json")
+        return settings.get("packaging_log_file", "")
+
+    def get_packaging_log_template(self):
+        """Возвращает путь к шаблону журнала упаковки"""
+        return self.get_asset_path("packaging_log_template.xlsx")
+
+    def create_restored_log_path(self):
+        """Создаёт путь для восстановленного журнала"""
+        from datetime import datetime
+        date_str = datetime.now().strftime("%d.%m.%Y")
+
+        # Пробуем использовать папку из настроек
+        settings_path = self.get_packaging_log_path()
+        if settings_path and os.path.exists(os.path.dirname(settings_path)):
+            target_dir = os.path.dirname(settings_path)
+        else:
+            target_dir = self.data_dir
+
+        filename = f"packaging_log_восстановлено_{date_str}.xlsx"
+        return os.path.join(target_dir, filename)
+
     @staticmethod
     def get_asset_path(filename):
         """Возвращает полный путь к файлу в папке assets для бинарника и исходника"""
