@@ -39,7 +39,7 @@ class PackagingLogWindow:
         """Создаёт окно журнала упаковки"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("📦 Журнал учёта упаковки")
-        self.window.geometry("1400x700")
+        self.window.geometry("1500x800")
         self.window.minsize(1000, 500)
 
         # Делаем модальным
@@ -134,6 +134,13 @@ class PackagingLogWindow:
 
         ttk.Button(
             buttons_frame,
+            text="🗑️ Удалить журнал",
+            command=self.clear_database,
+            width=18
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        ttk.Button(
+            buttons_frame,
             text="📥 Импорт из Excel",
             command=self.import_from_excel,
             width=18
@@ -177,7 +184,7 @@ class PackagingLogWindow:
         )
 
         style = ttk.Style()
-        style.configure("PackagingLog.Treeview", rowheight=30)
+        style.configure("PackagingLog.Treeview", rowheight=60)
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
@@ -201,14 +208,14 @@ class PackagingLogWindow:
         # Ширина колонок
         self.tree.column("date", width=70, anchor="center")
         self.tree.column("order_number", width=65, anchor="center")
-        self.tree.column("customer", width=150, anchor="w")
-        self.tree.column("product_name", width=200, anchor="w")
-        self.tree.column("quantity_labels", width=70, anchor="center")
-        self.tree.column("packer_name", width=80, anchor="w")
-        self.tree.column("large_boxes", width=20, anchor="center")
-        self.tree.column("small_boxes", width=20, anchor="center")
-        self.tree.column("aquaLife_boxes", width=20, anchor="center")
-        self.tree.column("note", width=50, anchor="w")
+        self.tree.column("customer", width=200, anchor="w")
+        self.tree.column("product_name", width=350, anchor="w")
+        self.tree.column("quantity_labels", width=65, anchor="center")
+        self.tree.column("packer_name", width=85, anchor="w")
+        self.tree.column("large_boxes", width=15, anchor="center")
+        self.tree.column("small_boxes", width=15, anchor="center")
+        self.tree.column("aquaLife_boxes", width=15, anchor="center")
+        self.tree.column("note", width=30, anchor="w")
 
         # Скроллбар
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -224,6 +231,71 @@ class PackagingLogWindow:
         self.load_recent()
         # Показываем путь к файлу в статусе
         self.update_status_with_file_path()
+
+    def clear_database(self):
+        """Очищает содержимое базы данных журнала упаковки"""
+        # Создаём окно подтверждения
+        confirm = tk.Toplevel(self.window)
+        confirm.title("Подтверждение")
+        confirm.geometry("500x300")
+        confirm.transient(self.window)
+        confirm.grab_set()
+
+        # Центрируем
+        confirm.update_idletasks()
+        x = self.window.winfo_x() + (self.window.winfo_width() - 500) // 2
+        y = self.window.winfo_y() + (self.window.winfo_height() - 200) // 2
+        confirm.geometry(f"+{x}+{y}")
+
+        # Предупреждение
+        ttk.Label(
+            confirm,
+            text="⚠️ ВНИМАНИЕ ⚠️",
+            font=("Arial", 14, "bold"),
+            foreground="red"
+        ).pack(pady=(20, 10))
+
+        ttk.Label(
+            confirm,
+            text="Это действие не затрагивает файл Excel,\nа очищает Базу Данных электронного журнала.",
+            font=("Arial", 11),
+            justify="center"
+        ).pack(pady=10)
+
+        ttk.Label(
+            confirm,
+            text="Вы уверены, что хотите продолжить?",
+            font=("Arial", 10, "bold")
+        ).pack(pady=10)
+
+        # Кнопки
+        btn_frame = ttk.Frame(confirm)
+        btn_frame.pack(pady=20)
+
+        def do_clear():
+            try:
+                self.manager.data_manager.clear_database()
+                self.entries = []
+                self.refresh_table()
+                self.set_status("✅ База данных журнала очищена", "green")
+                confirm.destroy()
+            except Exception as e:
+                self.set_status(f"❌ Ошибка: {str(e)}", "red")
+                confirm.destroy()
+
+        ttk.Button(
+            btn_frame,
+            text="Да, очистить",
+            command=do_clear,
+            width=15
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            btn_frame,
+            text="Отмена",
+            command=confirm.destroy,
+            width=15
+        ).pack(side=tk.LEFT, padx=5)
 
     def update_status_with_file_path(self):
         """Обновляет статусную строку с полным путём к файлу"""
@@ -433,11 +505,16 @@ class PackagingLogWindow:
                     date_str = f"{parts[2]}.{parts[1]}.{parts[0]}"
                 except:
                     pass
+
+            # Форматируем длинный текст с переносом вручную
+            customer = self._wrap_text(entry["customer"], 25)
+            product = self._wrap_text(entry["product_name"], 35)
+
             values = (
                 date_str,
                 entry["order_number"],
-                entry["customer"],
-                entry["product_name"],
+                customer,
+                product,
                 entry["quantity_labels"] if entry["quantity_labels"] else "",
                 entry["packer_name"],
                 entry["large_boxes"] if entry["large_boxes"] else "",
@@ -445,6 +522,7 @@ class PackagingLogWindow:
                 entry["aquaLife_boxes"] if entry["aquaLife_boxes"] else "",
                 entry["note"]
             )
+
             # Чётные строки - белые, нечётные - светло-серые
             if i % 2 == 0:
                 self.tree.insert("", "end", values=values, iid=entry["id"], tags=('even',))
@@ -454,6 +532,28 @@ class PackagingLogWindow:
         # Настраиваем цвета
         self.tree.tag_configure('even', background='white')
         self.tree.tag_configure('odd', background='#f0f0f0')
+
+    @staticmethod
+    def _wrap_text(text, length):
+        """Вставляет переносы строк в длинный текст"""
+        if len(text) <= length:
+            return text
+
+        words = text.split(' ')
+        lines = []
+        current_line = ""
+
+        for word in words:
+            if len(current_line + word) <= length:
+                current_line += (word + " ")
+            else:
+                lines.append(current_line.strip())
+                current_line = word + " "
+
+        if current_line:
+            lines.append(current_line.strip())
+
+        return "\n".join(lines)
 
     def search(self):
         """Выполняет поиск по заполненным полям"""

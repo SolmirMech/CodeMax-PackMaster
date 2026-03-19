@@ -33,6 +33,23 @@ class PackagingDataManager:
         # Подписываемся на уведомления координатора
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+
+    def clear_database(self):
+        """Полностью очищает таблицу packaging_log"""
+        with self._write_lock:
+            try:
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM packaging_log")
+                    cursor.execute("VACUUM")  # сжимает файл БД
+                    conn.commit()
+                    return True
+            except Exception as e:
+                print(f"Ошибка очистки БД: {e}")
+                return False
+            finally:
+                conn.close()
         
     def on_settings_changed(self, context=None):
         pass
