@@ -2,9 +2,9 @@
 [Setup]
 AppName=CodeMax-PackMaster Demo
 AppVersion=1.0
-AppVerName=CodeMax-PackMaster Demo 1.0
+AppVerName=CodeMax-PackMaster Demo 1.1
 AppPublisher=SolmirMech
-AppCopyright=Copyright © 2025 SolmirMech. Все права защищены.
+AppCopyright=Copyright © 2026 SolmirMech. Все права защищены.
 DefaultDirName={pf}\CodeMax-PackMaster Demo
 DefaultGroupName=CodeMax-PackMaster Demo
 OutputBaseFilename=CodeMax-PackMaster_Demo_Setup
