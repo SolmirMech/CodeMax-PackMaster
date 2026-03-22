@@ -4,6 +4,7 @@ import re
 import time
 import tkinter as tk
 from tkinter import ttk, StringVar, filedialog
+from tkinter import colorchooser
 
 from core.packaging.packaging_manager import PackagingManager
 
@@ -149,7 +150,7 @@ class PackagingLogWindow:
         self.rare_button.pack(side=tk.LEFT, padx=(10, 0))
 
         # Создаем меню для редких функций
-        rare_menu = tk.Menu(self.rare_button, tearoff=0)
+        rare_menu = tk.Menu(self.rare_button, tearoff=0, font=("Segoe UI", 15))
         self.rare_button.configure(menu=rare_menu)
 
         # Добавляем пункты в меню
@@ -159,7 +160,7 @@ class PackagingLogWindow:
         )
 
         # Подменю для импорта с галочкой
-        import_submenu = tk.Menu(rare_menu, tearoff=0)
+        import_submenu = tk.Menu(rare_menu, tearoff=0, font=("Segoe UI", 14))
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         import_submenu.add_checkbutton(
             label="Только первый лист",
@@ -177,6 +178,11 @@ class PackagingLogWindow:
         rare_menu.add_command(
             label="🔄 Восстановить журнал",
             command=self.restore_journal
+        )
+
+        rare_menu.add_command(
+            label="🎨 Сбросить цвет строки",
+            command=self.reset_row_color
         )
 
         # Статусная строка - теперь сверху
@@ -245,11 +251,50 @@ class PackagingLogWindow:
 
         # Привязка событий для редактирования
         self.tree.bind("<Double-Button-1>", self.on_double_click)
+        # Привязка правого клика для выбора цвета строки
+        self.tree.bind("<Button-3>", self.on_right_click)
 
         # Загружаем последние записи
         self.load_recent()
         # Показываем путь к файлу в статусе
         self.update_status_with_file_path()
+
+    def reset_row_color(self):
+        """Сбрасывает цвет выбранной строки"""
+        selection = self.tree.selection()
+        if not selection:
+            self.set_status("❌ Не выбрана строка для сброса цвета", "orange")
+            return
+
+        entry_id = int(selection[0])
+
+        # Сохраняем пустой цвет в БД
+        self.manager.update_row_color(entry_id, None)
+
+        # Обновляем отображение
+        self.load_recent()
+        self.set_status(f"✅ Цвет строки #{entry_id} сброшен", "green")
+
+    def on_right_click(self, event):
+        """Обработчик правого клика по строке - выбор цвета"""
+        item = self.tree.identify_row(event.y)
+        if not item:
+            return
+
+        entry_id = int(item)
+
+        # Открываем диалог выбора цвета
+        color = colorchooser.askcolor(title="Выберите цвет для строки", parent=self.window)
+
+        if color and color[1]:  # color[1] - это hex
+            hex_color = color[1].lstrip('#')
+
+            # Сохраняем в БД
+            self.manager.update_row_color(entry_id, hex_color)
+
+            # Обновляем отображение
+            self.load_recent()
+            self.set_status(f"✅ Цвет строки #{entry_id} сохранён", "green")
 
     def restore_journal(self):
         """Восстанавливает журнал из БД в новый Excel файл"""
@@ -565,12 +610,14 @@ class PackagingLogWindow:
             self.set_status(f"Ошибка загрузки: {str(e)}")
 
     def refresh_table(self):
-        """Обновляет отображение таблицы"""
+        """Обновляет отображение таблицы с поддержкой цветных строк"""
         # Очищаем
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        # Заполняем с чередованием цветов
+        # Собираем уникальные цвета для создания тегов
+        color_tags = {}
+
         for i, entry in enumerate(self.entries):
             date_str = entry["date"]
             if date_str and len(date_str) == 10 and date_str[4] == '-':
@@ -580,7 +627,6 @@ class PackagingLogWindow:
                 except:
                     pass
 
-            # Форматируем длинный текст с переносом вручную
             customer = self._wrap_text(entry["customer"], 25)
             product = self._wrap_text(entry["product_name"], 35)
 
@@ -597,13 +643,24 @@ class PackagingLogWindow:
                 entry["note"]
             )
 
-            # Чётные строки - белые, нечётные - светло-серые
-            if i % 2 == 0:
-                self.tree.insert("", "end", values=values, iid=entry["id"], tags=('even',))
-            else:
-                self.tree.insert("", "end", values=values, iid=entry["id"], tags=('odd',))
+            # Определяем теги
+            tags = []
+            row_color = entry.get("row_color")
 
-        # Настраиваем цвета
+            if row_color:
+                color_tag = f"color_{row_color}"
+                # Создаём тег, если его ещё нет
+                if color_tag not in color_tags:
+                    self.tree.tag_configure(color_tag, background=f"#{row_color}")
+                    color_tags[color_tag] = True
+                tags.append(color_tag)
+            else:
+                # Чередование для строк без цвета
+                tags.append('even' if i % 2 == 0 else 'odd')
+
+            self.tree.insert("", "end", values=values, iid=entry["id"], tags=tags)
+
+        # Настраиваем цвета для чередования
         self.tree.tag_configure('even', background='white')
         self.tree.tag_configure('odd', background='#f0f0f0')
 

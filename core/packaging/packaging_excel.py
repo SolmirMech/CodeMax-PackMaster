@@ -7,6 +7,7 @@ from copy import copy
 
 import openpyxl
 from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
 
@@ -284,14 +285,13 @@ class PackagingExcel:
 
         mapping = PACKAGING_EXCEL_MAPPING
         lock_file = file_path + ".lock"
-        wb = None  # Явно инициализируем
+        wb = None
 
-        # Ждём освобождения, если файл заблокирован
         for attempt in range(max_retries):
             if not os.path.exists(lock_file):
                 break
             lock_age = time.time() - os.path.getmtime(lock_file)
-            if lock_age > 60:  # Зависший lock (старше минуты)
+            if lock_age > 60:
                 try:
                     os.remove(lock_file)
                     break
@@ -302,25 +302,27 @@ class PackagingExcel:
             else:
                 raise Exception("Файл заблокирован другим процессом")
 
-        # Пытаемся создать свой lock-файл
         try:
             with open(lock_file, 'x') as f:
                 f.write(str(os.getpid()))
         except FileExistsError:
             raise Exception("Файл заблокирован другим процессом")
 
-        # Основная операция
         try:
             wb = openpyxl.load_workbook(file_path)
             sheet = wb.active
 
-            # Находим первую пустую строку
             row = mapping["start_row"]
             while sheet.cell(row=row, column=1).value:
                 row += 1
 
-            # Записываем
             for entry in entries:
+                # Проверяем наличие цвета
+                row_color = entry.get("row_color")
+                fill = None
+                if row_color:
+                    fill = PatternFill(start_color=row_color, end_color=row_color, fill_type="solid")
+
                 for field, col_mapping in mapping["columns"].items():
                     col = col_mapping.column
                     value = entry.get(field, "")
@@ -330,6 +332,10 @@ class PackagingExcel:
                         value = f"{d}.{m}.{y}"
 
                     cell = sheet.cell(row=row, column=col, value=value)
+
+                    # Применяем заливку только для колонок коробок и примечания
+                    if fill and col in (7, 8, 9, 10, 11, 12):
+                        cell.fill = fill
 
                     if col_mapping.style:
                         if col_mapping.style.font:
@@ -343,29 +349,25 @@ class PackagingExcel:
 
                 row += 1
 
-            # Сохраняем и закрываем
             wb.save(file_path)
             wb.close()
-            wb = None  # Явно обнуляем
+            wb = None
 
             return len(entries)
 
         except Exception as e:
             raise Exception(f"Ошибка экспорта: {str(e)}")
         finally:
-            # Гарантированное закрытие в случае ошибки
             if wb:
                 try:
                     wb.close()
                 except:
                     pass
-            # Всегда удаляем lock
             if os.path.exists(lock_file):
                 try:
                     os.remove(lock_file)
                 except:
                     pass
-            # Принудительная сборка мусора
             import gc
             gc.collect()
 

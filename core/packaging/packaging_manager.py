@@ -191,3 +191,7 @@ class PackagingManager:
             int: количество экспортированных записей
         """
         return PackagingExcel.export_entries(entries_by_sheet, template_path, output_path)
+
+    def update_row_color(self, entry_id, hex_color):
+        """Обновляет цвет строки"""
+        return self.data_manager.update_row_color(entry_id, hex_color)

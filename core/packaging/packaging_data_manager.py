@@ -65,7 +65,8 @@ class PackagingDataManager:
                             source_sheet TEXT,
                             source_row INTEGER,
                             sheet_index INTEGER DEFAULT 0,  -- порядковый номер листа при импорте
-                            restore_flag INTEGER DEFAULT 0
+                            restore_flag INTEGER DEFAULT 0,
+                            row_color TEXT
                         )
                     """)
 
@@ -101,7 +102,6 @@ class PackagingDataManager:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
 
-                # Создаём таблицу packaging_log с новыми полями (добавлен sheet_index)
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS packaging_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +121,8 @@ class PackagingDataManager:
                         source_sheet TEXT,
                         source_row INTEGER,
                         sheet_index INTEGER DEFAULT 0,
-                        restore_flag INTEGER DEFAULT 0
+                        restore_flag INTEGER DEFAULT 0,
+                        row_color TEXT
                     )
                 """)
 
@@ -134,6 +135,7 @@ class PackagingDataManager:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
 
+
                 conn.commit()
 
             except sqlite3.Error as e:
@@ -141,6 +143,41 @@ class PackagingDataManager:
             finally:
                 if 'conn' in locals():
                     conn.close()
+
+    def update_row_color(self, entry_id, hex_color):
+        """Обновляет цвет строки"""
+        with self._write_lock:
+            try:
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "UPDATE packaging_log SET row_color = ? WHERE id = ?",
+                        (hex_color, entry_id)
+                    )
+                    conn.commit()
+                    return cursor.rowcount > 0
+            finally:
+                conn.close()
+
+    def get_row_color(self, entry_id):
+        """Возвращает цвет строки"""
+        with self._readers_lock:
+            self._readers_count += 1
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT row_color FROM packaging_log WHERE id = ?",
+                    (entry_id,)
+                )
+                row = cursor.fetchone()
+                return row[0] if row else None
+        finally:
+            with self._readers_lock:
+                self._readers_count -= 1
+            conn.close()
 
     def get_unexported_entries(self):
         """Возвращает все неэкспортированные записи"""
@@ -284,28 +321,28 @@ class PackagingDataManager:
                     conn = sqlite3.connect(self.db_path)
                     cursor = conn.cursor()
 
-                    # Определяем source_type
                     if data.get('source_type') == 'excel':
                         source_type = 'excel'
                         source_file = data.get('source_file', '')
                         source_sheet = data.get('source_sheet', '')
                         source_row = data.get('source_row')
-                        sheet_index = data.get('sheet_index', 0)  # добавляем индекс листа
-                        exported = 1  # импортированные сразу помечаем
+                        sheet_index = data.get('sheet_index', 0)
+                        exported = 1
                     else:
                         source_type = 'manual'
                         source_file = ''
                         source_sheet = ''
                         source_row = None
                         sheet_index = 0
-                        exported = 0  # ручные ждут экспорта
+                        exported = 0
 
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
                          packer_name, large_boxes, small_boxes, aquaLife_boxes, note, 
-                         exported, source_type, source_file, source_sheet, source_row, sheet_index)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         exported, source_type, source_file, source_sheet, source_row, 
+                         sheet_index, row_color)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -322,7 +359,8 @@ class PackagingDataManager:
                         source_file,
                         source_sheet,
                         source_row,
-                        sheet_index
+                        sheet_index,
+                        data.get('row_color')
                     ))
                     conn.commit()
                     return cursor.lastrowid

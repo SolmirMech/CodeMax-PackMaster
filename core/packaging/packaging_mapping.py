@@ -126,6 +126,24 @@ PACKAGING_EXCEL_MAPPING = {
                 alignment=CENTER_ALIGN
             )
         ),
+        "extra_boxes_1": ColumnMapping(
+            column=10,
+            data_type="number",
+            style=CellStyle(
+                font=CALIBRI_11,
+                border=THIN_BORDER,
+                alignment=CENTER_ALIGN
+            )
+        ),
+        "extra_boxes_2": ColumnMapping(
+            column=11,
+            data_type="number",
+            style=CellStyle(
+                font=CALIBRI_11,
+                border=THIN_BORDER,
+                alignment=CENTER_ALIGN
+            )
+        ),
         "note": ColumnMapping(
             column=12,
             data_type="text",
