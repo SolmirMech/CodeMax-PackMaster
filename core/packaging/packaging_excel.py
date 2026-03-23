@@ -8,6 +8,7 @@ from copy import copy
 import openpyxl
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+import gc
 
 from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
 
@@ -33,27 +34,17 @@ IMPORT_MAPPING = {
 class PackagingExcel:
     """ВСЯ работа с Excel для журнала упаковки"""
 
+    # core/packaging/packaging_excel.py
+
     @staticmethod
     def import_from_excel(file_path, db_callback=None, progress_callback=None, only_first_sheet=True):
-        """
-        Импорт данных из Excel с поэтапной передачей в БД и прогрессом
 
-        Args:
-            file_path: путь к файлу
-            db_callback: функция для сохранения записи в БД (принимает entry)
-            progress_callback: функция для обновления прогресса (принимает sheet_name, count)
-            only_first_sheet: если True - импорт только из первого листа
-
-        Returns:
-            tuple: (imported_count, errors_list)
-        """
-        import gc
         errors = []
         imported_total = 0
 
         try:
-            # Открываем файл
-            wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)  # ← read_only режим!
+            # Используем read_only + keep_links=False для скорости
+            wb = load_workbook(file_path, read_only=True, data_only=True, keep_links=False)
 
             if only_first_sheet:
                 sheets_to_process = [wb.sheetnames[0]] if wb.sheetnames else []
@@ -61,42 +52,28 @@ class PackagingExcel:
                 sheets_to_process = list(reversed(wb.sheetnames))
 
             for sheet_idx, sheet_name in enumerate(sheets_to_process):
-                # Открываем лист
                 sheet = wb[sheet_name]
 
                 if progress_callback:
                     progress_callback(f"Обработка листа {sheet_idx + 1}/{len(sheets_to_process)}: {sheet_name}", None)
 
-                # Простая проверка первой строки с данными
-                first_data_row = None
-                for row in sheet.iter_rows(min_row=2, max_row=5, values_only=True):
-                    if row[0] is not None:
-                        first_data_row = row
-                        break
-
-                if not first_data_row:
-                    errors.append(f"Лист '{sheet_name}' пропущен: нет данных")
-                    continue
-
-                # Импортируем данные с листа
                 sheet_imported = 0
-                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
-                    if row[0] is None:  # пустая строка
+
+                # Читаем строки
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=False), 2):
+                    if row[0].value is None:
                         continue
 
                     try:
-                        entry = PackagingExcel._row_to_entry_simple(row)
-                        if entry.get('order_number') or entry.get('date'):
-                            if db_callback:
-                                db_callback(entry, sheet_name)
-                            sheet_imported += 1
+                        entry = PackagingExcel._row_to_entry_from_readonly(row, row_idx)
+                        if db_callback:
+                            db_callback(entry, sheet_name)
+                        sheet_imported += 1
 
-                            # Каждые 50 записей - обновляем прогресс и чистим память
-                            if sheet_imported % 50 == 0:
-                                if progress_callback:
-                                    progress_callback(f"Лист '{sheet_name}'", sheet_imported)
-                                import gc
-                                gc.collect()
+                        if sheet_imported % 50 == 0:
+                            if progress_callback:
+                                progress_callback(f"Лист '{sheet_name}'", sheet_imported)
+                            gc.collect()
 
                     except Exception as e:
                         errors.append(f"Лист '{sheet_name}', строка {row_idx}: {str(e)}")
@@ -107,9 +84,6 @@ class PackagingExcel:
                         progress_callback(f"✓ Лист '{sheet_name}' завершён", sheet_imported)
                     errors.append(f"Лист '{sheet_name}': импортировано {sheet_imported} записей")
 
-                # Принудительно закрываем лист и чистим память
-                # noinspection PyUnusedLocal
-                sheet = None
                 gc.collect()
 
             wb.close()
@@ -125,54 +99,56 @@ class PackagingExcel:
         return imported_total, errors
 
     @staticmethod
-    def _row_to_entry_simple(row):
-        """Упрощённое преобразование строки для read_only режима"""
-        entry = {}
+    def _row_to_entry_from_readonly(row, row_index):
+        """Преобразование строки из read_only режима с чтением цвета через низкоуровневый доступ"""
 
-        # Дата
-        date_cell = row[0]
-        if date_cell:
+        def to_int(value):
+            try:
+                return int(float(value)) if value else None
+            except:
+                return None
+
+        def format_date(date_cell):
+            if not date_cell:
+                return ""
             if hasattr(date_cell, 'strftime'):
-                entry['date'] = date_cell.strftime('%Y-%m-%d')
-            else:
-                date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
-                if date_match:
-                    day, month, year = date_match.groups()
-                    entry['date'] = f"{year}-{month}-{day}"
-                else:
-                    entry['date'] = str(date_cell)[:10]
+                return date_cell.strftime('%Y-%m-%d')
+            date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
+            if date_match:
+                day, month, year = date_match.groups()
+                return f"{year}-{month}-{day}"
+            return str(date_cell)[:10]
 
-        # Остальные поля по индексам
-        entry['order_number'] = str(row[1]) if row[1] else ""
-        entry['customer'] = str(row[2]) if row[2] else ""
-        entry['product_name'] = str(row[3]) if row[3] else ""
-
-        # Числовые поля
+        # Получаем цвет из ячейки (в read_only режиме цвет доступен через parent)
+        row_color = None
         try:
-            entry['quantity_labels'] = int(float(row[4])) if row[4] else None
+            # В read_only режиме нужно получить доступ к стилю через parent
+            cell = row[6]  # колонка 7 (большие коробки)
+            if cell.fill and cell.fill.start_color:
+                color = cell.fill.start_color
+                if hasattr(color, 'rgb') and color.rgb:
+                    rgb = color.rgb
+                    if len(rgb) == 8:
+                        rgb = rgb[2:]
+                    if rgb.upper() not in ('FFFFFF', '000000'):
+                        row_color = rgb
         except:
-            entry['quantity_labels'] = None
+            pass
 
-        entry['packer_name'] = str(row[5]) if row[5] else ""
-
-        try:
-            entry['large_boxes'] = int(float(row[6])) if row[6] else None
-        except:
-            entry['large_boxes'] = None
-
-        try:
-            entry['small_boxes'] = int(float(row[7])) if row[7] else None
-        except:
-            entry['small_boxes'] = None
-
-        try:
-            entry['aquaLife_boxes'] = int(float(row[8])) if row[8] else None
-        except:
-            entry['aquaLife_boxes'] = None
-
-        entry['note'] = str(row[11]) if len(row) > 11 and row[11] else ""
-
-        return entry
+        return {
+            'source_row': row_index,
+            'date': format_date(row[0].value),
+            'order_number': str(row[1].value) if row[1].value else "",
+            'customer': str(row[2].value) if row[2].value else "",
+            'product_name': str(row[3].value) if row[3].value else "",
+            'quantity_labels': to_int(row[4].value),
+            'packer_name': str(row[5].value) if row[5].value else "",
+            'large_boxes': to_int(row[6].value),
+            'small_boxes': to_int(row[7].value),
+            'aquaLife_boxes': to_int(row[8].value),
+            'note': str(row[11].value) if len(row) > 11 and row[11].value else "",
+            'row_color': row_color
+        }
 
     @staticmethod
     def _validate_sheet_structure(sheet):
@@ -374,17 +350,17 @@ class PackagingExcel:
     @staticmethod
     def export_entries(entries_by_sheet, template_path, output_path):
         """
-        Экспортирует записи в Excel с сохранением структуры листов
+        Экспортирует записи в Excel с сохранением структуры листов и цветов строк
 
         Args:
-            entries_by_sheet: словарь {имя_листа: [список_записей]}
+            entries_by_sheet: список кортежей [(имя_листа, [список_записей]), ...]
             template_path: путь к файлу-шаблону
             output_path: путь для сохранения результата
 
         Returns:
             int: количество экспортированных записей
         """
-        wb = None  # Явно инициализируем
+        wb = None
         try:
             # Копируем шаблон
             shutil.copy2(template_path, output_path)
@@ -409,6 +385,12 @@ class PackagingExcel:
                 # Заполняем данными
                 for idx, entry in enumerate(entries):
                     row_num = start_row + idx
+
+                    # Получаем цвет строки
+                    row_color = entry.get("row_color")
+                    fill = None
+                    if row_color:
+                        fill = PatternFill(start_color=row_color, end_color=row_color, fill_type="solid")
 
                     for field, col_map in mapping["columns"].items():
                         value = entry.get(field, "")
@@ -442,12 +424,17 @@ class PackagingExcel:
                         if col_map.style.number_format:
                             cell.number_format = col_map.style.number_format
 
+                        # Применяем заливку для всех колонок, если есть цвет строки
+                        # Если нужно ограничить только колонками с коробками (7-12)
+                        if fill and col_map.column in (7, 8, 9, 10, 11, 12):
+                            cell.fill = fill
+
                 total_exported += len(entries)
 
             # Сохраняем и закрываем
             wb.save(output_path)
             wb.close()
-            wb = None  # Явно обнуляем
+            wb = None
 
             # Принудительная сборка мусора для освобождения файла
             import gc

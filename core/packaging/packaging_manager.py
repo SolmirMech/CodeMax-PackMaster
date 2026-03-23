@@ -48,28 +48,20 @@ class PackagingManager:
     def import_from_excel(self, file_path, progress_callback=None, only_first_sheet=True):
         """
         Импорт из Excel с валидацией и прогрессом
-
-        Args:
-            file_path: путь к файлу
-            progress_callback: функция для обновления прогресса
-            only_first_sheet: если True - импорт только из первого листа
-
-        Returns:
-            tuple: (imported_count, errors_list)
         """
         imported = 0
         all_errors = []
         imported_ids = []
-        wb = None  # Явно инициализируем
+        wb = None
 
         try:
             # Получаем список листов для определения индексов
-            wb = openpyxl.load_workbook(file_path, read_only=True)
+            wb = openpyxl.load_workbook(file_path, data_only=True)
             sheet_index_map = {name: idx for idx, name in enumerate(wb.sheetnames)}
             wb.close()
             wb = None
 
-            def save_entry(entry, sheet_name):
+            def save_entry(entry, sheet_name, row_idx=None):  # ← добавляем row_idx
                 nonlocal imported, all_errors, imported_ids
                 # Валидируем
                 entry_errors = self._validate_entry(entry)
@@ -77,10 +69,14 @@ class PackagingManager:
                     all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
                     return
 
-                # ВАЖНО: добавляем source_type и sheet_index
+                # Добавляем source_type и sheet_index
                 entry['source_type'] = 'excel'
                 entry['source_sheet'] = sheet_name
-                entry['sheet_index'] = sheet_index_map.get(sheet_name, 0)  # сохраняем индекс листа
+                entry['sheet_index'] = sheet_index_map.get(sheet_name, 0)
+
+                # Сохраняем номер строки, если передан
+                if row_idx is not None:
+                    entry['source_row'] = row_idx
 
                 # Сохраняем
                 try:
@@ -106,13 +102,11 @@ class PackagingManager:
             return imported, all_errors
 
         finally:
-            # Гарантированное закрытие в случае ошибки
             if wb:
                 try:
                     wb.close()
                 except:
                     pass
-            # Принудительная сборка мусора
             import gc
             gc.collect()
 
