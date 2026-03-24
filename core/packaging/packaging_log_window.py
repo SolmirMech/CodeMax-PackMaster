@@ -14,6 +14,7 @@ class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
     def __init__(self, parent, config_manager, order_processor=None, coordinator=None):
+        self.status_menu = None
         self.rare_button = None
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         self.packaging_log_file = None
@@ -193,6 +194,13 @@ class PackagingLogWindow:
             command=self.reset_row_color
         )
 
+        ttk.Button(
+            buttons_frame,
+            text="🔍 Проверить",
+            command=self.check_selected_entry,
+            width=12
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
         # Статусная строка - теперь сверху
         status_frame = ttk.Frame(self.window, height=25)
         status_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
@@ -204,6 +212,11 @@ class PackagingLogWindow:
             anchor=tk.W
         )
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        # Контекстное меню для статусной строки
+        self.status_menu = tk.Menu(self.window, tearoff=0)
+        self.status_menu.add_command(label="Скопировать", command=self.copy_status_text)
+
+        self.status_label.bind("<Button-3>", self.show_status_menu)
 
         # Таблица
         table_frame = ttk.LabelFrame(self.window, text="Записи", padding=5)
@@ -266,6 +279,45 @@ class PackagingLogWindow:
         self.load_recent()
         # Показываем путь к файлу в статусе
         self.update_status_with_file_path()
+
+    def show_status_menu(self, event):
+        """Показывает контекстное меню для статусной строки"""
+        self.status_menu.post(event.x_root, event.y_root)
+
+    def copy_status_text(self):
+        """Копирует текст статусной строки в буфер обмена"""
+        text = self.status_label.cget("text")
+        if text:
+            self.window.clipboard_clear()
+            self.window.clipboard_append(text)
+            # Временное подтверждение
+            original_text = text
+            self.status_label.config(text=f"📋 Скопировано: {text}", foreground="green")
+            self.window.after(2000, lambda: self.status_label.config(text=original_text, foreground="blue"))
+
+    def check_selected_entry(self):
+        """Выводит информацию о выделенной записи из БД"""
+        selection = self.tree.selection()
+        if not selection:
+            self.status_label.config(text="❌ Не выбрана запись", foreground="orange")
+            return
+
+        entry_id = int(selection[0])
+
+        # Получаем запись из менеджера напрямую из БД
+        entries = self.manager.search_entries(id=entry_id)
+        if not entries:
+            self.status_label.config(text=f"❌ Запись #{entry_id} не найдена", foreground="red")
+            return
+
+        entry = entries[0]
+        info = (f"ID:{entry['id']} | exported:{entry['exported']} | "
+                f"source_row:{entry.get('source_row')} | "
+                f"source_sheet:{entry.get('source_sheet', 'None')} | "
+                f"source_type:{entry.get('source_type')}")
+
+        self.status_label.config(text=info, foreground="blue")
+        # Не сбрасываем через 5 секунд
 
     def reset_row_color(self):
         """Сбрасывает цвет выбранной строки"""

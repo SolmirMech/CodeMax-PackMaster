@@ -148,7 +148,13 @@ class PackagingManager:
     def export_unexported_to_excel(self, file_path):
         """
         Экспортирует все неэкспортированные записи в Excel.
-        Возвращает количество экспортированных записей
+
+        Для записей с координатами (source_row, source_sheet) выполняет обновление
+        существующих строк. Для записей без координат вставляет новые строки
+        в конец активного листа.
+
+        Returns:
+            int: количество обработанных записей (все переданные на экспорт)
         """
         # Получаем неэкспортированные записи
         entries = self.data_manager.get_unexported_entries()
@@ -158,22 +164,20 @@ class PackagingManager:
         # Экспортируем и получаем координаты для новых записей
         coords = PackagingExcel.export_to_excel(file_path, entries)
 
-        # Обновляем записи в БД
+        # Обновляем записи в БД: для новых записей сохраняем координаты
         if coords:
             for entry_id, (row_num, sheet_name) in coords.items():
-                # Обновляем source_row, source_sheet и exported=1
                 self.data_manager.update_entry(entry_id, 'source_row', row_num)
                 self.data_manager.update_entry(entry_id, 'source_sheet', sheet_name)
                 self.data_manager.update_entry(entry_id, 'exported', 1)
 
-            # Для записей, которые были обновлены (имели source_row)
-            # просто помечаем как экспортированные
-            existing_ids = [e['id'] for e in entries if e.get('source_row') and e['id'] not in coords]
-            if existing_ids:
-                self.data_manager.mark_as_exported(existing_ids)
+        # Для записей с существующими координатами (обновлённых) просто помечаем как экспортированные
+        existing_ids = [e['id'] for e in entries if e.get('source_row') and e['id'] not in coords]
+        if existing_ids:
+            self.data_manager.mark_as_exported(existing_ids)
 
         return len(entries)
-
+    
     # noinspection PyIncorrectDocstring,PyUnusedLocal,PyMethodMayBeStatic
     def export_entries_to_excel(self, entries_by_sheet, template_path, output_path):
         """

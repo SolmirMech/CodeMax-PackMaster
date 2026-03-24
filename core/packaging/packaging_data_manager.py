@@ -292,7 +292,6 @@ class PackagingDataManager:
             conn.close()
 
     def search(self, filters):
-        """Поиск по одному или нескольким полям - копируем подход с блокировками"""
         with self._readers_lock:
             self._readers_count += 1
         try:
@@ -307,6 +306,9 @@ class PackagingDataManager:
                 for key, value in filters.items():
                     if key == 'date':
                         query += " AND date = ?"
+                        params.append(value)
+                    elif key == 'id':
+                        query += " AND id = ?"
                         params.append(value)
                     elif key in ['order_number', 'customer', 'product_name']:
                         query += f" AND {key} LIKE ?"
