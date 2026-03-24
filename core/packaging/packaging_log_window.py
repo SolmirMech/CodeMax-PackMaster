@@ -13,7 +13,7 @@ from core.packaging.packaging_manager import PackagingManager
 class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
     
-    def __init__(self, parent, config_manager, order_processor=None):
+    def __init__(self, parent, config_manager, order_processor=None, coordinator=None):
         self.rare_button = None
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         self.packaging_log_file = None
@@ -24,6 +24,7 @@ class PackagingLogWindow:
         self.parent = parent
         self.config_manager = config_manager
         self.order_processor = order_processor
+        self.coordinator = coordinator
         
         # Переменные для полей поиска
         self.date_var = StringVar()
@@ -35,6 +36,13 @@ class PackagingLogWindow:
         self.manager = PackagingManager(config_manager)
         
         self.create_window()
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_settings_changed)
+
+    # noinspection PyUnusedLocal
+    def on_settings_changed(self, context=None):
+        """Обработчик изменений настроек от координатора"""
+        workshop = self.coordinator.get_workshop()
 
     # noinspection SpellCheckingInspection
     def create_window(self):

@@ -219,7 +219,8 @@ class OrderDataProcessor:
             PackagingLogWindow(
                 parent=self.parent,
                 config_manager=self.config_manager,
-                order_processor=self
+                order_processor=self,
+                coordinator=self.coordinator
             )
         except Exception as e:
             self.data_manager_status_label.config(
