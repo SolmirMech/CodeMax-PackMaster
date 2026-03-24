@@ -254,15 +254,18 @@ class PackagingExcel:
     @staticmethod
     def export_to_excel(file_path, entries, max_retries=3):
         """
-        Экспорт записей в Excel с файловой блокировкой
+        Экспорт записей в Excel с поддержкой обновления существующих строк.
+        Возвращает словарь {entry_id: (row_number, sheet_name)} для обновлённых/вставленных записей.
         """
         if not entries:
-            return 0
+            return {}
 
         mapping = PACKAGING_EXCEL_MAPPING
         lock_file = file_path + ".lock"
         wb = None
+        result_coords = {}
 
+        # Блокировка файла
         for attempt in range(max_retries):
             if not os.path.exists(lock_file):
                 break
@@ -286,50 +289,101 @@ class PackagingExcel:
 
         try:
             wb = openpyxl.load_workbook(file_path)
-            sheet = wb.active
+            active_sheet_name = wb.active.title
 
-            row = mapping["start_row"]
-            while sheet.cell(row=row, column=1).value:
-                row += 1
-
+            # Группируем записи по листам
+            entries_by_sheet = {}
             for entry in entries:
-                # Проверяем наличие цвета
-                row_color = entry.get("row_color")
-                fill = None
-                if row_color:
-                    fill = PatternFill(start_color=row_color, end_color=row_color, fill_type="solid")
+                # Для новых записей (без source_sheet) используем активный лист
+                sheet_name = entry.get("source_sheet")
+                if not sheet_name:
+                    sheet_name = active_sheet_name
+                    # Сохраняем sheet_name для будущих обновлений
+                    result_coords[entry["id"]] = (None, sheet_name)
 
-                for field, col_mapping in mapping["columns"].items():
-                    col = col_mapping.column
-                    value = entry.get(field, "")
+                if sheet_name not in entries_by_sheet:
+                    entries_by_sheet[sheet_name] = []
+                entries_by_sheet[sheet_name].append(entry)
 
-                    if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
-                        y, m, d = str(value).split('-')
-                        value = f"{d}.{m}.{y}"
+            # Обрабатываем каждый лист
+            for sheet_name, sheet_entries in entries_by_sheet.items():
+                # Проверяем существование листа
+                if sheet_name not in wb.sheetnames:
+                    # Если листа нет, используем активный (для новых записей)
+                    # или игнорируем (старые записи с несуществующим листом)
+                    if sheet_name == active_sheet_name:
+                        sheet = wb.active
+                    else:
+                        # Не создаём новый лист, используем активный
+                        sheet = wb.active
+                        sheet_name = active_sheet_name
+                else:
+                    sheet = wb[sheet_name]
 
-                    cell = sheet.cell(row=row, column=col, value=value)
+                # Определяем максимальный номер строки с данными
+                max_row = mapping["start_row"] - 1
+                for row in range(mapping["start_row"], sheet.max_row + 2):
+                    if sheet.cell(row=row, column=1).value:
+                        max_row = row
+                    else:
+                        break
 
-                    # Применяем заливку только для колонок коробок и примечания
-                    if fill and col in (7, 8, 9, 10, 11, 12):
-                        cell.fill = fill
+                # Обрабатываем каждую запись
+                for entry in sheet_entries:
+                    entry_id = entry["id"]
+                    existing_row = entry.get("source_row")
+                    existing_sheet = entry.get("source_sheet")
 
-                    if col_mapping.style:
+                    # Если запись имеет координаты и они соответствуют текущему листу
+                    if existing_row and existing_sheet == sheet_name:
+                        row_num = existing_row
+                    else:
+                        # Новая запись - ищем следующую свободную строку
+                        row_num = max_row + 1
+                        max_row += 1
+                        # Обновляем координаты для новых записей
+                        if entry_id in result_coords:
+                            result_coords[entry_id] = (row_num, sheet_name)
+
+                    # Заполняем строку
+                    row_color = entry.get("row_color")
+                    fill = None
+                    if row_color:
+                        fill = PatternFill(start_color=row_color, end_color=row_color, fill_type="solid")
+
+                    for field, col_mapping in mapping["columns"].items():
+                        col = col_mapping.column
+                        value = entry.get(field, "")
+
+                        # Форматируем дату
+                        if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
+                            y, m, d = str(value).split('-')
+                            value = f"{d}.{m}.{y}"
+
+                        cell = sheet.cell(row=row_num, column=col, value=value)
+
+                        # Применяем стили
                         if col_mapping.style.font:
-                            cell.font = col_mapping.style.font
+                            cell.font = copy(col_mapping.style.font)
                         if col_mapping.style.border:
-                            cell.border = col_mapping.style.border
+                            cell.border = copy(col_mapping.style.border)
                         if col_mapping.style.alignment:
-                            cell.alignment = col_mapping.style.alignment
+                            cell.alignment = copy(col_mapping.style.alignment)
                         if col_mapping.style.number_format:
                             cell.number_format = col_mapping.style.number_format
 
-                row += 1
+                        # Применяем заливку для колонок коробок
+                        if col in (7, 8, 9, 10, 11, 12):
+                            if fill:
+                                cell.fill = fill
+                            else:
+                                cell.fill = PatternFill(fill_type=None)
 
             wb.save(file_path)
             wb.close()
             wb = None
 
-            return len(entries)
+            return result_coords
 
         except Exception as e:
             raise Exception(f"Ошибка экспорта: {str(e)}")

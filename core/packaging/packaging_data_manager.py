@@ -34,6 +34,28 @@ class PackagingDataManager:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
 
+    def update_entry_with_coords(self, entry_id, field, value):
+        """
+        Обновление ячейки с сохранением координат и сбросом флага экспорта
+        """
+        with self._write_lock:
+            try:
+                with self._lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+
+                    # Обновляем значение и сбрасываем exported
+                    cursor.execute(f"""
+                        UPDATE packaging_log 
+                        SET {field} = ?, exported = 0 
+                        WHERE id = ?
+                    """, (value, entry_id))
+
+                    conn.commit()
+                    return cursor.rowcount > 0
+            finally:
+                conn.close()
+
     def clear_database(self):
         """Полностью очищает БД и пересоздаёт таблицу с новой структурой"""
         with self._write_lock:
@@ -145,14 +167,14 @@ class PackagingDataManager:
                     conn.close()
 
     def update_row_color(self, entry_id, hex_color):
-        """Обновляет цвет строки"""
+        """Обновляет цвет строки и сбрасывает флаг экспорта"""
         with self._write_lock:
             try:
                 with self._lock:
                     conn = sqlite3.connect(self.db_path)
                     cursor = conn.cursor()
                     cursor.execute(
-                        "UPDATE packaging_log SET row_color = ? WHERE id = ?",
+                        "UPDATE packaging_log SET row_color = ?, exported = 0 WHERE id = ?",
                         (hex_color, entry_id)
                     )
                     conn.commit()
@@ -248,7 +270,7 @@ class PackagingDataManager:
             finally:
                 conn.close()
 
-    def get_recent(self, limit=10):
+    def get_recent(self, limit=20):
         """Последние записи - копируем блокировки и подход из XMLDataManager"""
         with self._readers_lock:
             self._readers_count += 1

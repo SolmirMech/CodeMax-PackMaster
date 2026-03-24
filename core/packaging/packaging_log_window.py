@@ -144,9 +144,9 @@ class PackagingLogWindow:
 
         ttk.Button(
             buttons_frame,
-            text="📤 Экспорт в Excel",
+            text="🔄 Обновить Excel",
             command=self.export_to_excel,
-            width=18
+            width=17
         ).pack(side=tk.LEFT, padx=(10, 0))
 
         # Кнопка "Редкие функции"

@@ -29,7 +29,8 @@ class PackagingManager:
         return self.data_manager.search(filters)
 
     def update_cell(self, entry_id, column, value):
-        return self.data_manager.update_entry(entry_id, column, value)
+        """Обновление ячейки со сбросом флага экспорта"""
+        return self.data_manager.update_entry_with_coords(entry_id, column, value)
 
     def add_entry(self, data):
         return self.data_manager.add_entry(data)
@@ -154,22 +155,24 @@ class PackagingManager:
         if not entries:
             return 0
 
-        # Экспортируем
-        exported_count = PackagingExcel.export_to_excel(file_path, entries)
+        # Экспортируем и получаем координаты для новых записей
+        coords = PackagingExcel.export_to_excel(file_path, entries)
 
-        # Помечаем как экспортированные и сохраняем имя листа
-        if exported_count > 0:
-            entry_ids = [e['id'] for e in entries]
+        # Обновляем записи в БД
+        if coords:
+            for entry_id, (row_num, sheet_name) in coords.items():
+                # Обновляем source_row, source_sheet и exported=1
+                self.data_manager.update_entry(entry_id, 'source_row', row_num)
+                self.data_manager.update_entry(entry_id, 'source_sheet', sheet_name)
+                self.data_manager.update_entry(entry_id, 'exported', 1)
 
-            # Получаем имя активного листа из файла
-            wb = openpyxl.load_workbook(file_path)
-            sheet_name = wb.active.title
-            wb.close()
+            # Для записей, которые были обновлены (имели source_row)
+            # просто помечаем как экспортированные
+            existing_ids = [e['id'] for e in entries if e.get('source_row') and e['id'] not in coords]
+            if existing_ids:
+                self.data_manager.mark_as_exported(existing_ids)
 
-            # Обновляем записи: проставляем exported=1 и source_sheet
-            self.data_manager.mark_as_exported(entry_ids, sheet_name)
-
-        return exported_count
+        return len(entries)
 
     # noinspection PyIncorrectDocstring,PyUnusedLocal,PyMethodMayBeStatic
     def export_entries_to_excel(self, entries_by_sheet, template_path, output_path):
