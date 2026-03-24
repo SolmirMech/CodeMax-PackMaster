@@ -875,12 +875,18 @@ class OrderDataProcessor:
             try:
                 # Заполняем название продукции (основное поле)
                 self.roll_module.product_text.delete("1.0", tk.END)
-                
-                product_name = ""
-                if 'name' in product_data:
-                    product_name = product_data['name']
-                    
-                self.roll_module.product_text.insert("1.0", product_name)
+
+                product_name = product_data.get('name', '')
+                detail_number = product_data.get('detail_num', '')
+                customer = product_data.get('customer', '')
+
+                # Для заказчика Прогресс АО добавляем detail_number полностью
+                if customer == "ПРОГРЕСС АО" and detail_number:
+                    display_text = f"{detail_number}, {product_name}"
+                else:
+                    display_text = product_name
+
+                self.roll_module.product_text.insert("1.0", display_text)
                 
                 # устанавливаем дату эмиссии если она есть в данных
                 if 'date_emission' in product_data and product_data['date_emission']:
