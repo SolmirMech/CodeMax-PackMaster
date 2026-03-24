@@ -180,25 +180,25 @@ class PackagingLogWindow:
         rare_menu.add_separator()
 
         rare_menu.add_command(
-            label="🗑️ Удалить журнал",
+            label="🗑️ Удалить электронный журнал",
             command=self.clear_database
         )
 
         rare_menu.add_command(
-            label="🔄 Восстановить журнал",
+            label="🔄 Восстановить Excel журнал",
             command=self.restore_journal
         )
 
         rare_menu.add_command(
-            label="🎨 Сбросить цвет строки",
+            label="🎨 Сбросить цвет выбранной строки",
             command=self.reset_row_color
         )
 
         ttk.Button(
             buttons_frame,
-            text="🔍 Проверить",
+            text="🔍 Узнать о записи",
             command=self.check_selected_entry,
-            width=12
+            width=18
         ).pack(side=tk.LEFT, padx=(10, 0))
 
         # Статусная строка - теперь сверху
@@ -296,28 +296,30 @@ class PackagingLogWindow:
             self.window.after(2000, lambda: self.status_label.config(text=original_text, foreground="blue"))
 
     def check_selected_entry(self):
-        """Выводит информацию о выделенной записи из БД"""
+        """Выводит информацию о выделенной записи в понятном виде"""
         selection = self.tree.selection()
         if not selection:
-            self.status_label.config(text="❌ Не выбрана запись", foreground="orange")
+            self.set_status("❌ Не выбрана запись", "orange")
             return
 
         entry_id = int(selection[0])
-
-        # Получаем запись из менеджера напрямую из БД
         entries = self.manager.search_entries(id=entry_id)
         if not entries:
-            self.status_label.config(text=f"❌ Запись #{entry_id} не найдена", foreground="red")
+            self.set_status(f"❌ Запись #{entry_id} не найдена", "red")
             return
 
         entry = entries[0]
-        info = (f"ID:{entry['id']} | exported:{entry['exported']} | "
-                f"source_row:{entry.get('source_row')} | "
-                f"source_sheet:{entry.get('source_sheet', 'None')} | "
-                f"source_type:{entry.get('source_type')}")
 
-        self.status_label.config(text=info, foreground="blue")
-        # Не сбрасываем через 5 секунд
+        exported_status = "Да" if entry.get('exported') else "Нет"
+        excel_row = entry.get('source_row') if entry.get('source_row') else "НЕТ"
+        excel_sheet = entry.get('source_sheet') if entry.get('source_sheet') else "НЕТ"
+        source_type = "Импортирована" if entry.get('source_type') == 'excel' else "Добавлена вручную"
+
+        info = (f"ID: {entry['id']} | Экспортирована: {exported_status} | "
+                f"Строка Excel: {excel_row} | Лист Excel: {excel_sheet} | "
+                f"Источник: {source_type}")
+
+        self.set_status(info, "blue")
 
     def reset_row_color(self):
         """Сбрасывает цвет выбранной строки"""

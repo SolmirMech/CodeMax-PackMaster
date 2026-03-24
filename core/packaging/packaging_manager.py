@@ -177,7 +177,7 @@ class PackagingManager:
             self.data_manager.mark_as_exported(existing_ids)
 
         return len(entries)
-    
+
     # noinspection PyIncorrectDocstring,PyUnusedLocal,PyMethodMayBeStatic
     def export_entries_to_excel(self, entries_by_sheet, template_path, output_path):
         """
