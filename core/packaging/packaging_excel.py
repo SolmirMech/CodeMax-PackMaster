@@ -10,37 +10,63 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import gc
 
-from core.packaging.packaging_mapping import PACKAGING_EXCEL_MAPPING
-
-# Старый простой маппинг для импорта
-IMPORT_MAPPING = {
-    "columns": {
-        "date": 1,
-        "order_number": 2,
-        "customer": 3,
-        "product_name": 4,
-        "quantity_labels": 5,
-        "packer_name": 6,
-        "large_boxes": 7,
-        "small_boxes": 8,
-        "aquaLife_boxes": 9,
-        "note": 12,
-    },
-    "start_row": 2,
-    "date_format": "%d.%m.%Y"
-}
+# noinspection PyUnusedImports
+from core.packaging.packaging_mapping import PACKAGING_MAPPINGS, WORKSHOP_1_MAPPING
 
 
 class PackagingExcel:
     """ВСЯ работа с Excel для журнала упаковки"""
 
-    # core/packaging/packaging_excel.py
+    @staticmethod
+    def _mapping_to_import_format(mapping):
+        """
+        Преобразует PACKAGING_MAPPING в формат для импорта
+
+        Args:
+            mapping: словарь маппинга (WORKSHOP_1_MAPPING или WORKSHOP_2_MAPPING)
+
+        Returns:
+            dict: {
+                "columns": {"field_name": column_number, ...},
+                "start_row": int,
+                "date_format": str
+            }
+        """
+        return {
+            "columns": {
+                field: col_map.column
+                for field, col_map in mapping["columns"].items()
+            },
+            "start_row": mapping["start_row"],
+            "date_format": mapping.get("date_format", "%d.%m.%Y")
+        }
 
     @staticmethod
-    def import_from_excel(file_path, db_callback=None, progress_callback=None, only_first_sheet=True):
+    def import_from_excel(file_path, db_callback=None, progress_callback=None,
+                          only_first_sheet=True, mapping=None):
+        """
+        Импорт данных из Excel с динамическим маппингом
 
+        Args:
+            file_path: путь к файлу Excel
+            db_callback: функция для сохранения записи (entry, sheet_name)
+            progress_callback: функция для обновления прогресса (message, count)
+            only_first_sheet: импортировать только первый лист
+            mapping: маппинг структуры (WORKSHOP_1_MAPPING или WORKSHOP_2_MAPPING)
+
+        Returns:
+            tuple: (imported_total, errors)
+        """
         errors = []
         imported_total = 0
+
+        # Если маппинг не передан, используем дефолтный (цех 1)
+        if mapping is None:
+            from core.packaging.packaging_mapping import WORKSHOP_1_MAPPING
+            mapping = WORKSHOP_1_MAPPING
+
+        # Преобразуем в формат для импорта
+        import_format = PackagingExcel._mapping_to_import_format(mapping)
 
         try:
             # Используем read_only + keep_links=False для скорости
@@ -59,13 +85,16 @@ class PackagingExcel:
 
                 sheet_imported = 0
 
-                # Читаем строки
-                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=False), 2):
-                    if row[0].value is None:
+                # Читаем строки с учётом start_row из маппинга
+                start_row = import_format["start_row"]
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=start_row, values_only=False), start_row):
+                    # Проверяем первую ячейку (дата) - если пустая, пропускаем
+                    first_cell = row[0].value if len(row) > 0 else None
+                    if first_cell is None:
                         continue
 
                     try:
-                        entry = PackagingExcel._row_to_entry_from_readonly(row, row_idx)
+                        entry = PackagingExcel._row_to_entry_from_readonly(row, row_idx, mapping, import_format)
                         if db_callback:
                             db_callback(entry, sheet_name)
                         sheet_imported += 1
@@ -99,12 +128,14 @@ class PackagingExcel:
         return imported_total, errors
 
     @staticmethod
-    def _row_to_entry_from_readonly(row, row_index):
-        """Преобразование строки из read_only режима с чтением цвета через низкоуровневый доступ"""
+    def _row_to_entry_from_readonly(row, row_index, mapping, import_format):
+        """
+        Преобразование строки из read_only режима с динамическим маппингом
+        """
 
         def to_int(value):
             try:
-                return int(float(value)) if value else None
+                return int(float(value)) if value is not None else None
             except:
                 return None
 
@@ -119,140 +150,52 @@ class PackagingExcel:
                 return f"{year}-{month}-{day}"
             return str(date_cell)[:10]
 
-        # Получаем цвет из ячейки (в read_only режиме цвет доступен через parent)
+        # Получаем цвет из первой колонки, которая соответствует col_1..col_N
         row_color = None
         try:
-            # В read_only режиме нужно получить доступ к стилю через parent
-            cell = row[6]  # колонка 7 (большие коробки)
-            if cell.fill and cell.fill.start_color:
-                color = cell.fill.start_color
-                if hasattr(color, 'rgb') and color.rgb:
-                    rgb = color.rgb
-                    if len(rgb) == 8:
-                        rgb = rgb[2:]
-                    if rgb.upper() not in ('FFFFFF', '000000'):
-                        row_color = rgb
+            # Ищем первую колонку из маппинга, которая начинается с 'col_'
+            for field, col_map in mapping["columns"].items():
+                if field.startswith('col_'):
+                    col_index = col_map.column - 1
+                    if col_index < len(row):
+                        cell = row[col_index]
+                        if cell.fill and cell.fill.start_color:
+                            color = cell.fill.start_color
+                            if hasattr(color, 'rgb') and color.rgb:
+                                rgb = color.rgb
+                                if len(rgb) == 8:
+                                    rgb = rgb[2:]
+                                if rgb.upper() not in ('FFFFFF', '000000'):
+                                    row_color = rgb
+                        break  # берём цвет из первой попавшейся колонки коробок
         except:
             pass
 
-        return {
-            'source_row': row_index,
-            'date': format_date(row[0].value),
-            'order_number': str(row[1].value) if row[1].value else "",
-            'customer': str(row[2].value) if row[2].value else "",
-            'product_name': str(row[3].value) if row[3].value else "",
-            'quantity_labels': to_int(row[4].value),
-            'packer_name': str(row[5].value) if row[5].value else "",
-            'large_boxes': to_int(row[6].value),
-            'small_boxes': to_int(row[7].value),
-            'aquaLife_boxes': to_int(row[8].value),
-            'note': str(row[11].value) if len(row) > 11 and row[11].value else "",
-            'row_color': row_color
-        }
+        # Строим запись на основе маппинга
+        entry = {'source_row': row_index, 'row_color': row_color}
 
-    @staticmethod
-    def _validate_sheet_structure(sheet):
-        """
-        Проверяет, соответствует ли структура листа ожидаемой.
-        Проверяет первые 3 непустые строки на наличие данных в нужных колонках.
-        """
-        mapping = IMPORT_MAPPING
-        start_row = mapping["start_row"]
-        sample_rows = 0
-        max_samples = 3
+        for field, column_num in import_format["columns"].items():
+            col_index = column_num - 1
 
-        for row in sheet.iter_rows(min_row=start_row, max_row=start_row + 10):
-            # Первая ячейка (дата) - основной индикатор
-            if row[0].value is None:
+            if col_index >= len(row):
+                entry[field] = None
                 continue
 
-            sample_rows += 1
-            if sample_rows > max_samples:
-                break
+            cell_value = row[col_index].value
 
-            # Проверяем, что в ключевых колонках есть что-то похожее на данные
-            has_data = False
-            for field, col in mapping["columns"].items():
-                cell_value = row[col - 1].value
-                if cell_value not in (None, ""):
-                    has_data = True
-                    break
+            col_mapping = mapping["columns"].get(field)
 
-            if not has_data:
-                return False
-
-        return sample_rows > 0  # Хотя бы одна непустая строка нашлась
-
-    @staticmethod
-    def _row_to_entry(row, mapping):
-        """Преобразует строку Excel в словарь entry"""
-        entry = {}
-
-        # Дата
-        date_cell = row[mapping["columns"]["date"] - 1].value
-        if date_cell:
-            if hasattr(date_cell, 'strftime'):
-                entry['date'] = date_cell.strftime('%Y-%m-%d')
+            if field == "date":
+                entry[field] = format_date(cell_value)
+            elif col_mapping and col_mapping.data_type == "number":
+                entry[field] = to_int(cell_value)
             else:
-                date_match = re.search(r'(\d{2})[.\-](\d{2})[.\-](\d{4})', str(date_cell))
-                if date_match:
-                    day, month, year = date_match.groups()
-                    entry['date'] = f"{year}-{month}-{day}"
-                else:
-                    entry['date'] = str(date_cell)[:10]
-
-        # Номер заказа
-        order_val = row[mapping["columns"]["order_number"] - 1].value
-        entry['order_number'] = str(order_val) if order_val else ""
-
-        # Заказчик
-        customer_val = row[mapping["columns"]["customer"] - 1].value
-        entry['customer'] = str(customer_val) if customer_val else ""
-
-        # Наименование
-        product_val = row[mapping["columns"]["product_name"] - 1].value
-        entry['product_name'] = str(product_val) if product_val else ""
-
-        # Тираж
-        qty_val = row[mapping["columns"]["quantity_labels"] - 1].value
-        try:
-            entry['quantity_labels'] = int(float(qty_val)) if qty_val else None
-        except (ValueError, TypeError):
-            entry['quantity_labels'] = None
-
-        # Упаковщик
-        packer_val = row[mapping["columns"]["packer_name"] - 1].value
-        entry['packer_name'] = str(packer_val) if packer_val else ""
-
-        # Большие коробки
-        large_val = row[mapping["columns"]["large_boxes"] - 1].value
-        try:
-            entry['large_boxes'] = int(float(large_val)) if large_val else None
-        except (ValueError, TypeError):
-            entry['large_boxes'] = None
-
-        # Маленькие коробки
-        small_val = row[mapping["columns"]["small_boxes"] - 1].value
-        try:
-            entry['small_boxes'] = int(float(small_val)) if small_val else None
-        except (ValueError, TypeError):
-            entry['small_boxes'] = None
-
-        # Аквалайф
-        aqua_val = row[mapping["columns"]["aquaLife_boxes"] - 1].value
-        try:
-            entry['aquaLife_boxes'] = int(float(aqua_val)) if aqua_val else None
-        except (ValueError, TypeError):
-            entry['aquaLife_boxes'] = None
-
-        # Примечание
-        note_val = row[mapping["columns"]["note"] - 1].value
-        entry['note'] = str(note_val) if note_val else ""
+                entry[field] = str(cell_value) if cell_value is not None else ""
 
         return entry
 
     @staticmethod
-    def export_to_excel(file_path, entries, max_retries=3):
+    def export_to_excel(file_path, entries, mapping=None, max_retries=3):
         """
         Экспорт записей в Excel с поддержкой обновления существующих строк.
         Возвращает словарь {entry_id: (row_number, sheet_name)} для обновлённых/вставленных записей.
@@ -260,7 +203,11 @@ class PackagingExcel:
         if not entries:
             return {}
 
-        mapping = PACKAGING_EXCEL_MAPPING
+        # Если маппинг не передан, используем дефолтный (цех 1)
+        if mapping is None:
+            from core.packaging.packaging_mapping import WORKSHOP_1_MAPPING
+            mapping = WORKSHOP_1_MAPPING
+
         lock_file = file_path + ".lock"
         wb = None
         result_coords = {}
@@ -402,7 +349,7 @@ class PackagingExcel:
             gc.collect()
 
     @staticmethod
-    def export_entries(entries_by_sheet, template_path, output_path):
+    def export_entries(entries_by_sheet, template_path, output_path, mapping=None):
         """
         Экспортирует записи в Excel с сохранением структуры листов и цветов строк
 
@@ -410,10 +357,16 @@ class PackagingExcel:
             entries_by_sheet: список кортежей [(имя_листа, [список_записей]), ...]
             template_path: путь к файлу-шаблону
             output_path: путь для сохранения результата
+            mapping: маппинг структуры (WORKSHOP_1_MAPPING или WORKSHOP_2_MAPPING)
 
         Returns:
             int: количество экспортированных записей
         """
+        # Если маппинг не передан, используем дефолтный (цех 1)
+        if mapping is None:
+            from core.packaging.packaging_mapping import WORKSHOP_1_MAPPING
+            mapping = WORKSHOP_1_MAPPING
+
         wb = None
         try:
             # Копируем шаблон
@@ -422,7 +375,6 @@ class PackagingExcel:
             # Открываем копию
             wb = load_workbook(output_path)
 
-            mapping = PACKAGING_EXCEL_MAPPING
             start_row = mapping["start_row"]
 
             total_exported = 0

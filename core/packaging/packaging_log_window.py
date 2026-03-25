@@ -26,6 +26,10 @@ class PackagingLogWindow:
         self.config_manager = config_manager
         self.order_processor = order_processor
         self.coordinator = coordinator
+        # Получаем текущий цех и маппинг
+        self.current_workshop = None
+        self.current_mapping = None
+        self._update_mapping()
         
         # Переменные для полей поиска
         self.date_var = StringVar()
@@ -44,6 +48,24 @@ class PackagingLogWindow:
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
         workshop = self.coordinator.get_workshop()
+
+        # Если цех изменился — обновляем маппинг и перестраиваем таблицу
+        if self.current_workshop != workshop:
+            self._update_mapping()
+            self._rebuild_table_columns()  # пересоздаём колонки таблицы
+            self.load_recent()  # перезагружаем данные
+
+    def _update_mapping(self):
+        """Обновляет маппинг по текущему цеху"""
+        from core.packaging.packaging_mapping import PACKAGING_MAPPINGS
+
+        if self.coordinator:
+            workshop = self.coordinator.get_workshop()
+        else:
+            workshop = "workshop_1"
+
+        self.current_workshop = workshop
+        self.current_mapping = PACKAGING_MAPPINGS.get(workshop, PACKAGING_MAPPINGS["workshop_1"])
 
     # noinspection SpellCheckingInspection
     def create_window(self):
@@ -222,46 +244,49 @@ class PackagingLogWindow:
         table_frame = ttk.LabelFrame(self.window, text="Записи", padding=5)
         table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        # Создаём Treeview
-        columns = (
-            "date", "order_number", "customer", "product_name",
-            "quantity_labels", "packer_name", "large_boxes", "small_boxes",
-            "aquaLife_boxes", "note"
-        )
+        # Получаем маппинг
+        self._update_mapping()
+
+        # Строим колонки из display_names (только те, что нужно показывать)
+        columns = list(self.current_mapping["display_names"].keys())
 
         style = ttk.Style()
-        style.configure("PackagingLog.Treeview", rowheight=60)
+        style.configure("PackagingLog.Treeview", rowheight=70)
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
             show="headings",
-            height=40,
             selectmode="browse",
             style="PackagingLog.Treeview"
         )
-        # Настраиваем заголовки
-        self.tree.heading("date", text="Дата")
-        self.tree.heading("order_number", text="№ заказа")
-        self.tree.heading("customer", text="Заказчик")
-        self.tree.heading("product_name", text="Наименование")
-        self.tree.heading("quantity_labels", text="Тираж")
-        self.tree.heading("packer_name", text="Упаковщик")
-        self.tree.heading("large_boxes", text="Боль")
-        self.tree.heading("small_boxes", text="Мал")
-        self.tree.heading("aquaLife_boxes", text="Aqua")
-        self.tree.heading("note", text="Примечание")
 
-        # Ширина колонок
-        self.tree.column("date", width=70, anchor="center")
-        self.tree.column("order_number", width=65, anchor="center")
-        self.tree.column("customer", width=200, anchor="w")
-        self.tree.column("product_name", width=350, anchor="w")
-        self.tree.column("quantity_labels", width=65, anchor="center")
-        self.tree.column("packer_name", width=85, anchor="w")
-        self.tree.column("large_boxes", width=15, anchor="center")
-        self.tree.column("small_boxes", width=15, anchor="center")
-        self.tree.column("aquaLife_boxes", width=15, anchor="center")
-        self.tree.column("note", width=30, anchor="w")
+        # Настраиваем заголовки и ширину колонок
+        for field in columns:
+            display_name = self._get_display_name(field)
+            self.tree.heading(field, text=display_name)
+
+            # Ширина в зависимости от поля
+            if field == "date":
+                width = 70
+            elif field == "order_number":
+                width = 65
+            elif field == "customer":
+                width = 200
+            elif field == "product_name":
+                width = 350
+            elif field == "quantity_labels":
+                width = 65
+            elif field == "packer_name":
+                width = 85
+            elif field.startswith("col_"):
+                width = 25
+            elif field == "note":
+                width = 30
+            else:
+                width = 20
+
+            anchor = "center" if field not in ["customer", "product_name", "note"] else "w"
+            self.tree.column(field, width=width, anchor=anchor)
 
         # Скроллбар
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -270,15 +295,52 @@ class PackagingLogWindow:
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Привязка событий для редактирования
+        # Привязка событий
         self.tree.bind("<Double-Button-1>", self.on_double_click)
-        # Привязка правого клика для выбора цвета строки
         self.tree.bind("<Button-3>", self.on_right_click)
 
         # Загружаем последние записи
         self.load_recent()
-        # Показываем путь к файлу в статусе
         self.update_status_with_file_path()
+
+    def _rebuild_table_columns(self):
+        """Перестраивает колонки таблицы при смене цеха"""
+        if not self.tree:
+            return
+
+        # Очищаем существующие колонки
+        existing_columns = list(self.tree["columns"])
+        for col in existing_columns:
+            self.tree.heading(col, text="")
+            self.tree.column(col, width=0)
+
+        # Удаляем все колонки из Treeview (через configure)
+        self.tree["columns"] = []
+
+        # Добавляем новые колонки из маппинга
+        columns = list(self.current_mapping["columns"].keys())
+        self.tree["columns"] = columns
+
+        # Настраиваем заголовки и ширину
+        for field in columns:
+            display_name = self._get_display_name(field)
+            self.tree.heading(field, text=display_name)
+
+            # Ширина в зависимости от поля
+            if field in ['date', 'order_number']:
+                width = 70
+            elif field in ['customer', 'product_name']:
+                width = 200
+            elif field.startswith('col_'):
+                width = 50
+            else:
+                width = 85
+
+            self.tree.column(field, width=width, anchor="center")
+
+    def _get_display_name(self, field):
+        """Возвращает отображаемое имя поля для заголовка"""
+        return self.current_mapping["display_names"].get(field, field)
 
     def show_status_menu(self, event):
         """Показывает контекстное меню для статусной строки"""
@@ -575,7 +637,8 @@ class PackagingLogWindow:
             imported, errors = self.manager.import_from_excel(
                 file_path,
                 progress_callback=update_progress,
-                only_first_sheet=self.only_first_sheet_var.get()
+                only_first_sheet=self.only_first_sheet_var.get(),
+                mapping=self.current_mapping
             )
 
             # Если окно ещё не закрыто (например, при ошибке)
@@ -628,7 +691,7 @@ class PackagingLogWindow:
             self.window.update()
 
             try:
-                exported = self.manager.export_unexported_to_excel(file_path)
+                exported = self.manager.export_unexported_to_excel(file_path, mapping=self.current_mapping)
 
                 if exported > 0:
                     self.set_status(f"✅ Экспортировано новых записей: {exported}", "green")
@@ -652,7 +715,7 @@ class PackagingLogWindow:
             self.set_status("⏳ Экспорт...")
             self.window.update()
 
-            exported = self.manager.export_unexported_to_excel(file_path)
+            exported = self.manager.export_unexported_to_excel(file_path, mapping=self.current_mapping)
 
             if exported > 0:
                 self.set_status(f"✅ Экспортировано новых записей: {exported}", "green")
@@ -681,29 +744,28 @@ class PackagingLogWindow:
         color_tags = {}
 
         for i, entry in enumerate(self.entries):
-            date_str = entry["date"]
-            if date_str and len(date_str) == 10 and date_str[4] == '-':
-                try:
-                    parts = date_str.split('-')
-                    date_str = f"{parts[2]}.{parts[1]}.{parts[0]}"
-                except:
-                    pass
+            # Формируем значения по порядку колонок из маппинга
+            values = []
+            for field in self.tree["columns"]:
+                value = entry.get(field, "")
+                if value is None:
+                    value = ""
 
-            customer = self._wrap_text(entry["customer"], 25)
-            product = self._wrap_text(entry["product_name"], 35)
+                # Спецобработка для даты
+                if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
+                    try:
+                        y, m, d = str(value).split('-')
+                        value = f"{d}.{m}.{y}"
+                    except:
+                        pass
 
-            values = (
-                date_str,
-                entry["order_number"],
-                customer,
-                product,
-                entry["quantity_labels"] if entry["quantity_labels"] else "",
-                entry["packer_name"],
-                entry["large_boxes"] if entry["large_boxes"] else "",
-                entry["small_boxes"] if entry["small_boxes"] else "",
-                entry["aquaLife_boxes"] if entry["aquaLife_boxes"] else "",
-                entry["note"]
-            )
+                # Спецобработка для текстовых полей с переносом
+                if field == "customer":
+                    value = self._wrap_text(value, 25)
+                elif field == "product_name":
+                    value = self._wrap_text(value, 35)
+
+                values.append(value)
 
             # Определяем теги
             tags = []
@@ -711,13 +773,11 @@ class PackagingLogWindow:
 
             if row_color:
                 color_tag = f"color_{row_color}"
-                # Создаём тег, если его ещё нет
                 if color_tag not in color_tags:
                     self.tree.tag_configure(color_tag, background=f"#{row_color}")
                     color_tags[color_tag] = True
                 tags.append(color_tag)
             else:
-                # Чередование для строк без цвета
                 tags.append('even' if i % 2 == 0 else 'odd')
 
             self.tree.insert("", "end", values=values, iid=entry["id"], tags=tags)
@@ -798,13 +858,19 @@ class PackagingLogWindow:
             if self.order_processor:
                 defaults = self.order_processor.get_packaging_defaults()
             else:
+                # Создаём словарь со всеми полями БД
                 defaults = {
                     'date': '',
-                    'order_number': '', 'customer': '', 'product_name': '',
-                    'packer_name': '', 'quantity_labels': None,
-                    'large_boxes': None, 'small_boxes': None,
-                    'aquaLife_boxes': None, 'note': ''
+                    'order_number': '',
+                    'customer': '',
+                    'product_name': '',
+                    'quantity_labels': None,
+                    'packer_name': '',
+                    'note': ''
                 }
+                # Добавляем все col_1..col_10
+                for i in range(1, 11):
+                    defaults[f'col_{i}'] = None
 
             # Сохраняем в БД
             entry_id = self.manager.add_entry(defaults)
@@ -825,7 +891,7 @@ class PackagingLogWindow:
 
         except Exception as e:
             self.set_status(f"❌ Ошибка: {str(e)}")
-    
+
     def delete_selected(self):
         """Удаляет выбранную запись"""
         selection = self.tree.selection()

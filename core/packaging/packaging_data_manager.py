@@ -67,7 +67,7 @@ class PackagingDataManager:
                     # Удаляем старую таблицу
                     cursor.execute("DROP TABLE IF EXISTS packaging_log")
 
-                    # Создаём заново с новой структурой (добавлен sheet_index)
+                    # Создаём заново с новой структурой
                     cursor.execute("""
                         CREATE TABLE packaging_log (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,9 +77,16 @@ class PackagingDataManager:
                             product_name TEXT,
                             quantity_labels INTEGER DEFAULT 0,
                             packer_name TEXT,
-                            large_boxes INTEGER DEFAULT 0,
-                            small_boxes INTEGER DEFAULT 0,
-                            aquaLife_boxes INTEGER DEFAULT 0,
+                            col_1 INTEGER DEFAULT 0,
+                            col_2 INTEGER DEFAULT 0,
+                            col_3 INTEGER DEFAULT 0,
+                            col_4 INTEGER DEFAULT 0,
+                            col_5 INTEGER DEFAULT 0,
+                            col_6 INTEGER DEFAULT 0,
+                            col_7 INTEGER DEFAULT 0,
+                            col_8 INTEGER DEFAULT 0,
+                            col_9 INTEGER DEFAULT 0,
+                            col_10 INTEGER DEFAULT 0,
                             note TEXT,
                             exported INTEGER DEFAULT 0,
                             source_type TEXT DEFAULT 'manual',
@@ -111,6 +118,7 @@ class PackagingDataManager:
                 conn.close()
 
     def on_settings_changed(self, context=None):
+        """Заглушка для отслеживания изменений через координатор"""
         pass
         
     def set_status_callback(self, callback):
@@ -133,9 +141,16 @@ class PackagingDataManager:
                         product_name TEXT,
                         quantity_labels INTEGER DEFAULT 0,
                         packer_name TEXT,
-                        large_boxes INTEGER DEFAULT 0,
-                        small_boxes INTEGER DEFAULT 0,
-                        aquaLife_boxes INTEGER DEFAULT 0,
+                        col_1 INTEGER DEFAULT 0,
+                        col_2 INTEGER DEFAULT 0,
+                        col_3 INTEGER DEFAULT 0,
+                        col_4 INTEGER DEFAULT 0,
+                        col_5 INTEGER DEFAULT 0,
+                        col_6 INTEGER DEFAULT 0,
+                        col_7 INTEGER DEFAULT 0,
+                        col_8 INTEGER DEFAULT 0,
+                        col_9 INTEGER DEFAULT 0,
+                        col_10 INTEGER DEFAULT 0,
                         note TEXT,
                         exported INTEGER DEFAULT 0,
                         source_type TEXT DEFAULT 'manual',
@@ -363,10 +378,10 @@ class PackagingDataManager:
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
-                         packer_name, large_boxes, small_boxes, aquaLife_boxes, note, 
+                         packer_name, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10, note, 
                          exported, source_type, source_file, source_sheet, source_row, 
                          sheet_index, row_color)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -374,9 +389,16 @@ class PackagingDataManager:
                         data.get('product_name', ''),
                         data.get('quantity_labels') if data.get('quantity_labels') not in (None, '') else None,
                         data.get('packer_name', ''),
-                        data.get('large_boxes') if data.get('large_boxes') not in (None, '') else None,
-                        data.get('small_boxes') if data.get('small_boxes') not in (None, '') else None,
-                        data.get('aquaLife_boxes') if data.get('aquaLife_boxes') not in (None, '') else None,
+                        data.get('col_1') if data.get('col_1') not in (None, '') else None,
+                        data.get('col_2') if data.get('col_2') not in (None, '') else None,
+                        data.get('col_3') if data.get('col_3') not in (None, '') else None,
+                        data.get('col_4') if data.get('col_4') not in (None, '') else None,
+                        data.get('col_5') if data.get('col_5') not in (None, '') else None,
+                        data.get('col_6') if data.get('col_6') not in (None, '') else None,
+                        data.get('col_7') if data.get('col_7') not in (None, '') else None,
+                        data.get('col_8') if data.get('col_8') not in (None, '') else None,
+                        data.get('col_9') if data.get('col_9') not in (None, '') else None,
+                        data.get('col_10') if data.get('col_10') not in (None, '') else None,
                         data.get('note', ''),
                         exported,
                         source_type,

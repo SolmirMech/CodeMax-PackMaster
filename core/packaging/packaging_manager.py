@@ -46,7 +46,8 @@ class PackagingManager:
 
     # === Методы Excel ===
     # noinspection SpellCheckingInspection
-    def import_from_excel(self, file_path, progress_callback=None, only_first_sheet=True):
+    def import_from_excel(self, file_path, progress_callback=None,
+                          only_first_sheet=True, mapping=None):
         """
         Импорт из Excel с валидацией и прогрессом
         """
@@ -92,7 +93,8 @@ class PackagingManager:
                 file_path,
                 db_callback=save_entry,
                 progress_callback=progress_callback,
-                only_first_sheet=only_first_sheet
+                only_first_sheet=only_first_sheet,
+                mapping=mapping
             )
 
             # Помечаем как экспортированные
@@ -145,7 +147,7 @@ class PackagingManager:
 
         return errors
 
-    def export_unexported_to_excel(self, file_path):
+    def export_unexported_to_excel(self, file_path, mapping=None):
         """
         Экспортирует все неэкспортированные записи в Excel.
 
@@ -162,7 +164,7 @@ class PackagingManager:
             return 0
 
         # Экспортируем и получаем координаты для новых записей
-        coords = PackagingExcel.export_to_excel(file_path, entries)
+        coords = PackagingExcel.export_to_excel(file_path, entries, mapping=mapping)
 
         # Обновляем записи в БД: для новых записей сохраняем координаты
         if coords:
@@ -179,7 +181,7 @@ class PackagingManager:
         return len(entries)
 
     # noinspection PyIncorrectDocstring,PyUnusedLocal,PyMethodMayBeStatic
-    def export_entries_to_excel(self, entries_by_sheet, template_path, output_path):
+    def export_entries_to_excel(self, entries_by_sheet, template_path, output_path, mapping=None):
         """
         Экспортирует записи в Excel файл с сохранением структуры листов
 
@@ -191,7 +193,7 @@ class PackagingManager:
         Returns:
             int: количество экспортированных записей
         """
-        return PackagingExcel.export_entries(entries_by_sheet, template_path, output_path)
+        return PackagingExcel.export_entries(entries_by_sheet, template_path, output_path, mapping=mapping)
 
     def update_row_color(self, entry_id, hex_color):
         """Обновляет цвет строки"""
