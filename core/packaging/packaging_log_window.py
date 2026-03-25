@@ -12,6 +12,20 @@ from core.packaging.packaging_manager import PackagingManager
 # noinspection PyTypeChecker
 class PackagingLogWindow:
     """Окно журнала учёта упаковки"""
+
+    # Конфигурация колонок таблицы
+    COLUMN_CONFIG = {
+        "date": {"width": 88, "anchor": "center", "wrap": False},
+        "order_number": {"width": 65, "anchor": "center", "wrap": False},
+        "customer": {"width": 200, "anchor": "w", "wrap": True, "wrap_len": 18},
+        "product_name": {"width": 250, "anchor": "w", "wrap": True, "wrap_len": 25},
+        "quantity_labels": {"width": 65, "anchor": "center", "wrap": False},
+        "packer_name": {"width": 80, "anchor": "center", "wrap": True, "wrap_len": 10},
+        "note": {"width": 25, "anchor": "w", "wrap": False},
+    }
+
+    # Для col_* динамически
+    DEFAULT_COL_CONFIG = {"width": 45, "anchor": "center", "wrap": False}
     
     def __init__(self, parent, config_manager, order_processor=None, coordinator=None):
         self.status_menu = None
@@ -43,6 +57,12 @@ class PackagingLogWindow:
         self.create_window()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+
+    def _get_column_config(self, field):
+        """Возвращает конфигурацию для колонки"""
+        if field.startswith("col_"):
+            return self.COLUMN_CONFIG.get(field, self.DEFAULT_COL_CONFIG)
+        return self.COLUMN_CONFIG.get(field, {"width": 85, "anchor": "center", "wrap": False})
 
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
@@ -251,6 +271,7 @@ class PackagingLogWindow:
 
         style = ttk.Style()
         style.configure("PackagingLog.Treeview", rowheight=70)
+        style.configure("Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(0, 20))
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
@@ -264,28 +285,8 @@ class PackagingLogWindow:
             display_name = self._get_display_name(field)
             self.tree.heading(field, text=display_name)
 
-            # Ширина в зависимости от поля
-            if field == "date":
-                width = 70
-            elif field == "order_number":
-                width = 65
-            elif field == "customer":
-                width = 200
-            elif field == "product_name":
-                width = 350
-            elif field == "quantity_labels":
-                width = 65
-            elif field == "packer_name":
-                width = 85
-            elif field.startswith("col_"):
-                width = 25
-            elif field == "note":
-                width = 30
-            else:
-                width = 20
-
-            anchor = "center" if field not in ["customer", "product_name", "note"] else "w"
-            self.tree.column(field, width=width, anchor=anchor)
+            config = self._get_column_config(field)
+            self.tree.column(field, width=config["width"], anchor=config["anchor"])
 
         # Скроллбар
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -323,28 +324,8 @@ class PackagingLogWindow:
             display_name = self._get_display_name(field)
             self.tree.heading(field, text=display_name)
 
-            # Ширина в зависимости от поля
-            if field == "date":
-                width = 70
-            elif field == "order_number":
-                width = 65
-            elif field == "customer":
-                width = 200
-            elif field == "product_name":
-                width = 350
-            elif field == "quantity_labels":
-                width = 65
-            elif field == "packer_name":
-                width = 85
-            elif field.startswith("col_"):
-                width = 50
-            elif field == "note":
-                width = 30
-            else:
-                width = 85
-
-            anchor = "center" if field not in ["customer", "product_name", "note"] else "w"
-            self.tree.column(field, width=width, anchor=anchor)
+            config = self._get_column_config(field)
+            self.tree.column(field, width=config["width"], anchor=config["anchor"])
 
     def _get_display_name(self, field):
         """Возвращает отображаемое имя поля для заголовка"""
@@ -777,11 +758,11 @@ class PackagingLogWindow:
                     except:
                         pass
 
-                # Спецобработка для текстовых полей с переносом
-                if field == "customer":
-                    value = self._wrap_text(value, 25)
-                elif field == "product_name":
-                    value = self._wrap_text(value, 35)
+                # Спецобработка для полей с переносом
+                config = self._get_column_config(field)
+                if config.get("wrap", False):
+                    wrap_len = config.get("wrap_len", 30)
+                    value = self._wrap_text(value, wrap_len)
 
                 values.append(value)
 
@@ -818,8 +799,32 @@ class PackagingLogWindow:
             if len(current_line + word) <= length:
                 current_line += (word + " ")
             else:
-                lines.append(current_line.strip())
-                current_line = word + " "
+                # Если слово длиннее length, ищем дефис
+                if len(word) > length:
+                    parts = []
+                    remaining = word
+                    while len(remaining) > length:
+                        # Ищем дефис в пределах length
+                        hyphen_pos = remaining[:length].rfind('-')
+                        if hyphen_pos > 0:
+                            parts.append(remaining[:hyphen_pos + 1])
+                            remaining = remaining[hyphen_pos + 1:]
+                        else:
+                            parts.append(remaining[:length])
+                            remaining = remaining[length:]
+                    parts.append(remaining)
+
+                    # Добавляем текущую линию
+                    if current_line.strip():
+                        lines.append(current_line.strip())
+
+                    # Добавляем части
+                    for part in parts[:-1]:
+                        lines.append(part)
+                    current_line = parts[-1] + " "
+                else:
+                    lines.append(current_line.strip())
+                    current_line = word + " "
 
         if current_line:
             lines.append(current_line.strip())

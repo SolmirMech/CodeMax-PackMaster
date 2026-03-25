@@ -54,6 +54,7 @@ CALIBRI_18_BOLD = Font(name='Calibri', size=18, bold=True)
 # K - Запасная (col_5)
 # L - Примечание
 
+# noinspection SpellCheckingInspection
 WORKSHOP_1_MAPPING = {
     "name": "Цех 1",
     "start_row": 2,  # данные начинаются со 2 строки
@@ -65,10 +66,10 @@ WORKSHOP_1_MAPPING = {
         "product_name": "Наименование",
         "quantity_labels": "Тираж",
         "packer_name": "Упаковщик",
-        "col_1": "Большие коробки",
-        "col_2": "Маленькие коробки",
-        "col_3": "Аквалайф",
-        "note": "Примечание"
+        "col_1": "Большие\nкоробки",
+        "col_2": "Маленькие\nкоробки",
+        "col_3": "Аквалайф\nкоробки",
+        "note": "Приме\nчание"
     },
     "columns": {
         "date": ColumnMapping(
@@ -212,12 +213,11 @@ WORKSHOP_2_MAPPING = {
         "product_name": "Наименование",
         "quantity_labels": "Тираж",
         "col_1": "Вес, кг",
-        "col_2": "Поддоны мал.",
-        "col_3": "Поддоны евр.",
-        "col_4": "Поддоны бол.",
-        "col_5": "Коробки мал.",
-        "col_6": "Коробки бол.",
-        "note": "Примечание"
+        "col_2": "Поддоны\nмалые",
+        "col_3": "Поддоны\nевро",
+        "col_4": "Поддоны\nбольшие",
+        "col_5": "Коробки\nмалые",
+        "col_6": "Коробки\nбольшие"
     },
     "columns": {
         "date": ColumnMapping(

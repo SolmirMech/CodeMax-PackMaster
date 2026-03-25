@@ -387,6 +387,11 @@ class PackagingExcel:
                 # Копируем структуру из листа-шаблона (который называется "Шаблон")
                 ws = wb.copy_worksheet(wb['Шаблон'])
                 ws.title = sheet_name[:31]
+                # Закрепить заголовок
+                if mapping.get("name") == "Цех 2":
+                    ws.freeze_panes = 'A3'
+                else:
+                    ws.freeze_panes = 'A2'
 
                 # Заполняем данными
                 for idx, entry in enumerate(entries):
