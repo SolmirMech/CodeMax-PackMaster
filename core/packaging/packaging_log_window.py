@@ -56,16 +56,15 @@ class PackagingLogWindow:
             self.load_recent()  # перезагружаем данные
 
     def _update_mapping(self):
-        """Обновляет маппинг по текущему цеху"""
         from core.packaging.packaging_mapping import PACKAGING_MAPPINGS
 
         if self.coordinator:
-            workshop = self.coordinator.get_workshop()
+            workshop = str(self.coordinator.get_workshop())  # "1" или "2"
         else:
-            workshop = "workshop_1"
+            workshop = "1"
 
         self.current_workshop = workshop
-        self.current_mapping = PACKAGING_MAPPINGS.get(workshop, PACKAGING_MAPPINGS["workshop_1"])
+        self.current_mapping = PACKAGING_MAPPINGS.get(workshop, PACKAGING_MAPPINGS["1"])
 
     # noinspection SpellCheckingInspection
     def create_window(self):
@@ -309,34 +308,43 @@ class PackagingLogWindow:
             return
 
         # Очищаем существующие колонки
-        existing_columns = list(self.tree["columns"])
-        for col in existing_columns:
+        for col in self.tree["columns"]:
             self.tree.heading(col, text="")
             self.tree.column(col, width=0)
 
-        # Удаляем все колонки из Treeview (через configure)
-        self.tree["columns"] = []
+        # Получаем новые колонки из display_names
+        new_columns = list(self.current_mapping["display_names"].keys())
 
-        # Добавляем новые колонки из маппинга
-        columns = list(self.current_mapping["columns"].keys())
-        self.tree["columns"] = columns
+        # Меняем колонки Treeview
+        self.tree["columns"] = new_columns
 
-        # Настраиваем заголовки и ширину
-        for field in columns:
+        # Настраиваем каждую колонку
+        for field in new_columns:
             display_name = self._get_display_name(field)
             self.tree.heading(field, text=display_name)
 
             # Ширина в зависимости от поля
-            if field in ['date', 'order_number']:
+            if field == "date":
                 width = 70
-            elif field in ['customer', 'product_name']:
+            elif field == "order_number":
+                width = 65
+            elif field == "customer":
                 width = 200
-            elif field.startswith('col_'):
+            elif field == "product_name":
+                width = 350
+            elif field == "quantity_labels":
+                width = 65
+            elif field == "packer_name":
+                width = 85
+            elif field.startswith("col_"):
                 width = 50
+            elif field == "note":
+                width = 30
             else:
                 width = 85
 
-            self.tree.column(field, width=width, anchor="center")
+            anchor = "center" if field not in ["customer", "product_name", "note"] else "w"
+            self.tree.column(field, width=width, anchor=anchor)
 
     def _get_display_name(self, field):
         """Возвращает отображаемое имя поля для заголовка"""
@@ -428,7 +436,10 @@ class PackagingLogWindow:
             return
 
         new_file = self.config_manager.create_restored_log_path()
-        template = self.config_manager.get_packaging_log_template()
+        if self.current_workshop == "2":
+            template = self.config_manager.get_packaging_log_template_2()
+        else:
+            template = self.config_manager.get_packaging_log_template()
 
         if not os.path.exists(template):
             self.set_status("❌ Шаблон журнала не найден", "red")
@@ -460,7 +471,12 @@ class PackagingLogWindow:
 
         try:
             # Запускаем восстановление
-            exported = self.manager.export_entries_to_excel(entries_by_sheet, template, new_file)
+            exported = self.manager.export_entries_to_excel(
+                entries_by_sheet,
+                template,
+                new_file,
+                mapping=self.current_mapping
+            )
 
             progress_window.destroy()
 

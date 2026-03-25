@@ -199,9 +199,10 @@ WORKSHOP_1_MAPPING = {
 # K - Коробки малые (col_5)
 # L - Коробки большие (col_6)
 
+# === Маппинг для ЦЕХА 2 ===
 WORKSHOP_2_MAPPING = {
     "name": "Цех 2",
-    "start_row": 3,  # данные начинаются с 3 строки (2 строки заголовка)
+    "start_row": 3,
     "date_format": "%d.%m.%Y",
     "display_names": {
         "date": "Дата",
@@ -223,7 +224,7 @@ WORKSHOP_2_MAPPING = {
             column=1,
             data_type="date",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -232,7 +233,7 @@ WORKSHOP_2_MAPPING = {
             column=2,
             data_type="text",
             style=CellStyle(
-                font=CALIBRI_11_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -241,7 +242,7 @@ WORKSHOP_2_MAPPING = {
             column=3,
             data_type="text",
             style=CellStyle(
-                font=CALIBRI_18_BOLD,
+                font=Font(name='Arial Cyr', size=11, bold=True),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -250,16 +251,16 @@ WORKSHOP_2_MAPPING = {
             column=4,
             data_type="text",
             style=CellStyle(
-                font=CALIBRI_11_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
-                alignment=CENTER_ALIGN
+                alignment=LEFT_ALIGN
             )
         ),
         "product_name": ColumnMapping(
             column=5,
             data_type="text",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=LEFT_ALIGN
             )
@@ -268,9 +269,9 @@ WORKSHOP_2_MAPPING = {
             column=6,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Calibri', size=11),
                 border=THIN_BORDER,
-                alignment=CENTER_ALIGN,
+                alignment=Alignment(horizontal='right', vertical='center'),
                 number_format="#,##0"
             )
         ),
@@ -278,7 +279,7 @@ WORKSHOP_2_MAPPING = {
             column=7,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11, bold=True),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -287,7 +288,7 @@ WORKSHOP_2_MAPPING = {
             column=8,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_15_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -296,7 +297,7 @@ WORKSHOP_2_MAPPING = {
             column=9,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_15_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -305,7 +306,7 @@ WORKSHOP_2_MAPPING = {
             column=10,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_15_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -314,7 +315,7 @@ WORKSHOP_2_MAPPING = {
             column=11,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_15_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -323,43 +324,43 @@ WORKSHOP_2_MAPPING = {
             column=12,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_15_BOLD,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
         ),
-        "col_7": ColumnMapping(  # Запасная
+        "col_7": ColumnMapping(
             column=13,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
         ),
-        "col_8": ColumnMapping(  # Запасная
+        "col_8": ColumnMapping(
             column=14,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
         ),
-        "col_9": ColumnMapping(  # Запасная
+        "col_9": ColumnMapping(
             column=15,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
         ),
-        "col_10": ColumnMapping(  # Запасная
+        "col_10": ColumnMapping(
             column=16,
             data_type="number",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=CENTER_ALIGN
             )
@@ -368,7 +369,7 @@ WORKSHOP_2_MAPPING = {
             column=17,
             data_type="text",
             style=CellStyle(
-                font=CALIBRI_11,
+                font=Font(name='Arial Cyr', size=11),
                 border=THIN_BORDER,
                 alignment=Alignment(horizontal='left', vertical='center', wrap_text=True)
             )
@@ -379,8 +380,8 @@ WORKSHOP_2_MAPPING = {
 
 # Словарь всех маппингов по ключу цеха
 PACKAGING_MAPPINGS = {
-    "workshop_1": WORKSHOP_1_MAPPING,
-    "workshop_2": WORKSHOP_2_MAPPING,
+    "1": WORKSHOP_1_MAPPING,
+    "2": WORKSHOP_2_MAPPING,
 }
 
 

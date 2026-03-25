@@ -36,6 +36,10 @@ class ConfigManager:
         """Возвращает путь к шаблону журнала упаковки"""
         return self.get_asset_path("packaging_log_template.xlsx")
 
+    def get_packaging_log_template_2(self):
+        """Возвращает путь к шаблону журнала упаковки для 2 цеха"""
+        return self.get_asset_path("packaging_log_template_2.xlsx")
+
     def create_restored_log_path(self):
         """Создаёт путь для восстановленного журнала"""
         from datetime import datetime
