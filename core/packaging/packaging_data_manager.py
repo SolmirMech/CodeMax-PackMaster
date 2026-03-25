@@ -18,8 +18,14 @@ class PackagingDataManager:
         self.config = config_manager
         self.coordinator = coordinator
 
+        # Определяем текущий цех
+        if coordinator:
+            workshop_id = coordinator.get_workshop()
+        else:
+            workshop_id = "1"
+
         # Путь к БД в папке data AppData
-        self.db_path = config_manager.data_dir / "packaging.db"
+        self.db_path = config_manager.data_dir / f"packaging_{workshop_id}_cex.db"
 
         # Атрибуты для управления потоками (КОПИРУЕМ из XMLDataManager)
         self._readers_count = 0  # Счётчик активных читателей
@@ -28,11 +34,21 @@ class PackagingDataManager:
         self._lock = threading.RLock()  # Основная блокировка
 
         # Инициализация БД
+        self.workshop_id = None
+        self._update_workshop()
         self._init_database()
 
         # Подписываемся на уведомления координатора
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+
+    def _update_workshop(self):
+        """Определяем текущий цех"""
+        if self.coordinator:
+            self.workshop_id = self.coordinator.get_workshop()
+        else:
+            self.workshop_id = "1"
+        self.db_path = self.config.data_dir / f"packaging_{self.workshop_id}_cex.db"
 
     def update_entry_with_coords(self, entry_id, field, value):
         """
@@ -118,9 +134,13 @@ class PackagingDataManager:
             finally:
                 conn.close()
 
+    # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
-        """Заглушка для отслеживания изменений через координатор"""
-        pass
+        """При смене цеха переключаем БД"""
+        new_workshop = self.coordinator.get_workshop() if self.coordinator else "1"
+        if new_workshop != self.workshop_id:
+            self._update_workshop()  # ← обновляем путь
+            # БД уже существует или создастся при первом обращении
         
     def set_status_callback(self, callback):
         """Устанавливает callback для отправки статусных сообщений в UI"""

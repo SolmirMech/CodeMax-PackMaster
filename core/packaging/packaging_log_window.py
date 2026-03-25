@@ -53,7 +53,7 @@ class PackagingLogWindow:
         self.product_var = StringVar()
         
         # Менеджер
-        self.manager = PackagingManager(config_manager)
+        self.manager = PackagingManager(config_manager, self.coordinator)
         
         self.create_window()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -74,6 +74,7 @@ class PackagingLogWindow:
         if self.current_workshop != workshop:
             self._update_mapping()
             self._rebuild_table_columns()  # пересоздаём колонки таблицы
+            self.manager = PackagingManager(self.config_manager, self.coordinator)
             self.load_recent()  # перезагружаем данные
 
     def _update_mapping(self):
@@ -303,6 +304,7 @@ class PackagingLogWindow:
         # Загружаем последние записи
         self.load_recent()
         self.update_status_with_file_path()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _rebuild_table_columns(self):
         """Перестраивает колонки таблицы при смене цеха"""
@@ -1049,3 +1051,9 @@ class PackagingLogWindow:
                 widget.insert(0, text)
         except Exception as e:
             print(f"Ошибка вставки: {e}")
+
+    def on_close(self):
+        """Отписка при закрытии окна"""
+        if self.coordinator and hasattr(self.coordinator, 'unsubscribe'):
+            self.coordinator.unsubscribe(self.on_settings_changed)
+        self.window.destroy()
