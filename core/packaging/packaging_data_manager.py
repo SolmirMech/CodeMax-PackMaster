@@ -77,6 +77,7 @@ class PackagingDataManager:
                             product_name TEXT,
                             quantity_labels INTEGER DEFAULT 0,
                             packer_name TEXT,
+                            weight_kg REAL DEFAULT 0,
                             col_1 INTEGER DEFAULT 0,
                             col_2 INTEGER DEFAULT 0,
                             col_3 INTEGER DEFAULT 0,
@@ -141,6 +142,7 @@ class PackagingDataManager:
                         product_name TEXT,
                         quantity_labels INTEGER DEFAULT 0,
                         packer_name TEXT,
+                        weight_kg REAL DEFAULT 0,
                         col_1 INTEGER DEFAULT 0,
                         col_2 INTEGER DEFAULT 0,
                         col_3 INTEGER DEFAULT 0,
@@ -375,13 +377,21 @@ class PackagingDataManager:
                         sheet_index = 0
                         exported = 0
 
+                    # Форматируем вес: если число, округляем до 1 знака
+                    weight = data.get('weight_kg')
+                    if weight is not None and weight != '':
+                        try:
+                            weight = round(float(weight), 1)
+                        except (ValueError, TypeError):
+                            weight = None
+
                     cursor.execute("""
                         INSERT INTO packaging_log 
                         (date, order_number, customer, product_name, quantity_labels, 
-                         packer_name, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10, note, 
+                         packer_name, weight_kg, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10, note, 
                          exported, source_type, source_file, source_sheet, source_row, 
                          sheet_index, row_color)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data.get('date', ''),
                         data.get('order_number', ''),
@@ -389,6 +399,7 @@ class PackagingDataManager:
                         data.get('product_name', ''),
                         data.get('quantity_labels') if data.get('quantity_labels') not in (None, '') else None,
                         data.get('packer_name', ''),
+                        weight,  # ← изменено
                         data.get('col_1') if data.get('col_1') not in (None, '') else None,
                         data.get('col_2') if data.get('col_2') not in (None, '') else None,
                         data.get('col_3') if data.get('col_3') not in (None, '') else None,

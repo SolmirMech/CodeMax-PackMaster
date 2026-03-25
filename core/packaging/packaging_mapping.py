@@ -212,7 +212,7 @@ WORKSHOP_2_MAPPING = {
         "customer": "Заказчик",
         "product_name": "Наименование",
         "quantity_labels": "Тираж",
-        "col_1": "Вес, кг",
+        "weight_kg": "Вес, кг",
         "col_2": "Поддоны\nмалые",
         "col_3": "Поддоны\nевро",
         "col_4": "Поддоны\nбольшие",
@@ -275,9 +275,9 @@ WORKSHOP_2_MAPPING = {
                 number_format="#,##0"
             )
         ),
-        "col_1": ColumnMapping(  # Вес, кг
+        "weight_kg": ColumnMapping(  # Вес, кг
             column=7,
-            data_type="number",
+            data_type="float",
             style=CellStyle(
                 font=Font(name='Arial Cyr', size=11, bold=True),
                 border=THIN_BORDER,

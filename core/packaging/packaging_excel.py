@@ -111,7 +111,6 @@ class PackagingExcel:
                     imported_total += sheet_imported
                     if progress_callback:
                         progress_callback(f"✓ Лист '{sheet_name}' завершён", sheet_imported)
-                    errors.append(f"Лист '{sheet_name}': импортировано {sheet_imported} записей")
 
                 gc.collect()
 
@@ -135,7 +134,17 @@ class PackagingExcel:
 
         def to_int(value):
             try:
+                if isinstance(value, str):
+                    value = value.replace(',', '.')
                 return int(float(value)) if value is not None else None
+            except:
+                return None
+
+        def to_float(value):
+            try:
+                if isinstance(value, str):
+                    value = value.replace(',', '.')
+                return float(value) if value is not None else None
             except:
                 return None
 
@@ -189,6 +198,8 @@ class PackagingExcel:
                 entry[field] = format_date(cell_value)
             elif col_mapping and col_mapping.data_type == "number":
                 entry[field] = to_int(cell_value)
+            elif col_mapping and col_mapping.data_type == "float":
+                entry[field] = to_float(cell_value)
             else:
                 entry[field] = str(cell_value) if cell_value is not None else ""
 
@@ -270,7 +281,10 @@ class PackagingExcel:
                 # Определяем максимальный номер строки с данными
                 max_row = mapping["start_row"] - 1
                 for row in range(mapping["start_row"], sheet.max_row + 2):
-                    if sheet.cell(row=row, column=1).value:
+                    # Проверяем колонку A И колонку B
+                    val_a = sheet.cell(row=row, column=1).value
+                    val_b = sheet.cell(row=row, column=2).value
+                    if val_a is not None or val_b is not None:
                         max_row = row
                     else:
                         break
@@ -306,6 +320,13 @@ class PackagingExcel:
                         if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
                             y, m, d = str(value).split('-')
                             value = f"{d}.{m}.{y}"
+
+                        # Преобразуем вес в число
+                        if field == "weight_kg" and value not in (None, ""):
+                            try:
+                                value = float(str(value).replace(',', '.'))
+                            except:
+                                value = value
 
                         cell = sheet.cell(row=row_num, column=col, value=value)
 

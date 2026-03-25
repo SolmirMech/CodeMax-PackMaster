@@ -55,6 +55,7 @@ class PackagingManager:
         all_errors = []
         imported_ids = []
         wb = None
+        log_file = self.config.data_dir / "import_errors.log"
 
         try:
             # Получаем список листов для определения индексов
@@ -63,7 +64,7 @@ class PackagingManager:
             wb.close()
             wb = None
 
-            def save_entry(entry, sheet_name, row_idx=None):  # ← добавляем row_idx
+            def save_entry(entry, sheet_name, row_idx=None):
                 nonlocal imported, all_errors, imported_ids
                 # Валидируем
                 entry_errors = self._validate_entry(entry)
@@ -102,6 +103,18 @@ class PackagingManager:
                 self.data_manager.mark_as_exported(imported_ids)
 
             all_errors.extend(errors)
+
+            # Логируем ошибки в файл
+            if all_errors:
+                from datetime import datetime
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Импорт: {file_path}\n")
+                    f.write(f"Импортировано: {imported}, Ошибок: {len(all_errors)}\n")
+                    for err in all_errors[:20]:  # первые 20 ошибок
+                        f.write(f"  {err}\n")
+                    if len(all_errors) > 20:
+                        f.write(f"  ... и ещё {len(all_errors) - 20} ошибок\n")
+
             return imported, all_errors
 
         finally:
@@ -122,7 +135,7 @@ class PackagingManager:
         errors = []
 
         # Обязательные поля (можно настроить)
-        required_fields = ['order_number']  # Номер заказа обязателен
+        required_fields = ['date', 'order_number']  # Номер заказа и дата обязательны
         for field in required_fields:
             if not entry.get(field):
                 errors.append(f"отсутствует {field}")
@@ -134,7 +147,7 @@ class PackagingManager:
                 errors.append(f"неверный формат даты: {date_val}")
 
         # Валидация чисел
-        numeric_fields = ['quantity_labels', 'large_boxes', 'small_boxes', 'aquaLife_boxes']
+        numeric_fields = ['quantity_labels']
         for field in numeric_fields:
             val = entry.get(field)
             if val is not None:

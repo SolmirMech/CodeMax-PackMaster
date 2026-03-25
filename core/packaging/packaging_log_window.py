@@ -20,6 +20,7 @@ class PackagingLogWindow:
         "customer": {"width": 200, "anchor": "w", "wrap": True, "wrap_len": 18},
         "product_name": {"width": 250, "anchor": "w", "wrap": True, "wrap_len": 25},
         "quantity_labels": {"width": 65, "anchor": "center", "wrap": False},
+        "weight_kg": {"width": 45, "anchor": "center", "wrap": False},
         "packer_name": {"width": 80, "anchor": "center", "wrap": True, "wrap_len": 10},
         "note": {"width": 25, "anchor": "w", "wrap": False},
     }
@@ -750,14 +751,16 @@ class PackagingLogWindow:
                 if value is None:
                     value = ""
 
+                # Форматирование для веса (число с запятой)
+                if field == "weight_kg" and isinstance(value, (int, float)):
+                    value = f"{value:.1f}".replace('.', ',')
                 # Спецобработка для даты
-                if field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
+                elif field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
                     try:
                         y, m, d = str(value).split('-')
                         value = f"{d}.{m}.{y}"
                     except:
                         pass
-
                 # Спецобработка для полей с переносом
                 config = self._get_column_config(field)
                 if config.get("wrap", False):
