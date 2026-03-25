@@ -3,8 +3,8 @@ import os
 import re
 import time
 import tkinter as tk
-from tkinter import ttk, StringVar, filedialog
 from tkinter import colorchooser
+from tkinter import ttk, StringVar, filedialog
 
 from core.packaging.packaging_manager import PackagingManager
 
@@ -482,7 +482,9 @@ class PackagingLogWindow:
 
             if exported > 0:
                 self.set_status(f"✅ Журнал восстановлен: {new_file}", "green")
-                folder_to_open = os.path.dirname(new_file)
+                # Открываем папку с восстановленным файлом
+                path = self.config_manager.get_packaging_log_path()
+                folder_to_open = os.path.dirname(path)
                 os.startfile(folder_to_open)
             else:
                 self.set_status("❌ Ошибка при восстановлении", "red")
