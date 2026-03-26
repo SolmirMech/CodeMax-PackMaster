@@ -34,6 +34,7 @@ class PackagingLogWindow:
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         self.packaging_log_file = None
         self.status_label = None
+        self.network_status_label = None
         self.entries = []
         self.tree = None
         self.window = None
@@ -301,10 +302,62 @@ class PackagingLogWindow:
         self.tree.bind("<Double-Button-1>", self.on_double_click)
         self.tree.bind("<Button-3>", self.on_right_click)
 
+        # Строка статуса сети
+        self.network_status_label = tk.Label(
+            self.window,
+            text="Проверка подключения...",
+            font=("Segoe UI", 9),
+            bd=1,
+            relief=tk.SUNKEN,
+            anchor=tk.W,
+            padx=5
+        )
+        self.network_status_label.pack(side=tk.BOTTOM, fill=tk.X, before=table_frame)
+
+        # Запускаем проверку статуса сети
+        self._update_network_status()
+        # Периодическая проверка каждые 10 секунд
+        self._schedule_network_check()
+
         # Загружаем последние записи
         self.load_recent()
         self.update_status_with_file_path()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def _update_network_status(self):
+        """Обновляет индикатор статуса сетевой БД"""
+        try:
+            if self.manager and hasattr(self.manager, 'is_network_available'):
+                if self.manager.is_network_available():
+                    self.network_status_label.config(
+                        text="✅ Сетевая База данных доступна",
+                        background="#90EE90",
+                        foreground="#006400"
+                    )
+                else:
+                    self.network_status_label.config(
+                        text="⚠️ Сетевая База недоступна, режим локальной записи",
+                        background="#FFB347",
+                        foreground="#8B4513"
+                    )
+            else:
+                self.network_status_label.config(
+                    text="❌ Статус сети недоступен",
+                    background="#FF6B6B",
+                    foreground="#8B0000"
+                )
+        except Exception as e:
+            self.network_status_label.config(
+                text=f"❌ Ошибка проверки: {e}",
+                background="#FF6B6B",
+                foreground="#8B0000"
+            )
+
+    def _schedule_network_check(self):
+        """Планирует периодическую проверку сети"""
+        self._update_network_status()
+        # Повторяем каждые 10 секунд
+        self.window.after(10000, self._schedule_network_check)
 
     def _rebuild_table_columns(self):
         """Перестраивает колонки таблицы при смене цеха"""

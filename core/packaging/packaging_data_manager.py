@@ -2,6 +2,7 @@
 import sqlite3
 import threading
 import os
+import time
 
 
 class PackagingDataManager:
@@ -59,6 +60,38 @@ class PackagingDataManager:
         # Подписываемся на уведомления координатора
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+
+    @staticmethod
+    def _execute_with_retry(operation, max_retries=3):
+        """Выполняет операцию с повторными попытками при блокировке"""
+        for attempt in range(max_retries):
+            try:
+                return operation()
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e) and attempt < max_retries - 1:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise
+        # Эта строка никогда не выполнится, но для статического анализа
+        return None
+
+    def _execute_on_network(self, operation, with_backup=False):
+        """Выполняет операцию на сетевой БД с повторными попытками"""
+        if not self._is_network_available():
+            return None
+
+        with self._write_lock, self._lock:
+            def wrapped():
+                conn = sqlite3.connect(self.network_db_path)
+                try:
+                    result = operation(conn)
+                    if with_backup:
+                        self._backup_to_local()
+                    return result
+                finally:
+                    conn.close()
+
+            return self._execute_with_retry(wrapped)
 
     def _add_to_local_offline(self, data):
         """Добавляет запись в локальную БД с synced=0"""
@@ -179,6 +212,10 @@ class PackagingDataManager:
             return os.path.exists(network_dir) and os.access(network_dir, os.R_OK | os.W_OK)
         except:
             return False
+
+    def is_network_available(self):
+        """Публичный метод проверки доступности сетевой БД"""
+        return self._is_network_available()
 
     def _init_local_backup(self):
         """Инициализирует локальную БД-бэкап"""
@@ -373,7 +410,7 @@ class PackagingDataManager:
         self.status_callback = callback
 
     def _init_network_database(self):
-        """Инициализация БД для журнала упаковки"""
+        """Инициализация сетевой БД для журнала упаковки"""
         with self._lock:
             try:
                 conn = sqlite3.connect(self.network_db_path)
@@ -713,10 +750,10 @@ class PackagingDataManager:
         """Добавление новой записи с учётом офлайн-режима"""
         if self._is_network_available():
             # Пишем в сетевую БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
+            with self._write_lock, self._lock:
+                def operation():
+                    conn = sqlite3.connect(self.network_db_path)
+                    try:
                         cursor = conn.cursor()
 
                         # Форматируем вес
@@ -768,8 +805,10 @@ class PackagingDataManager:
                         self._backup_to_local()
 
                         return entry_id
-                finally:
-                    conn.close()
+                    finally:
+                        conn.close()
+
+                return self._execute_with_retry(operation)
         else:
             # Офлайн-режим: пишем в локальную БД
             return self._add_to_local_offline(data)

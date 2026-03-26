@@ -44,6 +44,10 @@ class PackagingManager:
     def mark_as_exported(self, entry_ids):
         return self.data_manager.mark_as_exported(entry_ids)
 
+    def is_network_available(self):
+        """Проверка доступности сетевой БД"""
+        return self.data_manager.is_network_available()
+
     # === Методы Excel ===
     # noinspection SpellCheckingInspection
     def import_from_excel(self, file_path, progress_callback=None,
