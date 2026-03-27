@@ -224,7 +224,7 @@ class PackagingLogWindow:
         rare_menu.add_separator()
 
         rare_menu.add_command(
-            label="🗑️ Удалить электронный журнал",
+            label="🗑 Удалить электронный журнал",
             command=self.clear_database
         )
 
@@ -243,7 +243,7 @@ class PackagingLogWindow:
             text="🔍 Узнать о записи",
             command=self.check_selected_entry,
             width=18
-        ).pack(side=tk.LEFT, padx=(10, 0))
+        ).pack(side=tk.LEFT, padx=(10, 0), pady=(5, 5))
 
         # Статусная строка - теперь сверху
         status_frame = ttk.Frame(self.window, height=25)
@@ -306,7 +306,7 @@ class PackagingLogWindow:
         self.network_status_label = tk.Label(
             self.window,
             text="Проверка подключения...",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 12),
             bd=1,
             relief=tk.SUNKEN,
             anchor=tk.W,
@@ -327,19 +327,21 @@ class PackagingLogWindow:
     def _update_network_status(self):
         """Обновляет индикатор статуса сетевой БД"""
         try:
-            if self.manager and hasattr(self.manager, 'is_network_available'):
-                if self.manager.is_network_available():
-                    self.network_status_label.config(
-                        text="✅ Сетевая База данных доступна",
-                        background="#90EE90",
-                        foreground="#006400"
-                    )
-                else:
-                    self.network_status_label.config(
-                        text="⚠️ Сетевая База недоступна, режим локальной записи",
-                        background="#FFB347",
-                        foreground="#8B4513"
-                    )
+            if self.manager and self.manager.is_network_available():
+                db_path = self.manager.data_manager.network_db_path or "не задан"
+                workshop = self.current_workshop if hasattr(self, 'current_workshop') else "?"
+
+                self.network_status_label.config(
+                    text=f"✅ Сетевая База данных доступна | Цех: {workshop} | Файл: {db_path}",
+                    background="#90EE90",
+                    foreground="#006400"
+                )
+            elif self.manager and not self.manager.is_network_available():
+                self.network_status_label.config(
+                    text="⚠️ Сетевая База недоступна, режим локальной записи",
+                    background="#FFB347",
+                    foreground="#8B4513"
+                )
             else:
                 self.network_status_label.config(
                     text="❌ Статус сети недоступен",

@@ -273,56 +273,41 @@ class PackagingDataManager:
         Обновление ячейки с сохранением координат и сбросом флага экспорта
         """
         if self._is_network_available():
-            # Обновляем в сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-
-                        cursor.execute(f"""
-                            UPDATE packaging_log 
-                            SET {field} = ?, exported = 0 
-                            WHERE id = ?
-                        """, (value, entry_id))
-
-                        conn.commit()
-                        result = cursor.rowcount > 0
-
-                        # Делаем бэкап
-                        if result:
-                            self._backup_to_local()
-
-                        return result
-                finally:
-                    conn.close()
+            def operation(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    f"UPDATE packaging_log SET {field} = ?, exported = 0 WHERE id = ?",
+                    (value, entry_id)
+                )
+                conn.commit()
+                return cur.rowcount > 0
+            return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: обновляем в локальной БД только если запись не синхронизирована
-            conn = sqlite3.connect(self.local_backup_path)
+            local_conn = sqlite3.connect(self.local_backup_path)
             try:
-                cursor = conn.cursor()
+                local_cursor = local_conn.cursor()
 
                 # Проверяем, можно ли обновлять
-                cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
-                row = cursor.fetchone()
+                local_cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
+                row = local_cursor.fetchone()
 
                 if not row:
                     return False
 
                 if row[0] == 1:
-                    # Запись уже синхронизирована, в офлайне нельзя изменять
                     return False
 
-                cursor.execute(f"""
+                local_cursor.execute(f"""
                     UPDATE packaging_log 
                     SET {field} = ?, exported = 0 
                     WHERE id = ?
                 """, (value, entry_id))
 
-                conn.commit()
-                return cursor.rowcount > 0
+                local_conn.commit()
+                return local_cursor.rowcount > 0
             finally:
-                conn.close()
+                local_conn.close()
 
     def clear_database(self):
         """Полностью очищает БД и пересоздаёт таблицу с новой структурой"""
@@ -332,70 +317,60 @@ class PackagingDataManager:
                 self.status_callback("Очистка БД недоступна в офлайн-режиме")
             return False
 
-        with self._write_lock:
-            try:
-                with self._lock:
-                    conn = sqlite3.connect(self.network_db_path)
-                    cursor = conn.cursor()
+        def operation(conn):
+            cur = conn.cursor()
 
-                    # Удаляем старую таблицу
-                    cursor.execute("DROP TABLE IF EXISTS packaging_log")
+            # Удаляем старую таблицу
+            cur.execute("DROP TABLE IF EXISTS packaging_log")
 
-                    # Создаём заново с новой структурой
-                    cursor.execute("""
-                        CREATE TABLE packaging_log (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            date TEXT,
-                            order_number TEXT,
-                            customer TEXT,
-                            product_name TEXT,
-                            quantity_labels INTEGER DEFAULT 0,
-                            packer_name TEXT,
-                            weight_kg REAL DEFAULT 0,
-                            col_1 INTEGER DEFAULT 0,
-                            col_2 INTEGER DEFAULT 0,
-                            col_3 INTEGER DEFAULT 0,
-                            col_4 INTEGER DEFAULT 0,
-                            col_5 INTEGER DEFAULT 0,
-                            col_6 INTEGER DEFAULT 0,
-                            col_7 INTEGER DEFAULT 0,
-                            col_8 INTEGER DEFAULT 0,
-                            col_9 INTEGER DEFAULT 0,
-                            col_10 INTEGER DEFAULT 0,
-                            note TEXT,
-                            exported INTEGER DEFAULT 0,
-                            source_type TEXT DEFAULT 'manual',
-                            source_file TEXT,
-                            source_sheet TEXT,
-                            source_row INTEGER,
-                            sheet_index INTEGER DEFAULT 0,
-                            restore_flag INTEGER DEFAULT 0,
-                            row_color TEXT,
-                            synced INTEGER DEFAULT 1
-                        )
-                    """)
+            # Создаём заново с новой структурой
+            cur.execute("""
+                CREATE TABLE packaging_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT,
+                    order_number TEXT,
+                    customer TEXT,
+                    product_name TEXT,
+                    quantity_labels INTEGER DEFAULT 0,
+                    packer_name TEXT,
+                    weight_kg REAL DEFAULT 0,
+                    col_1 INTEGER DEFAULT 0,
+                    col_2 INTEGER DEFAULT 0,
+                    col_3 INTEGER DEFAULT 0,
+                    col_4 INTEGER DEFAULT 0,
+                    col_5 INTEGER DEFAULT 0,
+                    col_6 INTEGER DEFAULT 0,
+                    col_7 INTEGER DEFAULT 0,
+                    col_8 INTEGER DEFAULT 0,
+                    col_9 INTEGER DEFAULT 0,
+                    col_10 INTEGER DEFAULT 0,
+                    note TEXT,
+                    exported INTEGER DEFAULT 0,
+                    source_type TEXT DEFAULT 'manual',
+                    source_file TEXT,
+                    source_sheet TEXT,
+                    source_row INTEGER,
+                    sheet_index INTEGER DEFAULT 0,
+                    restore_flag INTEGER DEFAULT 0,
+                    row_color TEXT,
+                    synced INTEGER DEFAULT 1
+                )
+            """)
 
-                    # Индексы
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_date ON packaging_log(date)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
+            # Индексы
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_date ON packaging_log(date)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
 
-                    conn.commit()
+            conn.commit()
+            return True
 
-                    # Делаем бэкап очищенной БД
-                    self._backup_to_local()
-
-                    return True
-
-            except Exception as e:
-                print(f"Ошибка очистки БД: {e}")
-                return False
-            finally:
-                conn.close()
+        result = self._execute_on_network(operation, with_backup=True)
+        return result if result is not None else False
 
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
@@ -470,35 +445,24 @@ class PackagingDataManager:
     def update_row_color(self, entry_id, hex_color):
         """Обновляет цвет строки и сбрасывает флаг экспорта"""
         if self._is_network_available():
-            # Обновляем в сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "UPDATE packaging_log SET row_color = ?, exported = 0 WHERE id = ?",
-                            (hex_color, entry_id)
-                        )
-                        conn.commit()
-                        result = cursor.rowcount > 0
-
-                        # Делаем бэкап
-                        if result:
-                            self._backup_to_local()
-
-                        return result
-                finally:
-                    conn.close()
+            def operation(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE packaging_log SET row_color = ?, exported = 0 WHERE id = ?",
+                    (hex_color, entry_id)
+                )
+                conn.commit()
+                return cur.rowcount > 0
+            return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: обновляем в локальной только если запись не синхронизирована
-            conn = sqlite3.connect(self.local_backup_path)
+            local_conn = sqlite3.connect(self.local_backup_path)
             try:
-                cursor = conn.cursor()
+                local_cursor = local_conn.cursor()
 
                 # Проверяем, можно ли обновлять
-                cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
-                row = cursor.fetchone()
+                local_cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
+                row = local_cursor.fetchone()
 
                 if not row:
                     return False
@@ -506,59 +470,74 @@ class PackagingDataManager:
                 if row[0] == 1:
                     return False
 
-                cursor.execute(
+                local_cursor.execute(
                     "UPDATE packaging_log SET row_color = ?, exported = 0 WHERE id = ?",
                     (hex_color, entry_id)
                 )
-                conn.commit()
-                return cursor.rowcount > 0
+                local_conn.commit()
+                return local_cursor.rowcount > 0
             finally:
-                conn.close()
+                local_conn.close()
 
     def get_row_color(self, entry_id):
         """Возвращает цвет строки"""
-        conn = None
-        try:
-            if self._is_network_available():
-                conn = sqlite3.connect(self.network_db_path)
-            else:
-                conn = sqlite3.connect(self.local_backup_path)
-
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT row_color FROM packaging_log WHERE id = ?",
-                (entry_id,)
-            )
-            row = cursor.fetchone()
-            return row[0] if row else None
-        finally:
-            if conn:
-                conn.close()
+        if self._is_network_available():
+            def operation(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT row_color FROM packaging_log WHERE id = ?",
+                    (entry_id,)
+                )
+                result_row = cur.fetchone()
+                return result_row[0] if result_row else None
+            result = self._execute_on_network(operation, with_backup=False)
+            return result if result is not None else None
+        else:
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_cursor = local_conn.cursor()
+                local_cursor.execute(
+                    "SELECT row_color FROM packaging_log WHERE id = ?",
+                    (entry_id,)
+                )
+                local_row = local_cursor.fetchone()
+                return local_row[0] if local_row else None
+            finally:
+                local_conn.close()
 
     def get_unexported_entries(self):
         """Возвращает все неэкспортированные записи"""
-        conn = None
-        try:
-            if self._is_network_available():
-                conn = sqlite3.connect(self.network_db_path)
-            else:
-                conn = sqlite3.connect(self.local_backup_path)
-
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM packaging_log 
-                WHERE exported = 0 
-                ORDER BY id ASC
-            """)
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        except Exception as e:
-            print(f"Ошибка в get_unexported_entries: {e}")
-            return []
-        finally:
-            if conn:
-                conn.close()
+        if self._is_network_available():
+            def operation(conn):
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT * FROM packaging_log 
+                    WHERE exported = 0 
+                    ORDER BY id ASC
+                """)
+                result_rows = cur.fetchall()
+                return [dict(row) for row in result_rows]
+            result = self._execute_on_network(operation, with_backup=False)
+            return result if result is not None else []
+        else:
+            # Офлайн-режим
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_conn.row_factory = sqlite3.Row
+                local_cursor = local_conn.cursor()
+                local_cursor.execute("""
+                    SELECT * FROM packaging_log 
+                    WHERE exported = 0 
+                    ORDER BY id ASC
+                """)
+                local_rows = local_cursor.fetchall()
+                return [dict(row) for row in local_rows]
+            except Exception as e:
+                print(f"Ошибка в get_unexported_entries: {e}")
+                return []
+            finally:
+                local_conn.close()
 
     def mark_as_exported(self, entry_ids, sheet_name=None):
         """
@@ -578,161 +557,167 @@ class PackagingDataManager:
             entry_ids = [entry_ids]
 
         if self._is_network_available():
-            # Обновляем в сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-                        placeholders = ','.join(['?'] * len(entry_ids))
-
-                        if sheet_name:
-                            cursor.execute(f"""
-                                UPDATE packaging_log 
-                                SET exported = 1, source_sheet = ?, sheet_index = 0
-                                WHERE id IN ({placeholders})
-                            """, [sheet_name] + entry_ids)
-                        else:
-                            cursor.execute(f"""
-                                UPDATE packaging_log 
-                                SET exported = 1
-                                WHERE id IN ({placeholders})
-                            """, entry_ids)
-
-                        conn.commit()
-                        result = cursor.rowcount
-
-                        # Делаем бэкап
-                        if result > 0:
-                            self._backup_to_local()
-
-                        return result
-                except Exception as e:
-                    print(f"Ошибка в mark_as_exported: {e}")
-                    return 0
-                finally:
-                    conn.close()
+            def operation(conn):
+                cur = conn.cursor()
+                placeholders = ','.join(['?'] * len(entry_ids))
+                if sheet_name:
+                    cur.execute(f"""
+                        UPDATE packaging_log 
+                        SET exported = 1, source_sheet = ?, sheet_index = 0
+                        WHERE id IN ({placeholders})
+                    """, [sheet_name] + entry_ids)
+                else:
+                    cur.execute(f"""
+                        UPDATE packaging_log 
+                        SET exported = 1
+                        WHERE id IN ({placeholders})
+                    """, entry_ids)
+                conn.commit()
+                return cur.rowcount
+            return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: обновляем в локальной только если записи не синхронизированы
-            conn = sqlite3.connect(self.local_backup_path)
+            local_conn = sqlite3.connect(self.local_backup_path)
             try:
-                cursor = conn.cursor()
-                placeholders = ','.join(['?'] * len(entry_ids))
+                local_cursor = local_conn.cursor()
+                local_placeholders = ','.join(['?'] * len(entry_ids))
 
                 # Проверяем, все ли записи можно обновлять
-                cursor.execute(f"SELECT id FROM packaging_log WHERE id IN ({placeholders}) AND synced = 1", entry_ids)
-                synced_ids = [row[0] for row in cursor.fetchall()]
+                local_cursor.execute(f"SELECT id FROM packaging_log WHERE id IN ({local_placeholders}) AND synced = 1", entry_ids)
+                synced_ids = [row[0] for row in local_cursor.fetchall()]
 
                 if synced_ids:
                     # Есть синхронизированные записи, их нельзя менять в офлайне
                     return 0
 
                 if sheet_name:
-                    cursor.execute(f"""
+                    local_cursor.execute(f"""
                         UPDATE packaging_log 
                         SET exported = 1, source_sheet = ?, sheet_index = 0
-                        WHERE id IN ({placeholders})
+                        WHERE id IN ({local_placeholders})
                     """, [sheet_name] + entry_ids)
                 else:
-                    cursor.execute(f"""
+                    local_cursor.execute(f"""
                         UPDATE packaging_log 
                         SET exported = 1
-                        WHERE id IN ({placeholders})
+                        WHERE id IN ({local_placeholders})
                     """, entry_ids)
 
-                conn.commit()
-                return cursor.rowcount
+                local_conn.commit()
+                return local_cursor.rowcount
             except Exception as e:
                 print(f"Ошибка в mark_as_exported (офлайн): {e}")
                 return 0
             finally:
-                conn.close()
+                local_conn.close()
 
     def get_recent(self, limit=20):
         """Последние записи - с fallback на локальную БД"""
-        conn = None
-        try:
-            if self._is_network_available():
-                conn = sqlite3.connect(self.network_db_path)
-            else:
-                conn = sqlite3.connect(self.local_backup_path)
-
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM packaging_log 
-                ORDER BY id DESC 
-                LIMIT ?
-            """, (limit,))
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            if conn:
-                conn.close()
+        if self._is_network_available():
+            def operation(conn):
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT * FROM packaging_log 
+                    ORDER BY id DESC 
+                    LIMIT ?
+                """, (limit,))
+                result_rows = cur.fetchall()
+                return [dict(row) for row in result_rows]
+            result = self._execute_on_network(operation, with_backup=False)
+            return result if result is not None else []
+        else:
+            # Офлайн-режим
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_conn.row_factory = sqlite3.Row
+                local_cursor = local_conn.cursor()
+                local_cursor.execute("""
+                    SELECT * FROM packaging_log 
+                    ORDER BY id DESC 
+                    LIMIT ?
+                """, (limit,))
+                local_rows = local_cursor.fetchall()
+                return [dict(row) for row in local_rows]
+            finally:
+                local_conn.close()
 
     def search(self, filters):
-        conn = None
-        try:
-            if self._is_network_available():
-                conn = sqlite3.connect(self.network_db_path)
-            else:
-                conn = sqlite3.connect(self.local_backup_path)
+        """Поиск записей по фильтрам"""
+        if self._is_network_available():
+            def operation(conn):
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
 
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+                sql_query = "SELECT * FROM packaging_log WHERE 1=1"
+                sql_params = []
 
-            query = "SELECT * FROM packaging_log WHERE 1=1"
-            params = []
+                for f_key, f_value in filters.items():
+                    if f_key == 'date':
+                        sql_query += " AND date = ?"
+                        sql_params.append(f_value)
+                    elif f_key == 'id':
+                        sql_query += " AND id = ?"
+                        sql_params.append(f_value)
+                    elif f_key in ['order_number', 'customer', 'product_name']:
+                        sql_query += f" AND {f_key} LIKE ?"
+                        sql_params.append(f'%{f_value}%')
 
-            for key, value in filters.items():
-                if key == 'date':
-                    query += " AND date = ?"
-                    params.append(value)
-                elif key == 'id':
-                    query += " AND id = ?"
-                    params.append(value)
-                elif key in ['order_number', 'customer', 'product_name']:
-                    query += f" AND {key} LIKE ?"
-                    params.append(f'%{value}%')
+                sql_query += " ORDER BY id DESC"
 
-            query += " ORDER BY id DESC"
+                cur.execute(sql_query, sql_params)
+                result_rows = cur.fetchall()
+                return [dict(row) for row in result_rows]
 
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            if conn:
-                conn.close()
+            result = self._execute_on_network(operation, with_backup=False)
+            return result if result is not None else []
+        else:
+            # Офлайн-режим
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_conn.row_factory = sqlite3.Row
+                local_cursor = local_conn.cursor()
+
+                local_query = "SELECT * FROM packaging_log WHERE 1=1"
+                local_params = []
+
+                for l_key, l_value in filters.items():
+                    if l_key == 'date':
+                        local_query += " AND date = ?"
+                        local_params.append(l_value)
+                    elif l_key == 'id':
+                        local_query += " AND id = ?"
+                        local_params.append(l_value)
+                    elif l_key in ['order_number', 'customer', 'product_name']:
+                        local_query += f" AND {l_key} LIKE ?"
+                        local_params.append(f'%{l_value}%')
+
+                local_query += " ORDER BY id DESC"
+
+                local_cursor.execute(local_query, local_params)
+                local_rows = local_cursor.fetchall()
+                return [dict(row) for row in local_rows]
+            finally:
+                local_conn.close()
 
     def update_entry(self, entry_id, field, value):
         """Обновление конкретной ячейки - с учётом офлайн-режима"""
         if self._is_network_available():
-            # Обновляем в сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-                        cursor.execute(f"UPDATE packaging_log SET {field} = ? WHERE id = ?", (value, entry_id))
-                        conn.commit()
-                        result = cursor.rowcount > 0
-
-                        # Делаем бэкап
-                        if result:
-                            self._backup_to_local()
-
-                        return result
-                finally:
-                    conn.close()
+            def operation(conn):
+                cur = conn.cursor()
+                cur.execute(f"UPDATE packaging_log SET {field} = ? WHERE id = ?", (value, entry_id))
+                conn.commit()
+                return cur.rowcount > 0
+            return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: обновляем в локальной только если запись не синхронизирована
-            conn = sqlite3.connect(self.local_backup_path)
+            local_conn = sqlite3.connect(self.local_backup_path)
             try:
-                cursor = conn.cursor()
+                local_cursor = local_conn.cursor()
 
                 # Проверяем, можно ли обновлять
-                cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
-                row = cursor.fetchone()
+                local_cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
+                row = local_cursor.fetchone()
 
                 if not row:
                     return False
@@ -740,11 +725,11 @@ class PackagingDataManager:
                 if row[0] == 1:
                     return False
 
-                cursor.execute(f"UPDATE packaging_log SET {field} = ? WHERE id = ?", (value, entry_id))
-                conn.commit()
-                return cursor.rowcount > 0
+                local_cursor.execute(f"UPDATE packaging_log SET {field} = ? WHERE id = ?", (value, entry_id))
+                local_conn.commit()
+                return local_cursor.rowcount > 0
             finally:
-                conn.close()
+                local_conn.close()
 
     def add_entry(self, data):
         """Добавление новой записи с учётом офлайн-режима"""
@@ -816,32 +801,21 @@ class PackagingDataManager:
     def delete_entry(self, entry_id):
         """Удаление записи с учётом офлайн-режима"""
         if self._is_network_available():
-            # Удаляем из сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM packaging_log WHERE id = ?", (entry_id,))
-                        conn.commit()
-                        result = cursor.rowcount > 0
-
-                        # Делаем бэкап
-                        if result:
-                            self._backup_to_local()
-
-                        return result
-                finally:
-                    conn.close()
+            def operation(conn):
+                cur = conn.cursor()
+                cur.execute("DELETE FROM packaging_log WHERE id = ?", (entry_id,))
+                conn.commit()
+                return cur.rowcount > 0
+            return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: удаляем из локальной только если запись не синхронизирована
-            conn = sqlite3.connect(self.local_backup_path)
+            local_conn = sqlite3.connect(self.local_backup_path)
             try:
-                cursor = conn.cursor()
+                local_cursor = local_conn.cursor()
 
                 # Проверяем, можно ли удалять
-                cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
-                row = cursor.fetchone()
+                local_cursor.execute("SELECT synced FROM packaging_log WHERE id = ?", (entry_id,))
+                row = local_cursor.fetchone()
 
                 if not row:
                     return False
@@ -850,59 +824,91 @@ class PackagingDataManager:
                     # Запись уже синхронизирована, в офлайне нельзя удалять
                     return False
 
-                cursor.execute("DELETE FROM packaging_log WHERE id = ?", (entry_id,))
-                conn.commit()
-                return cursor.rowcount > 0
+                local_cursor.execute("DELETE FROM packaging_log WHERE id = ?", (entry_id,))
+                local_conn.commit()
+                return local_cursor.rowcount > 0
             finally:
-                conn.close()
+                local_conn.close()
 
     def get_restorable_entries(self):
         """Возвращает записи для восстановления в Excel"""
-        conn = None
-        try:
-            if self._is_network_available():
-                conn = sqlite3.connect(self.network_db_path)
-            else:
-                conn = sqlite3.connect(self.local_backup_path)
+        if self._is_network_available():
+            def operation(conn):
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
 
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+                # Получаем уникальные листы с их индексами
+                cur.execute("""
+                    SELECT DISTINCT source_sheet, sheet_index 
+                    FROM packaging_log 
+                    WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
+                    ORDER BY sheet_index ASC
+                """)
+                network_sheets = cur.fetchall()
 
-            # Получаем уникальные листы с их индексами
-            cursor.execute("""
-                SELECT DISTINCT source_sheet, sheet_index 
-                FROM packaging_log 
-                WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
-                ORDER BY sheet_index ASC
-            """)
-            sheets = cursor.fetchall()
+                network_result = []
 
-            result = []
+                for net_sheet in network_sheets:
+                    net_sheet_name = net_sheet['source_sheet'].strip() or "Лист1"
+                    net_sheet_index = net_sheet['sheet_index']
 
-            for sheet in sheets:
-                sheet_name = sheet['source_sheet'].strip() or "Лист1"
-                sheet_index = sheet['sheet_index']
+                    # Получаем записи для этого листа
+                    cur.execute("""
+                        SELECT * FROM packaging_log 
+                        WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
+                        AND source_sheet = ? AND sheet_index = ?
+                        ORDER BY id ASC
+                    """, (net_sheet_name, net_sheet_index))
 
-                # Получаем записи для этого листа
-                cursor.execute("""
-                    SELECT * FROM packaging_log 
-                    WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
-                    AND source_sheet = ? AND sheet_index = ?
-                    ORDER BY id ASC
-                """, (sheet_name, sheet_index))
+                    net_rows = cur.fetchall()
+                    if net_rows:
+                        net_entries = [dict(row) for row in net_rows]
+                        network_result.append((net_sheet_name, net_entries))
 
-                rows = cursor.fetchall()
-                if rows:
-                    entries = [dict(row) for row in rows]
-                    result.append((sheet_name, entries))
+                return network_result
+            result = self._execute_on_network(operation, with_backup=False)
+            return result if result is not None else []
+        else:
+            # Офлайн-режим
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_conn.row_factory = sqlite3.Row
+                local_cursor = local_conn.cursor()
 
-            return result
-        except Exception as e:
-            print(f"Ошибка в get_restorable_entries: {e}")
-            return []
-        finally:
-            if conn:
-                conn.close()
+                # Получаем уникальные листы с их индексами
+                local_cursor.execute("""
+                    SELECT DISTINCT source_sheet, sheet_index 
+                    FROM packaging_log 
+                    WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
+                    ORDER BY sheet_index ASC
+                """)
+                local_sheets = local_cursor.fetchall()
+
+                local_result = []
+
+                for local_sheet in local_sheets:
+                    local_sheet_name = local_sheet['source_sheet'].strip() or "Лист1"
+                    local_sheet_index = local_sheet['sheet_index']
+
+                    # Получаем записи для этого листа
+                    local_cursor.execute("""
+                        SELECT * FROM packaging_log 
+                        WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
+                        AND source_sheet = ? AND sheet_index = ?
+                        ORDER BY id ASC
+                    """, (local_sheet_name, local_sheet_index))
+
+                    local_rows = local_cursor.fetchall()
+                    if local_rows:
+                        local_entries = [dict(row) for row in local_rows]
+                        local_result.append((local_sheet_name, local_entries))
+
+                return local_result
+            except Exception as e:
+                print(f"Ошибка в get_restorable_entries: {e}")
+                return []
+            finally:
+                local_conn.close()
 
     def mark_manual_as_restorable(self, entry_ids):
         """Помечает экспортированные ручные записи как восстанавливаемые"""
@@ -913,54 +919,40 @@ class PackagingDataManager:
             entry_ids = [entry_ids]
 
         if self._is_network_available():
-            # Обновляем в сетевой БД
-            with self._write_lock:
-                try:
-                    with self._lock:
-                        conn = sqlite3.connect(self.network_db_path)
-                        cursor = conn.cursor()
-                        placeholders = ','.join(['?'] * len(entry_ids))
-                        cursor.execute(f"""
-                            UPDATE packaging_log 
-                            SET restore_flag = 1 
-                            WHERE id IN ({placeholders}) AND source_type = 'manual'
-                        """, entry_ids)
-                        conn.commit()
-                        result = cursor.rowcount
-
-                        # Делаем бэкап
-                        if result > 0:
-                            self._backup_to_local()
-
-                        return result
-                except Exception as e:
-                    print(f"Ошибка в mark_manual_as_restorable: {e}")
-                    return 0
-                finally:
-                    conn.close()
-        else:
-            # Офлайн-режим: обновляем в локальной только если записи не синхронизированы
-            conn = sqlite3.connect(self.local_backup_path)
-            try:
-                cursor = conn.cursor()
+            def operation(conn):
+                cur = conn.cursor()
                 placeholders = ','.join(['?'] * len(entry_ids))
-
-                # Проверяем, все ли записи можно обновлять
-                cursor.execute(f"SELECT id FROM packaging_log WHERE id IN ({placeholders}) AND synced = 1", entry_ids)
-                synced_ids = [row[0] for row in cursor.fetchall()]
-
-                if synced_ids:
-                    return 0
-
-                cursor.execute(f"""
+                cur.execute(f"""
                     UPDATE packaging_log 
                     SET restore_flag = 1 
                     WHERE id IN ({placeholders}) AND source_type = 'manual'
                 """, entry_ids)
                 conn.commit()
-                return cursor.rowcount
+                return cur.rowcount
+            return self._execute_on_network(operation, with_backup=True)
+        else:
+            # Офлайн-режим: обновляем в локальной только если записи не синхронизированы
+            local_conn = sqlite3.connect(self.local_backup_path)
+            try:
+                local_cursor = local_conn.cursor()
+                local_placeholders = ','.join(['?'] * len(entry_ids))
+
+                # Проверяем, все ли записи можно обновлять
+                local_cursor.execute(f"SELECT id FROM packaging_log WHERE id IN ({local_placeholders}) AND synced = 1", entry_ids)
+                synced_ids = [row[0] for row in local_cursor.fetchall()]
+
+                if synced_ids:
+                    return 0
+
+                local_cursor.execute(f"""
+                    UPDATE packaging_log 
+                    SET restore_flag = 1 
+                    WHERE id IN ({local_placeholders}) AND source_type = 'manual'
+                """, entry_ids)
+                local_conn.commit()
+                return local_cursor.rowcount
             except Exception as e:
                 print(f"Ошибка в mark_manual_as_restorable (офлайн): {e}")
                 return 0
             finally:
-                conn.close()
+                local_conn.close()
