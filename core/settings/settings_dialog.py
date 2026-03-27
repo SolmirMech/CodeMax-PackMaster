@@ -16,7 +16,6 @@ class SettingsDialog:
     """Диалог настроек"""
 
     def __init__(self, parent_frame, config_manager=None, coordinator=None):
-        self.packaging_log_file = None
         self.parent_frame = parent_frame
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -136,10 +135,6 @@ class SettingsDialog:
         folder_menu_btn.menu.add_command(
             label="Выбрать папку для экспорта в Excel",
             command=self.select_excel_folder
-        )
-        folder_menu_btn.menu.add_command(
-            label="Выбрать файл журнала упаковки",
-            command=self.select_packaging_log_file
         )
 
         # Загружаем текущие пути
@@ -363,29 +358,6 @@ class SettingsDialog:
         
         self.update_folder_status()
 
-    def select_packaging_log_file(self):
-        """Выбирает файл журнала упаковки"""
-        file_path = filedialog.askopenfilename(
-            title="Выберите файл журнала упаковки",
-            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
-        )
-        if not file_path:
-            return
-
-        # Сохраняем путь в настройки
-        settings = self.config_manager.load_json_settings("shared_utils.json")
-        settings["packaging_log_file"] = file_path
-        self.packaging_log_file = file_path
-        self.config_manager.save_json_settings("shared_utils.json", settings)
-
-        file_name = os.path.basename(file_path)
-        self.show_message(f"✅ Выбран файл: {file_name}", "green")
-
-    def get_packaging_log_file(self):
-        """Возвращает путь к файлу журнала упаковки"""
-        settings = self.config_manager.load_json_settings("shared_utils.json")
-        return settings.get("packaging_log_file", "")
-
     def open_excel_folder(self):
         """Открывает папку с Excel файлами в проводнике"""
         if not self.excel_folder_path or not os.path.exists(self.excel_folder_path):
@@ -588,13 +560,6 @@ class SettingsDialog:
             # Сохраняем остальные настройки
             shared_settings = self.config_manager.load_json_settings("shared_utils.json")
 
-            # Путь к файлу журнала упаковки - сохраняем существующий, если не был изменён
-            if self.packaging_log_file:
-                shared_settings["packaging_log_file"] = self.packaging_log_file
-            elif "packaging_log_file" not in shared_settings:
-                # Если нет ни в памяти, ни в файле - оставляем пустым
-                shared_settings["packaging_log_file"] = ""
-
             # Номер заказа
             shared_settings["order_number"] = {
                 "prefix": self.settings_prefix_var.get().strip(),
@@ -657,16 +622,12 @@ class SettingsDialog:
                 excel_path = str(self.config_manager.data_dir)
             self.excel_folder_path = excel_path
 
-            # Загружаем путь к файлу журнала упаковки
-            self.packaging_log_file = settings.get("packaging_log_file", "")
-
             self.update_folder_status()
 
         except Exception as e:
             print(f"Ошибка чтения shared_utils.json: {e}")
             self.xml_folder_path.set(str(self.config_manager.data_dir))
             self.excel_folder_path = str(self.config_manager.data_dir)
-            self.packaging_log_file = ""
 
     def select_xml_folder(self):
         """Выбирает папку для XML файлов"""

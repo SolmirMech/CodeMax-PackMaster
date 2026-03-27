@@ -52,6 +52,9 @@ class PackagingLogWindow:
         self.order_var = StringVar()
         self.customer_var = StringVar()
         self.product_var = StringVar()
+        # Загружаем сохранённый путь
+        if self.config_manager:
+            self.packaging_log_file = self.get_packaging_log_file()
         
         # Менеджер
         self.manager = PackagingManager(config_manager, self.coordinator)
@@ -59,6 +62,11 @@ class PackagingLogWindow:
         self.create_window()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
+
+    def get_packaging_log_file(self):
+        """Возвращает путь к файлу журнала упаковки"""
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        return settings.get("packaging_log_file", "")
 
     def _get_column_config(self, field):
         """Возвращает конфигурацию для колонки"""
@@ -182,16 +190,16 @@ class PackagingLogWindow:
 
         ttk.Button(
             buttons_frame,
-            text="🗑️ Удалить",
+            text="🗑 Удалить запись",
             command=self.delete_selected,
-            width=15
+            width=16
         ).pack(side=tk.LEFT)
 
         ttk.Button(
             buttons_frame,
             text="🔄 Обновить Excel",
             command=self.export_to_excel,
-            width=17
+            width=16
         ).pack(side=tk.LEFT, padx=(10, 0))
 
         # Кнопка "Редкие функции"
@@ -208,7 +216,14 @@ class PackagingLogWindow:
 
         # Добавляем пункты в меню
         rare_menu.add_command(
-            label="📥 Импорт из Excel",
+            label="📁 Выбрать Excel журнал",
+            command=self.select_packaging_log_file
+        )
+
+        rare_menu.add_separator()
+
+        rare_menu.add_command(
+            label="📥 Импорт из Excel журнала",
             command=self.import_from_excel
         )
 
@@ -216,7 +231,7 @@ class PackagingLogWindow:
         import_submenu = tk.Menu(rare_menu, tearoff=0, font=("Segoe UI", 14))
         self.only_first_sheet_var = tk.BooleanVar(value=True)
         import_submenu.add_checkbutton(
-            label="Только первый лист",
+            label="Только первый лист журнала",
             variable=self.only_first_sheet_var
         )
         rare_menu.add_cascade(label="Настройки импорта", menu=import_submenu)
@@ -224,26 +239,16 @@ class PackagingLogWindow:
         rare_menu.add_separator()
 
         rare_menu.add_command(
-            label="🗑 Удалить электронный журнал",
-            command=self.clear_database
-        )
-
-        rare_menu.add_command(
             label="🔄 Восстановить Excel журнал",
             command=self.restore_journal
         )
 
-        rare_menu.add_command(
-            label="🎨 Сбросить цвет выбранной строки",
-            command=self.reset_row_color
-        )
+        rare_menu.add_separator()
 
-        ttk.Button(
-            buttons_frame,
-            text="🔍 Узнать о записи",
-            command=self.check_selected_entry,
-            width=18
-        ).pack(side=tk.LEFT, padx=(10, 0), pady=(5, 5))
+        rare_menu.add_command(
+            label="🗑 Удалить электронный журнал",
+            command=self.clear_database
+        )
 
         # Статусная строка - теперь сверху
         status_frame = ttk.Frame(self.window, height=25)
@@ -323,6 +328,25 @@ class PackagingLogWindow:
         self.load_recent()
         self.update_status_with_file_path()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def select_packaging_log_file(self):
+        """Выбирает файл журнала упаковки"""
+        file_path = filedialog.askopenfilename(
+            title="Выберите файл журнала упаковки",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return
+
+        # Сохраняем путь в настройки
+        settings = self.config_manager.load_json_settings("shared_utils.json")
+        settings["packaging_log_file"] = file_path
+        self.packaging_log_file = file_path
+        self.config_manager.save_json_settings("shared_utils.json", settings)
+
+        file_name = os.path.basename(file_path)
+        self.set_status(f"✅ Выбран файл: {file_name}", "green")
+        self.update_status_with_file_path()
 
     def _update_network_status(self):
         """Обновляет индикатор статуса сетевой БД"""
@@ -404,21 +428,53 @@ class PackagingLogWindow:
             self.status_label.config(text=f"📋 Скопировано: {text}", foreground="green")
             self.window.after(2000, lambda: self.status_label.config(text=original_text, foreground="blue"))
 
-    def check_selected_entry(self):
-        """Выводит информацию о выделенной записи в понятном виде"""
-        selection = self.tree.selection()
-        if not selection:
-            self.set_status("❌ Не выбрана запись", "orange")
+    def _choose_row_color(self, entry_id):
+        """Выбирает цвет для указанной строки"""
+        color = colorchooser.askcolor(title="Выберите цвет для строки", parent=self.window)
+        if color and color[1]:
+            hex_color = color[1].lstrip('#')
+            self.manager.update_row_color(entry_id, hex_color)
+            self.load_recent()
+            self.set_status(f"✅ Цвет строки #{entry_id} сохранён", "green")
+
+    def _reset_row_color(self, entry_id):
+        """Сбрасывает цвет указанной строки"""
+        self.manager.update_row_color(entry_id, None)
+        self.load_recent()
+        self.set_status(f"✅ Цвет строки #{entry_id} сброшен", "green")
+
+    def on_right_click(self, event):
+        """Обработчик правого клика по строке"""
+        item = self.tree.identify_row(event.y)
+        if not item:
             return
 
-        entry_id = int(selection[0])
+        entry_id = int(item)
+
+        menu = tk.Menu(self.window, tearoff=0)
+        menu.add_command(
+            label="🔍 Узнать о записи",
+            command=lambda: self._check_entry_info(entry_id)
+        )
+        menu.add_separator()
+        menu.add_command(
+            label="🎨 Выбрать цвет строки",
+            command=lambda: self._choose_row_color(entry_id)
+        )
+        menu.add_command(
+            label="🗑 Сбросить цвет строки",
+            command=lambda: self._reset_row_color(entry_id)
+        )
+        menu.post(event.x_root, event.y_root)
+
+    def _check_entry_info(self, entry_id):
+        """Выводит информацию о записи"""
         entries = self.manager.search_entries(id=entry_id)
         if not entries:
             self.set_status(f"❌ Запись #{entry_id} не найдена", "red")
             return
 
         entry = entries[0]
-
         exported_status = "Да" if entry.get('exported') else "Нет"
         excel_row = entry.get('source_row') if entry.get('source_row') else "НЕТ"
         excel_sheet = entry.get('source_sheet') if entry.get('source_sheet') else "НЕТ"
@@ -429,43 +485,6 @@ class PackagingLogWindow:
                 f"Источник: {source_type}")
 
         self.set_status(info, "blue")
-
-    def reset_row_color(self):
-        """Сбрасывает цвет выбранной строки"""
-        selection = self.tree.selection()
-        if not selection:
-            self.set_status("❌ Не выбрана строка для сброса цвета", "orange")
-            return
-
-        entry_id = int(selection[0])
-
-        # Сохраняем пустой цвет в БД
-        self.manager.update_row_color(entry_id, None)
-
-        # Обновляем отображение
-        self.load_recent()
-        self.set_status(f"✅ Цвет строки #{entry_id} сброшен", "green")
-
-    def on_right_click(self, event):
-        """Обработчик правого клика по строке - выбор цвета"""
-        item = self.tree.identify_row(event.y)
-        if not item:
-            return
-
-        entry_id = int(item)
-
-        # Открываем диалог выбора цвета
-        color = colorchooser.askcolor(title="Выберите цвет для строки", parent=self.window)
-
-        if color and color[1]:  # color[1] - это hex
-            hex_color = color[1].lstrip('#')
-
-            # Сохраняем в БД
-            self.manager.update_row_color(entry_id, hex_color)
-
-            # Обновляем отображение
-            self.load_recent()
-            self.set_status(f"✅ Цвет строки #{entry_id} сохранён", "green")
 
     def restore_journal(self):
         """Восстанавливает журнал из БД в новый Excel файл"""
@@ -898,7 +917,6 @@ class PackagingLogWindow:
             filters = {}
             if self.date_var.get().strip():
                 date_input = self.date_var.get().strip()
-                # Преобразуем DD.MM.YYYY в YYYY-MM-DD для поиска в БД
                 date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', date_input)
                 if date_match:
                     day, month, year = date_match.groups()
@@ -908,7 +926,6 @@ class PackagingLogWindow:
 
             if self.order_var.get().strip():
                 order = self.order_var.get().strip()
-                # Если введено 4 цифры, ищем частично
                 if re.match(r'^\d{4}$', order):
                     filters["order_number"] = f"%{order}%"
                 else:
@@ -919,10 +936,14 @@ class PackagingLogWindow:
             if self.product_var.get().strip():
                 filters["product_name"] = self.product_var.get().strip()
 
-            self.set_status("Поиск...")
-            self.window.update()
+            # Если все поля пустые — загружаем последние 20 записей
+            if not filters:
+                self.entries = self.manager.get_recent_entries(20)
+            else:
+                self.set_status("Поиск...")
+                self.window.update()
+                self.entries = self.manager.search_entries(**filters)
 
-            self.entries = self.manager.search_entries(**filters)
             self.refresh_table()
 
             count = len(self.entries)
@@ -933,7 +954,7 @@ class PackagingLogWindow:
 
         except Exception as e:
             self.set_status(f"Ошибка поиска: {str(e)}")
-
+            
     def add_new_entry(self):
         """Добавляет новую запись с предзаполненными данными"""
         try:
