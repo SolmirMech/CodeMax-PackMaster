@@ -249,15 +249,33 @@ class PackagingDataManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS packaging_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT, order_number TEXT, customer TEXT, product_name TEXT,
-                    quantity_labels INTEGER DEFAULT 0, packer_name TEXT, weight_kg REAL DEFAULT 0,
-                    col_1 INTEGER DEFAULT 0, col_2 INTEGER DEFAULT 0, col_3 INTEGER DEFAULT 0,
-                    col_4 INTEGER DEFAULT 0, col_5 INTEGER DEFAULT 0, col_6 INTEGER DEFAULT 0,
-                    col_7 INTEGER DEFAULT 0, col_8 INTEGER DEFAULT 0, col_9 INTEGER DEFAULT 0,
-                    col_10 INTEGER DEFAULT 0, note TEXT, exported INTEGER DEFAULT 0,
-                    source_type TEXT DEFAULT 'manual', source_file TEXT, source_sheet TEXT,
-                    source_row INTEGER, sheet_index INTEGER DEFAULT 0, restore_flag INTEGER DEFAULT 0,
-                    row_color TEXT, synced INTEGER DEFAULT 1
+                    date TEXT,
+                    order_number TEXT,
+                    customer TEXT,
+                    product_name TEXT,
+                    quantity_labels INTEGER DEFAULT 0,
+                    packer_name TEXT,
+                    weight_kg REAL DEFAULT 0,
+                    col_1 INTEGER DEFAULT 0,
+                    col_2 INTEGER DEFAULT 0,
+                    col_3 INTEGER DEFAULT 0,
+                    col_4 INTEGER DEFAULT 0,
+                    col_5 INTEGER DEFAULT 0,
+                    col_6 INTEGER DEFAULT 0,
+                    col_7 INTEGER DEFAULT 0,
+                    col_8 INTEGER DEFAULT 0,
+                    col_9 INTEGER DEFAULT 0,
+                    col_10 INTEGER DEFAULT 0,
+                    note TEXT,
+                    exported INTEGER DEFAULT 0 CHECK(exported IN (0,1,2)),
+                    source_type TEXT DEFAULT 'manual',
+                    source_file TEXT,
+                    source_sheet TEXT,
+                    source_row INTEGER,
+                    sheet_index INTEGER DEFAULT 0,
+                    restore_flag INTEGER DEFAULT 0,
+                    row_color TEXT,
+                    synced INTEGER DEFAULT 1
                 )
             """)
 
@@ -439,7 +457,7 @@ class PackagingDataManager:
                         col_9 INTEGER DEFAULT 0,
                         col_10 INTEGER DEFAULT 0,
                         note TEXT,
-                        exported INTEGER DEFAULT 0,
+                        exported INTEGER DEFAULT 0 CHECK(exported IN (0,1,2)),
                         source_type TEXT DEFAULT 'manual',
                         source_file TEXT,
                         source_sheet TEXT,
@@ -538,17 +556,34 @@ class PackagingDataManager:
             def operation(conn):
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
-                cur.execute("""
-                    SELECT * FROM packaging_log 
-                    WHERE exported = 0 
-                    ORDER BY id ASC
-                """)
-                result_rows = cur.fetchall()
-                return [dict(row) for row in result_rows]
+                # Используем SELECT FOR UPDATE через BEGIN IMMEDIATE
+                cur.execute("BEGIN IMMEDIATE")
+                try:
+                    cur.execute("""
+                        SELECT * FROM packaging_log 
+                        WHERE exported = 0 
+                        ORDER BY id ASC
+                    """)
+                    result_rows = cur.fetchall()
+                    # Мгновенно помечаем как экспортируемые
+                    if result_rows:
+                        ids = [row['id'] for row in result_rows]
+                        placeholders = ','.join(['?'] * len(ids))
+                        cur.execute(f"""
+                            UPDATE packaging_log 
+                            SET exported = 2 
+                            WHERE id IN ({placeholders})
+                        """, ids)
+                        conn.commit()
+                    return [dict(row) for row in result_rows]
+                except:
+                    conn.rollback()
+                    raise
+
             result = self._execute_on_network(operation, with_backup=False)
             return result if result is not None else []
         else:
-            # Офлайн-режим
+            # офлайн-режим без изменений
             local_conn = sqlite3.connect(self.local_backup_path)
             try:
                 local_conn.row_factory = sqlite3.Row
@@ -589,18 +624,19 @@ class PackagingDataManager:
                 placeholders = ','.join(['?'] * len(entry_ids))
                 if sheet_name:
                     cur.execute(f"""
-                        UPDATE packaging_log 
-                        SET exported = 1, source_sheet = ?, sheet_index = 0
-                        WHERE id IN ({placeholders})
-                    """, [sheet_name] + entry_ids)
+                            UPDATE packaging_log 
+                            SET exported = 1, source_sheet = ?, sheet_index = 0
+                            WHERE id IN ({placeholders}) AND exported IN (0, 2)
+                        """, [sheet_name] + entry_ids)
                 else:
                     cur.execute(f"""
-                        UPDATE packaging_log 
-                        SET exported = 1
-                        WHERE id IN ({placeholders})
-                    """, entry_ids)
+                            UPDATE packaging_log 
+                            SET exported = 1
+                            WHERE id IN ({placeholders}) AND exported IN (0, 2)
+                        """, entry_ids)
                 conn.commit()
                 return cur.rowcount
+
             return self._execute_on_network(operation, with_backup=True)
         else:
             # Офлайн-режим: обновляем в локальной только если записи не синхронизированы

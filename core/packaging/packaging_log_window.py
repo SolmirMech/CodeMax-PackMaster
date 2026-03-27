@@ -363,8 +363,6 @@ class PackagingLogWindow:
         if self.manager:
             self.manager.refresh_database_paths()
 
-        file_name = os.path.basename(file_path)
-        self.set_status(f"✅ Выбран файл: {file_name}", "green")
         self.update_status_with_file_path()
         self.load_recent()
 
@@ -640,7 +638,7 @@ class PackagingLogWindow:
         """Обновляет статусную строку с полным путём к файлу"""
         if self.packaging_log_file:
             self.status_label.config(
-                text=f"📁 Текущий файл: {self.packaging_log_file}",
+                text=f"📁 Текущий файл Excel журнала: {self.packaging_log_file}",
                 foreground="blue"
             )
         else:
@@ -823,7 +821,7 @@ class PackagingLogWindow:
             self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     def load_recent(self):
-        """Загружает последние 10 записей"""
+        """Загружает последние записи"""
         try:
             self.entries = self.manager.get_recent_entries(20)
             self.refresh_table()
