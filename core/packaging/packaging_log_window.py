@@ -58,6 +58,10 @@ class PackagingLogWindow:
         
         # Менеджер
         self.manager = PackagingManager(config_manager, self.coordinator)
+
+        # Устанавливаем callback для статусных сообщений
+        if hasattr(self.manager, 'data_manager'):
+            self.manager.data_manager.set_status_callback(self.on_sync_status)
         
         self.create_window()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -329,6 +333,17 @@ class PackagingLogWindow:
         self.update_status_with_file_path()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    def on_sync_status(self, message):
+        """Обработчик статусных сообщений от data_manager"""
+        if hasattr(self, 'network_status_label'):
+            self.network_status_label.config(
+                text=f"🔄 {message}",
+                background="#FFFF99",
+                foreground="#000000"
+            )
+            # Возвращаем обычный статус через 3 секунды
+            self.window.after(3000, lambda: self._update_network_status())
+
     def select_packaging_log_file(self):
         """Выбирает файл журнала упаковки"""
         file_path = filedialog.askopenfilename(
@@ -344,9 +359,14 @@ class PackagingLogWindow:
         self.packaging_log_file = file_path
         self.config_manager.save_json_settings("shared_utils.json", settings)
 
+        # Обновляем пути в data_manager
+        if self.manager:
+            self.manager.refresh_database_paths()
+
         file_name = os.path.basename(file_path)
         self.set_status(f"✅ Выбран файл: {file_name}", "green")
         self.update_status_with_file_path()
+        self.load_recent()
 
     def _update_network_status(self):
         """Обновляет индикатор статуса сетевой БД"""
@@ -823,25 +843,28 @@ class PackagingLogWindow:
             # Формируем значения по порядку колонок из маппинга
             values = []
             for field in self.tree["columns"]:
+                # Получаем значение из entry по ключу field
                 value = entry.get(field, "")
-                if value is None:
-                    value = ""
 
-                # Форматирование для веса (число с запятой)
-                if field == "weight_kg" and isinstance(value, (int, float)):
-                    value = f"{value:.1f}".replace('.', ',')
-                # Спецобработка для даты
-                elif field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
-                    try:
-                        y, m, d = str(value).split('-')
-                        value = f"{d}.{m}.{y}"
-                    except:
-                        pass
-                # Спецобработка для полей с переносом
-                config = self._get_column_config(field)
-                if config.get("wrap", False):
-                    wrap_len = config.get("wrap_len", 30)
-                    value = self._wrap_text(value, wrap_len)
+                # Если значение None или пустое
+                if value is None or value == "":
+                    value = ""
+                else:
+                    # Форматирование для веса (число с запятой)
+                    if field == "weight_kg" and isinstance(value, (int, float)):
+                        value = f"{value:.1f}".replace('.', ',')
+                    # Спецобработка для даты
+                    elif field == "date" and value and len(str(value)) == 10 and str(value)[4] == '-':
+                        try:
+                            y, m, d = str(value).split('-')
+                            value = f"{d}.{m}.{y}"
+                        except:
+                            pass
+                    # Спецобработка для полей с переносом
+                    config = self._get_column_config(field)
+                    if config.get("wrap", False):
+                        wrap_len = config.get("wrap_len", 30)
+                        value = self._wrap_text(str(value), wrap_len)
 
                 values.append(value)
 
@@ -849,7 +872,8 @@ class PackagingLogWindow:
             tags = []
             row_color = entry.get("row_color")
 
-            if row_color:
+            # Проверяем валидность цвета
+            if row_color and row_color != "0" and len(row_color) >= 6:
                 color_tag = f"color_{row_color}"
                 if color_tag not in color_tags:
                     self.tree.tag_configure(color_tag, background=f"#{row_color}")
@@ -954,7 +978,7 @@ class PackagingLogWindow:
 
         except Exception as e:
             self.set_status(f"Ошибка поиска: {str(e)}")
-            
+
     def add_new_entry(self):
         """Добавляет новую запись с предзаполненными данными"""
         try:

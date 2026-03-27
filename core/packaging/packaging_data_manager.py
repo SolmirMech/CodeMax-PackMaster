@@ -61,6 +61,18 @@ class PackagingDataManager:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
 
+    def refresh_paths(self):
+        """Обновляет пути к БД после изменения Excel файла"""
+        self._update_workshop()
+        self._init_network_database()
+        self._init_local_backup()
+
+        # Синхронизация при обновлении
+        if self._is_network_available():
+            synced = self._sync_local_to_network()
+            if synced > 0 and self.status_callback:
+                self.status_callback(f"Синхронизировано {synced} записей")
+
     @staticmethod
     def _execute_with_retry(operation, max_retries=3):
         """Выполняет операцию с повторными попытками при блокировке"""
@@ -165,6 +177,8 @@ class PackagingDataManager:
         conn_network = sqlite3.connect(self.network_db_path)
 
         try:
+            # Используем row_factory для получения dict
+            conn_local.row_factory = sqlite3.Row
             cursor_local = conn_local.cursor()
             cursor_local.execute("SELECT * FROM packaging_log WHERE synced = 0 ORDER BY id ASC")
             rows = cursor_local.fetchall()
@@ -172,19 +186,26 @@ class PackagingDataManager:
             if not rows:
                 return 0
 
-            # Получаем названия колонок (без id)
-            cursor_local.execute("PRAGMA table_info(packaging_log)")
-            columns = [col[1] for col in cursor_local.fetchall() if col[1] != 'id']
-
             cursor_network = conn_network.cursor()
 
+            # Получаем список колонок сетевой БД (без id)
+            cursor_network.execute("PRAGMA table_info(packaging_log)")
+            network_columns = [col[1] for col in cursor_network.fetchall() if col[1] != 'id']
+
             for row in rows:
-                row_dict = {col: row[columns.index(col)] for col in columns}
-                placeholders = ','.join(['?'] * len(row_dict))
-                columns_str = ','.join(row_dict.keys())
+                # Преобразуем row в dict
+                row_dict = dict(row)
+                # Удаляем id из dict (он не нужен при вставке)
+                row_dict.pop('id', None)
+
+                # Оставляем только те поля, которые есть в сетевой БД
+                filtered_dict = {k: v for k, v in row_dict.items() if k in network_columns}
+
+                placeholders = ','.join(['?'] * len(filtered_dict))
+                columns_str = ','.join(filtered_dict.keys())
                 cursor_network.execute(
                     f"INSERT INTO packaging_log ({columns_str}) VALUES ({placeholders})",
-                    list(row_dict.values())
+                    list(filtered_dict.values())
                 )
 
             conn_network.commit()
@@ -194,7 +215,7 @@ class PackagingDataManager:
             cursor_local.execute("DELETE FROM packaging_log WHERE synced = 0")
             conn_local.commit()
 
-            return synced_count  # ← добавляем return
+            return synced_count
 
         except Exception as e:
             print(f"Ошибка синхронизации: {e}")
@@ -219,6 +240,9 @@ class PackagingDataManager:
 
     def _init_local_backup(self):
         """Инициализирует локальную БД-бэкап"""
+        if not self.local_backup_path:
+            return
+
         conn = sqlite3.connect(self.local_backup_path)
         try:
             cursor = conn.cursor()
@@ -386,6 +410,9 @@ class PackagingDataManager:
 
     def _init_network_database(self):
         """Инициализация сетевой БД для журнала упаковки"""
+        if not self.network_db_path:
+            return  # нечего инициализировать
+
         with self._lock:
             try:
                 conn = sqlite3.connect(self.network_db_path)

@@ -48,6 +48,10 @@ class PackagingManager:
         """Проверка доступности сетевой БД"""
         return self.data_manager.is_network_available()
 
+    def refresh_database_paths(self):
+        """Обновляет пути к БД после выбора Excel файла"""
+        self.data_manager.refresh_paths()
+
     # === Методы Excel ===
     # noinspection SpellCheckingInspection
     def import_from_excel(self, file_path, progress_callback=None,
