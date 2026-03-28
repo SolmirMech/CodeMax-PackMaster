@@ -106,10 +106,15 @@ class PackagingDataManager:
             return self._execute_with_retry(wrapped)
 
     def _add_to_local_offline(self, data):
-        """Добавляет запись в локальную БД с synced=0"""
+        """Добавляет запись в локальную БД с synced=0 и отрицательным id"""
         conn = sqlite3.connect(self.local_backup_path)
         try:
             cursor = conn.cursor()
+
+            # Получаем минимальный отрицательный id
+            cursor.execute("SELECT MIN(id) FROM packaging_log WHERE id < 0")
+            min_id = cursor.fetchone()[0]
+            new_id = (min_id - 1) if min_id else -1
 
             # Форматируем вес
             weight = data.get('weight_kg')
@@ -121,12 +126,13 @@ class PackagingDataManager:
 
             cursor.execute("""
                 INSERT INTO packaging_log 
-                (date, order_number, customer, product_name, quantity_labels, 
+                (id, date, order_number, customer, product_name, quantity_labels, 
                  packer_name, weight_kg, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10, note, 
                  exported, source_type, source_file, source_sheet, source_row, 
                  sheet_index, row_color, synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
             """, (
+                new_id,
                 data.get('date', ''),
                 data.get('order_number', ''),
                 data.get('customer', ''),
@@ -154,19 +160,9 @@ class PackagingDataManager:
                 data.get('row_color')
             ))
             conn.commit()
-            return cursor.lastrowid
+            return new_id
         finally:
             conn.close()
-
-    def _backup_to_local(self):
-        """Копирует сетевую БД в локальную (бэкап)"""
-        if not self._is_network_available():
-            return
-        try:
-            import shutil
-            shutil.copy2(self.network_db_path, self.local_backup_path)
-        except Exception as e:
-            print(f"Ошибка бэкапа: {e}")
 
     def _sync_local_to_network(self):
         """Синхронизирует локальные записи (synced=0) в сетевую БД"""
@@ -192,11 +188,14 @@ class PackagingDataManager:
             cursor_network.execute("PRAGMA table_info(packaging_log)")
             network_columns = [col[1] for col in cursor_network.fetchall() if col[1] != 'id']
 
+            print(f"DEBUG: Найдено записей для синхронизации: {len(rows)}")
             for row in rows:
+                print(f"DEBUG: id={row['id']}, synced={row['synced']}")
                 # Преобразуем row в dict
                 row_dict = dict(row)
                 # Удаляем id из dict (он не нужен при вставке)
                 row_dict.pop('id', None)
+                row_dict['synced'] = 1
 
                 # Оставляем только те поля, которые есть в сетевой БД
                 filtered_dict = {k: v for k, v in row_dict.items() if k in network_columns}
@@ -212,7 +211,9 @@ class PackagingDataManager:
             synced_count = len(rows)
 
             # Удаляем синхронизированные из локальной
-            cursor_local.execute("DELETE FROM packaging_log WHERE synced = 0")
+            print(f"DEBUG: Вставлено в сеть записей: {synced_count}")
+            cursor_local.execute("DELETE FROM packaging_log WHERE id < 0 AND synced = 0")
+            print(f"DEBUG: Удалено из локальной: {cursor_local.rowcount}")
             conn_local.commit()
 
             return synced_count
@@ -239,13 +240,15 @@ class PackagingDataManager:
         return self._is_network_available()
 
     def _init_local_backup(self):
-        """Инициализирует локальную БД-бэкап"""
+        """Инициализирует локальную БД-бэкап с двумя таблицами"""
         if not self.local_backup_path:
             return
 
         conn = sqlite3.connect(self.local_backup_path)
         try:
             cursor = conn.cursor()
+
+            # Таблица для офлайн-записей
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS packaging_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,7 +270,41 @@ class PackagingDataManager:
                     col_9 INTEGER DEFAULT 0,
                     col_10 INTEGER DEFAULT 0,
                     note TEXT,
-                    exported INTEGER DEFAULT 0 CHECK(exported IN (0,1,2)),
+                    exported INTEGER DEFAULT 0,
+                    source_type TEXT DEFAULT 'manual',
+                    source_file TEXT,
+                    source_sheet TEXT,
+                    source_row INTEGER,
+                    sheet_index INTEGER DEFAULT 0,
+                    restore_flag INTEGER DEFAULT 0,
+                    row_color TEXT,
+                    synced INTEGER DEFAULT 0
+                )
+            """)
+
+            # Таблица для бэкапа сетевой БД
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS packaging_log_backup (
+                    id INTEGER PRIMARY KEY,
+                    date TEXT,
+                    order_number TEXT,
+                    customer TEXT,
+                    product_name TEXT,
+                    quantity_labels INTEGER DEFAULT 0,
+                    packer_name TEXT,
+                    weight_kg REAL DEFAULT 0,
+                    col_1 INTEGER DEFAULT 0,
+                    col_2 INTEGER DEFAULT 0,
+                    col_3 INTEGER DEFAULT 0,
+                    col_4 INTEGER DEFAULT 0,
+                    col_5 INTEGER DEFAULT 0,
+                    col_6 INTEGER DEFAULT 0,
+                    col_7 INTEGER DEFAULT 0,
+                    col_8 INTEGER DEFAULT 0,
+                    col_9 INTEGER DEFAULT 0,
+                    col_10 INTEGER DEFAULT 0,
+                    note TEXT,
+                    exported INTEGER DEFAULT 0,
                     source_type TEXT DEFAULT 'manual',
                     source_file TEXT,
                     source_sheet TEXT,
@@ -279,18 +316,57 @@ class PackagingDataManager:
                 )
             """)
 
-            # Индексы
+            # Индексы для основной таблицы
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_synced ON packaging_log(synced)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_date ON packaging_log(date)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_order ON packaging_log(order_number)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_customer ON packaging_log(customer)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_product ON packaging_log(product_name)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_exported ON packaging_log(exported)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_source ON packaging_log(source_type)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pack_sheet_index ON packaging_log(sheet_index)")
 
             conn.commit()
         finally:
             conn.close()
+
+    def _backup_to_local(self):
+        """Копирует сетевую БД в таблицу бэкапа"""
+        if not self._is_network_available():
+            return
+
+        conn_network = None
+        conn_local = None
+
+        try:
+            conn_network = sqlite3.connect(self.network_db_path)
+            conn_local = sqlite3.connect(self.local_backup_path)
+
+            cursor_network = conn_network.cursor()
+            cursor_local = conn_local.cursor()
+
+            # Очищаем таблицу бэкапа
+            cursor_local.execute("DELETE FROM packaging_log_backup")
+
+            # Копируем все записи из сетевой
+            cursor_network.execute("SELECT * FROM packaging_log")
+            rows = cursor_network.fetchall()
+
+            if rows:
+                # Получаем имена колонок
+                col_names = [description[0] for description in cursor_network.description]
+                placeholders = ','.join(['?'] * len(col_names))
+
+                for row in rows:
+                    cursor_local.execute(
+                        f"INSERT INTO packaging_log_backup ({','.join(col_names)}) VALUES ({placeholders})",
+                        row
+                    )
+
+            conn_local.commit()
+
+        except Exception as e:
+            print(f"Ошибка бэкапа: {e}")
+        finally:
+            if conn_network:
+                conn_network.close()
+            if conn_local:
+                conn_local.close()
 
     def _update_workshop(self):
         """Определяем текущий цех и обновляем пути к БД"""
@@ -696,8 +772,11 @@ class PackagingDataManager:
                 local_conn.row_factory = sqlite3.Row
                 local_cursor = local_conn.cursor()
                 local_cursor.execute("""
-                    SELECT * FROM packaging_log 
-                    ORDER BY id DESC 
+                    SELECT * FROM packaging_log
+                    UNION ALL
+                    SELECT * FROM packaging_log_backup b
+                    WHERE NOT EXISTS (SELECT 1 FROM packaging_log o WHERE o.id = b.id)
+                    ORDER BY id DESC
                     LIMIT ?
                 """, (limit,))
                 local_rows = local_cursor.fetchall()
@@ -741,23 +820,31 @@ class PackagingDataManager:
                 local_conn.row_factory = sqlite3.Row
                 local_cursor = local_conn.cursor()
 
-                local_query = "SELECT * FROM packaging_log WHERE 1=1"
+                # Базовый запрос для объединения
+                base_query = """
+                    SELECT * FROM (
+                        SELECT * FROM packaging_log
+                        UNION ALL
+                        SELECT * FROM packaging_log_backup b
+                        WHERE NOT EXISTS (SELECT 1 FROM packaging_log o WHERE o.id = b.id)
+                    ) AS combined WHERE 1=1
+                """
                 local_params = []
 
                 for l_key, l_value in filters.items():
                     if l_key == 'date':
-                        local_query += " AND date = ?"
+                        base_query += " AND date = ?"
                         local_params.append(l_value)
                     elif l_key == 'id':
-                        local_query += " AND id = ?"
+                        base_query += " AND id = ?"
                         local_params.append(l_value)
                     elif l_key in ['order_number', 'customer', 'product_name']:
-                        local_query += f" AND {l_key} LIKE ?"
+                        base_query += f" AND {l_key} LIKE ?"
                         local_params.append(f'%{l_value}%')
 
-                local_query += " ORDER BY id DESC"
+                base_query += " ORDER BY id DESC"
 
-                local_cursor.execute(local_query, local_params)
+                local_cursor.execute(base_query, local_params)
                 local_rows = local_cursor.fetchall()
                 return [dict(row) for row in local_rows]
             finally:
@@ -938,11 +1025,15 @@ class PackagingDataManager:
                 local_conn.row_factory = sqlite3.Row
                 local_cursor = local_conn.cursor()
 
-                # Получаем уникальные листы с их индексами
+                # Получаем уникальные листы из ОБЕИХ таблиц
                 local_cursor.execute("""
-                    SELECT DISTINCT source_sheet, sheet_index 
-                    FROM packaging_log 
-                    WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
+                    SELECT DISTINCT source_sheet, sheet_index FROM (
+                        SELECT source_sheet, sheet_index FROM packaging_log 
+                        WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
+                        UNION
+                        SELECT source_sheet, sheet_index FROM packaging_log_backup 
+                        WHERE source_type = 'excel' OR (source_type = 'manual' AND exported = 1)
+                    )
                     ORDER BY sheet_index ASC
                 """)
                 local_sheets = local_cursor.fetchall()
@@ -953,13 +1044,19 @@ class PackagingDataManager:
                     local_sheet_name = local_sheet['source_sheet'].strip() or "Лист1"
                     local_sheet_index = local_sheet['sheet_index']
 
-                    # Получаем записи для этого листа
+                    # Получаем записи из ОБЕИХ таблиц для этого листа
                     local_cursor.execute("""
-                        SELECT * FROM packaging_log 
-                        WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
-                        AND source_sheet = ? AND sheet_index = ?
+                        SELECT * FROM (
+                            SELECT * FROM packaging_log 
+                            WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
+                            AND source_sheet = ? AND sheet_index = ?
+                            UNION ALL
+                            SELECT * FROM packaging_log_backup 
+                            WHERE (source_type = 'excel' OR (source_type = 'manual' AND exported = 1))
+                            AND source_sheet = ? AND sheet_index = ?
+                        )
                         ORDER BY id ASC
-                    """, (local_sheet_name, local_sheet_index))
+                    """, (local_sheet_name, local_sheet_index, local_sheet_name, local_sheet_index))
 
                     local_rows = local_cursor.fetchall()
                     if local_rows:

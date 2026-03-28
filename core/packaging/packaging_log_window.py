@@ -493,12 +493,23 @@ class PackagingLogWindow:
             return
 
         entry = entries[0]
-        exported_status = "Да" if entry.get('exported') else "Нет"
+
+        # Статус экспорта: 0 - нет, 1 - да, 2 - в процессе
+        exported_status = {
+            0: "Нет",
+            1: "Да",
+            2: "В процессе"
+        }.get(entry.get('exported'), "Нет")
+
+        # Статус синхронизации: 0 - не синхронизирована, 1 - синхронизирована
+        synced_status = "Да" if entry.get('synced') == 1 else "Нет"
+
         excel_row = entry.get('source_row') if entry.get('source_row') else "НЕТ"
         excel_sheet = entry.get('source_sheet') if entry.get('source_sheet') else "НЕТ"
         source_type = "Импортирована" if entry.get('source_type') == 'excel' else "Добавлена вручную"
 
         info = (f"ID: {entry['id']} | Экспортирована: {exported_status} | "
+                f"Синхронизирована: {synced_status} | "
                 f"Строка Excel: {excel_row} | Лист Excel: {excel_sheet} | "
                 f"Источник: {source_type}")
 
@@ -652,7 +663,7 @@ class PackagingLogWindow:
         """Устанавливает статусное сообщение с цветом и автоочисткой через 5 секунд"""
         self.status_label.config(text=message, foreground=color)
         self.status_label.update()  # принудительное обновление
-        self.window.after(5000, self.update_status_with_file_path)
+        self.window.after(10000, self.update_status_with_file_path)
 
     def import_from_excel(self):
         """Импорт данных из Excel"""
