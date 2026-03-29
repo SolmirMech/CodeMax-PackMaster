@@ -176,7 +176,7 @@ class PackagingDataManager:
             # Используем row_factory для получения dict
             conn_local.row_factory = sqlite3.Row
             cursor_local = conn_local.cursor()
-            cursor_local.execute("SELECT * FROM packaging_log WHERE synced = 0 ORDER BY id ASC")
+            cursor_local.execute("SELECT * FROM packaging_log WHERE synced = 0 ORDER BY id DESC")
             rows = cursor_local.fetchall()
 
             if not rows:
@@ -188,9 +188,7 @@ class PackagingDataManager:
             cursor_network.execute("PRAGMA table_info(packaging_log)")
             network_columns = [col[1] for col in cursor_network.fetchall() if col[1] != 'id']
 
-            print(f"DEBUG: Найдено записей для синхронизации: {len(rows)}")
             for row in rows:
-                print(f"DEBUG: id={row['id']}, synced={row['synced']}")
                 # Преобразуем row в dict
                 row_dict = dict(row)
                 # Удаляем id из dict (он не нужен при вставке)
@@ -211,9 +209,7 @@ class PackagingDataManager:
             synced_count = len(rows)
 
             # Удаляем синхронизированные из локальной
-            print(f"DEBUG: Вставлено в сеть записей: {synced_count}")
             cursor_local.execute("DELETE FROM packaging_log WHERE id < 0 AND synced = 0")
-            print(f"DEBUG: Удалено из локальной: {cursor_local.rowcount}")
             conn_local.commit()
 
             return synced_count
@@ -758,11 +754,14 @@ class PackagingDataManager:
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT * FROM packaging_log 
-                    ORDER BY id DESC 
+                    ORDER BY 
+                        CASE WHEN id < 0 THEN 0 ELSE 1 END,
+                        CASE WHEN id < 0 THEN -id ELSE id END DESC
                     LIMIT ?
                 """, (limit,))
                 result_rows = cur.fetchall()
                 return [dict(row) for row in result_rows]
+
             result = self._execute_on_network(operation, with_backup=False)
             return result if result is not None else []
         else:
@@ -772,11 +771,15 @@ class PackagingDataManager:
                 local_conn.row_factory = sqlite3.Row
                 local_cursor = local_conn.cursor()
                 local_cursor.execute("""
-                    SELECT * FROM packaging_log
-                    UNION ALL
-                    SELECT * FROM packaging_log_backup b
-                    WHERE NOT EXISTS (SELECT 1 FROM packaging_log o WHERE o.id = b.id)
-                    ORDER BY id DESC
+                    SELECT * FROM (
+                        SELECT * FROM packaging_log
+                        UNION ALL
+                        SELECT * FROM packaging_log_backup b
+                        WHERE NOT EXISTS (SELECT 1 FROM packaging_log o WHERE o.id = b.id)
+                    )
+                    ORDER BY 
+                        CASE WHEN id < 0 THEN 0 ELSE 1 END,
+                        CASE WHEN id < 0 THEN -id ELSE id END DESC
                     LIMIT ?
                 """, (limit,))
                 local_rows = local_cursor.fetchall()

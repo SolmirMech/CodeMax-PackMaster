@@ -330,8 +330,40 @@ class PackagingLogWindow:
 
         # Загружаем последние записи
         self.load_recent()
-        self.update_status_with_file_path()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def _update_network_status(self):
+        """Обновляет индикатор статуса сетевой БД"""
+        try:
+            if self.manager and self.manager.is_network_available():
+                db_path = self.manager.data_manager.network_db_path or "не задан"
+                workshop = self.current_workshop if hasattr(self, 'current_workshop') else "?"
+                excel_path = self.packaging_log_file if self.packaging_log_file else "не задан"
+
+                self.network_status_label.config(
+                    text=f"✅ Сетевая База данных доступна | Цех: {workshop} | Файл базы: {db_path} | Текущий Excel журнал: {excel_path}",
+                    background="#90EE90",
+                    foreground="#006400"
+                )
+            elif self.manager and not self.manager.is_network_available():
+                excel_path = self.packaging_log_file if self.packaging_log_file else "не задан"
+                self.network_status_label.config(
+                    text=f"⚠️ Сетевая База недоступна, режим локальной записи | Текущий Excel журнал: {excel_path}",
+                    background="#FFB347",
+                    foreground="#8B4513"
+                )
+            else:
+                self.network_status_label.config(
+                    text="❌ Статус сети недоступен",
+                    background="#FF6B6B",
+                    foreground="#8B0000"
+                )
+        except Exception as e:
+            self.network_status_label.config(
+                text=f"❌ Ошибка проверки: {e}",
+                background="#FF6B6B",
+                foreground="#8B0000"
+            )
 
     def on_sync_status(self, message):
         """Обработчик статусных сообщений от data_manager"""
@@ -363,39 +395,8 @@ class PackagingLogWindow:
         if self.manager:
             self.manager.refresh_database_paths()
 
-        self.update_status_with_file_path()
+        self._update_network_status()
         self.load_recent()
-
-    def _update_network_status(self):
-        """Обновляет индикатор статуса сетевой БД"""
-        try:
-            if self.manager and self.manager.is_network_available():
-                db_path = self.manager.data_manager.network_db_path or "не задан"
-                workshop = self.current_workshop if hasattr(self, 'current_workshop') else "?"
-
-                self.network_status_label.config(
-                    text=f"✅ Сетевая База данных доступна | Цех: {workshop} | Файл: {db_path}",
-                    background="#90EE90",
-                    foreground="#006400"
-                )
-            elif self.manager and not self.manager.is_network_available():
-                self.network_status_label.config(
-                    text="⚠️ Сетевая База недоступна, режим локальной записи",
-                    background="#FFB347",
-                    foreground="#8B4513"
-                )
-            else:
-                self.network_status_label.config(
-                    text="❌ Статус сети недоступен",
-                    background="#FF6B6B",
-                    foreground="#8B0000"
-                )
-        except Exception as e:
-            self.network_status_label.config(
-                text=f"❌ Ошибка проверки: {e}",
-                background="#FF6B6B",
-                foreground="#8B0000"
-            )
 
     def _schedule_network_check(self):
         """Планирует периодическую проверку сети"""
@@ -645,25 +646,12 @@ class PackagingLogWindow:
             width=15
         ).pack(side=tk.LEFT, padx=5)
 
-    def update_status_with_file_path(self):
-        """Обновляет статусную строку с полным путём к файлу"""
-        if self.packaging_log_file:
-            self.status_label.config(
-                text=f"📁 Текущий файл Excel журнала: {self.packaging_log_file}",
-                foreground="blue"
-            )
-        else:
-            self.status_label.config(
-                text="📁 Файл журнала не настроен",
-                foreground="orange"
-            )
-
     # noinspection SpellCheckingInspection
     def set_status(self, message, color="green"):
         """Устанавливает статусное сообщение с цветом и автоочисткой через 5 секунд"""
         self.status_label.config(text=message, foreground=color)
         self.status_label.update()  # принудительное обновление
-        self.window.after(10000, self.update_status_with_file_path)
+        self.window.after(6000, lambda: self.status_label.config(text=""))
 
     def import_from_excel(self):
         """Импорт данных из Excel"""
@@ -848,6 +836,9 @@ class PackagingLogWindow:
         # Собираем уникальные цвета для создания тегов
         color_tags = {}
 
+        # Сортируем: сначала офлайн (-3, -2, -1), потом обычные (100, 99, 98...)
+        # sorted_entries = sorted(self.entries, key=lambda x: (x["id"] >= 0, x["id"]), reverse=True)
+
         for i, entry in enumerate(self.entries):
             # Формируем значения по порядку колонок из маппинга
             values = []
@@ -891,7 +882,7 @@ class PackagingLogWindow:
             else:
                 tags.append('even' if i % 2 == 0 else 'odd')
 
-            self.tree.insert("", "end", values=values, iid=entry["id"], tags=tags)
+            self.tree.insert("", "end", values=values, iid=str(entry["id"]), tags=tags)
 
         # Настраиваем цвета для чередования
         self.tree.tag_configure('even', background='white')
