@@ -14,7 +14,6 @@ class OrderDataProcessor:
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
         self.comment_text = None
         self.comment_label_frame = None
-        self.aggregation_frame = None
         self.data_manager_status_label = None
         self.name_combobox = None
         self.current_order = None
@@ -198,10 +197,6 @@ class OrderDataProcessor:
         comment_scrollbar.grid(row=0, column=1, sticky="ns")
         self.comment_text.config(yscrollcommand=comment_scrollbar.set)
         
-        # Фрейм для статуса агрегации
-        self.aggregation_frame = ttk.Frame(self.comment_label_frame)
-        self.aggregation_frame.grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 0))
-        
         # Скрываем по умолчанию
         self.comment_label_frame.grid_remove()
         
@@ -313,61 +308,51 @@ class OrderDataProcessor:
         packaging_comment = comments.get('packaging_comment', '')
         aggregation_status = operations.get('aggregation_status', '')
 
-        # Устанавливаем комментарии в CommentManager и получаем результат проверок
         result = self.comment_manager.set_comments(
             cutting_comment=cutting_comment,
             packaging_comment=packaging_comment,
             aggregation_status=aggregation_status
         )
 
-        # Обновляем Text виджет
+        # Всегда очищаем text widget
         self.comment_text.config(state="normal")
         self.comment_text.delete("1.0", tk.END)
 
-        # Формируем текст комментариев
         comment_text = ""
-
         if cutting_comment:
             comment_text += "📐 КОММЕНТАРИЙ РЕЗКИ:\n"
             comment_text += f"{cutting_comment}\n\n"
-
         if packaging_comment:
             comment_text += "📦 КОММЕНТАРИЙ УПАКОВКИ:\n"
             comment_text += f"{packaging_comment}\n"
 
-        # Проверяем особые требования через CommentManager
         special_requirements = self.comment_manager.get_special_requirements()
         if special_requirements:
             comment_text += "\n🚨 Особые требования:\n"
             comment_text += f"{special_requirements}\n"
 
-        # Вставляем текст если есть
-        if comment_text:
-            self.comment_text.insert("1.0", comment_text.strip())
-            self.comment_text.config(state="disabled")
+        if result['has_comments'] or result['has_aggregation']:
+            self.comment_label_frame.grid()
 
-            # ИСПОЛЬЗУЕМ result['has_comments'] вместо повторной проверки
+            title = "Комментарии"
+            if result['has_aggregation']:
+                title = f"🔄 ЕСТЬ АГРЕГАЦИЯ | {title}"
             if result['has_comments']:
-                # Показываем блок комментариев
-                self.comment_label_frame.grid()
+                title = f"⚠ {title}"
 
-                # Обновляем заголовок с треугольником
-                current_title = self.comment_label_frame.cget("text")
-                if "⚠" not in current_title:
-                    self.comment_label_frame.config(text="⚠ " + current_title)
+            self.comment_label_frame.config(text=title)
 
-                # Запускаем мигание
+            if comment_text:
+                self.comment_text.insert("1.0", comment_text.strip())
+
+            # Мигаем только если есть комментарии
+            if result['has_comments']:
                 self._blink_comment_title(blink_count=3)
         else:
-            # Скрываем блок если нет комментариев
             self.comment_label_frame.grid_remove()
 
-        # ИСПОЛЬЗУЕМ result['has_aggregation'] вместо повторной проверки
-        if result['has_aggregation']:
-            self._show_aggregation_status()
-        else:
-            self._hide_aggregation_status()
-            
+        self.comment_text.config(state="disabled")
+
     def _blink_comment_title(self, blink_count=3):
         """Мигает треугольником в заголовке 2-3 раза"""
         current_title = self.comment_label_frame.cget("text")
@@ -386,36 +371,6 @@ class OrderDataProcessor:
                 self.parent.after(500, lambda: blink_sequence(step + 1))
         
         blink_sequence()
-    
-    def _show_aggregation_status(self):
-        """Показывает статус агрегации"""
-        # Очищаем фрейм
-        for widget in self.aggregation_frame.winfo_children():
-            widget.destroy()
-        
-        # Иконка информации
-        info_icon = ttk.Label(
-            self.aggregation_frame,
-            text="ℹ",
-            font=("Arial", 14, "bold"),
-            foreground="#0066CC"
-        )
-        info_icon.pack(side=tk.LEFT, padx=(0, 5))
-        
-        # Текст статуса
-        status_label = ttk.Label(
-            self.aggregation_frame,
-            text="ЕСТЬ АГРЕГАЦИЯ",
-            font=("Arial", 11, "bold"),
-            foreground="#006600"
-        )
-        status_label.pack(side=tk.LEFT)
-        
-        self.aggregation_frame.grid()
-    
-    def _hide_aggregation_status(self):
-        """Скрывает статус агрегации"""
-        self.aggregation_frame.grid_remove()        
         
     def show_product_results(self, products, search_text):
         """Показывает найденные продукты в комбобоксе"""

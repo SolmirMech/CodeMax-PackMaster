@@ -52,6 +52,7 @@ class XMLDataManager:
         self._processed_files = 0          # Счетчик обработанных файлов
         self._diameter_orders = set()  # Заказы с diameter_mm и оттисков > 1
         self._labels_per_roll_orders = set()  # Заказы с max_labels_per_roll и оттисков > 1
+        self._aggregation_orders = set()
         
         # Атрибуты для управления потоками
         self._readers_count = 0             # Счётчик активных читателей
@@ -383,6 +384,12 @@ class XMLDataManager:
             # Проверяем наличие max_labels_per_roll
             if operations.get('max_labels_per_roll'):
                 self._labels_per_roll_orders.add(order_number)
+
+        # 5. Агрегация
+        operations = parsed_data.get('operations', {})
+        aggregation_status = operations.get('aggregation_status', '')
+        if aggregation_status:
+            self._aggregation_orders.add(order_number)
         
         # Увеличиваем счетчик (БЕЗ промежуточного логирования)
         self._processed_files += 1
@@ -461,6 +468,14 @@ class XMLDataManager:
                 self._log_compact_list(
                     title="Заказы с max_labels_per_roll (оттисков > 1)",
                     items=labels_with_customers,
+                    items_per_line=5
+                )
+            # 5. Заказы с агрегацией
+            if len(self._aggregation_orders) > 0:
+                aggregation_with_customers = self._get_orders_with_customers(self._aggregation_orders)
+                self._log_compact_list(
+                    title="Заказы с агрегацией",
+                    items=aggregation_with_customers,
                     items_per_line=5
                 )
             
@@ -772,7 +787,8 @@ class XMLDataManager:
                                      solmark_set: set,
                                      multi_customer_list: list,
                                      diameter_set: set,
-                                     labels_set: set):
+                                     labels_set: set,
+                                     aggregation_set: set):
         """
         Собирает статистику для одного файла в указанные коллекции.
         
@@ -824,6 +840,12 @@ class XMLDataManager:
                 diameter_set.add(order_number)
             if operations.get('max_labels_per_roll'):
                 labels_set.add(order_number)
+
+        # 5. Агрегация
+        operations = parsed_data.get('operations', {})
+        aggregation_status = operations.get('aggregation_status', '')
+        if aggregation_status:
+            aggregation_set.add(order_number)
     
     def _check_xml_source_available(self) -> bool:
         """
@@ -1071,6 +1093,7 @@ class XMLDataManager:
                     processed_files = 0                  # Счётчик обработанных файлов
                     new_diameter_orders = set()
                     new_labels_per_roll_orders = set()
+                    new_aggregation_orders = set()
                     
                     # Сканирование файловой системы
                     xml_files = list(self.xml_folder.glob("*.xml"))
@@ -1116,8 +1139,9 @@ class XMLDataManager:
                                         emission_set=new_emission_orders,
                                         solmark_set=new_solmark_orders,
                                         multi_customer_list=new_multi_customer_orders,
-                                        diameter_set=new_diameter_orders,  # новый
-                                        labels_set=new_labels_per_roll_orders  # новый
+                                        diameter_set=new_diameter_orders,
+                                        labels_set=new_labels_per_roll_orders,
+                                        aggregation_set=new_aggregation_orders
                                     )
 
                         except (PermissionError, FileNotFoundError) as e:
@@ -1139,6 +1163,7 @@ class XMLDataManager:
                         self._processed_files = processed_files
                         self._diameter_orders = new_diameter_orders
                         self._labels_per_roll_orders = new_labels_per_roll_orders
+                        self._aggregation_orders = new_aggregation_orders
                         
                         # Логирование итоговой статистики (всегда в файл)
                         self._log_collected_statistics("обновление")
