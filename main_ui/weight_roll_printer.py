@@ -52,8 +52,8 @@ class RollLabelPrinter:
         self.total_net_var = StringVar(value="")
 
         # Технические параметры
-        self.winding_scheme_var = StringVar(value="7")
-        self.sleeve_diameter_var = StringVar(value="76")
+        self.winding_scheme_var = StringVar(value="")
+        self.sleeve_diameter_var = StringVar(value="")
         self.streams_var = StringVar(value="")
         self.stream_width_var = StringVar(value="")
         self.label_length_mm = StringVar(value="")
@@ -164,8 +164,8 @@ class RollLabelPrinter:
 
         # Загрузка настроек номера заказа
         order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
-        self.order_prefix.set(order_settings.get("prefix", "Ф"))
-        self.order_suffix.set(order_settings.get("suffix", "/5"))
+        self.order_prefix.set(order_settings.get("prefix", ""))
+        self.order_suffix.set(order_settings.get("suffix", ""))
 
         # Создание UI
         self.create_ui()
@@ -1271,8 +1271,8 @@ class RollLabelPrinter:
             settings = self.config_manager.load_json_settings("shared_utils.json")
             # Обновляем префикс/суффикс номера заказа
             order_settings = settings.get("order_number", {})
-            self.order_prefix.set(order_settings.get("prefix", "Ф"))
-            self.order_suffix.set(order_settings.get("suffix", "/5"))
+            self.order_prefix.set(order_settings.get("prefix", ""))
+            self.order_suffix.set(order_settings.get("suffix", ""))
 
             self.config_manager.reload_settings()
             self.update_packers_list()

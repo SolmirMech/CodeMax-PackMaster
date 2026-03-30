@@ -60,7 +60,7 @@ class WeightOrdersApp:
     def __init__(self, parent):
         self.root = parent
         self.root.title("Мастер упаковки CodeMax-PackMaster")
-        self.root.geometry("1500x900")
+        self.root.geometry("1500x950")
 
         # Объявляем все атрибуты модулей
         self.roll_module = None

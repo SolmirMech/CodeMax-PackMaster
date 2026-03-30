@@ -381,14 +381,14 @@ class RollPreview:
         frame.rowconfigure(0, weight=1)     # Ролик
         frame.rowconfigure(1, weight=1)     # Коробка
         
-        # Превью ролика - строка 0, колонка 0 для 2 цеха width=420, height=420,
+        # Превью ролика - строка 0, колонка 0
         self.roll_frame = ttk.LabelFrame(frame, text="Ролик", padding=2)
         self.roll_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nsew")
         
         self.roll_canvas_frame = ttk.Frame(self.roll_frame, relief="solid", borderwidth=2)
         self.roll_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, width=416, height=520, bg="white")
+        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, bg="white")
         self.roll_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.roll_canvas.bind("<Button-1>", lambda e: self.roll_canvas.focus_set())
         
@@ -404,7 +404,7 @@ class RollPreview:
         self.box_canvas_frame = ttk.Frame(self.box_frame, relief="sunken", borderwidth=1)
         self.box_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.box_canvas = tk.Canvas(self.box_canvas_frame, width=416, height=520, bg="white")
+        self.box_canvas = tk.Canvas(self.box_canvas_frame, bg="white")
         self.box_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.box_canvas.bind("<Button-1>", lambda e: self.box_canvas.focus_set())
         
@@ -874,7 +874,7 @@ class RollPreview:
             return f"{int(cleaned):,}".replace(",", " ")
         except (ValueError, TypeError):
             return str(number_str)
-    
+
     def update_preview_displays(self):
         """Обновляет оба превью"""
         try:
@@ -882,55 +882,69 @@ class RollPreview:
             if self.roll_pdf_filler:
                 roll_data_map = self._prepare_roll_data_map()
                 roll_preview_image = self.roll_pdf_filler.generate_preview(roll_data_map)
+                w_mm, h_mm = self.roll_pdf_filler.get_template_size_mm()
+                self._set_canvas_aspect_ratio(self.roll_canvas, w_mm, h_mm)
                 self._update_canvas_preview(self.roll_canvas, roll_preview_image)
-            
+
             # Обновляем превью коробки
             if self.box_pdf_filler:
                 box_data_map = self._prepare_box_data_map()
                 box_preview_image = self.box_pdf_filler.generate_preview(box_data_map)
-                self._update_canvas_preview(self.box_canvas, box_preview_image)         
-            
+                w_mm, h_mm = self.box_pdf_filler.get_template_size_mm()
+                self._set_canvas_aspect_ratio(self.box_canvas, w_mm, h_mm)
+                self._update_canvas_preview(self.box_canvas, box_preview_image)
+
         except Exception as e:
             self.status_label.config(text=f"Ошибка обновления: {e}", foreground="red")
-    
+
     @staticmethod
     def _update_canvas_preview(canvas, preview_image):
         """Обновляет конкретное превью на canvas"""
         try:
             canvas_width = canvas.winfo_width()
             canvas_height = canvas.winfo_height()
-            
-            # Если canvas еще не отрисован, просто выходим
-            # Следующее обновление произойдет при изменении данных
+
             if canvas_width <= 1 or canvas_height <= 1:
-                return  # НЕ планируем повторно!
-            
-            if canvas_width > 1 and canvas_height > 1:
-                # Используем ВЕСЬ доступный размер канваса
-                img_ratio = preview_image.width / preview_image.height
-                canvas_ratio = canvas_width / canvas_height
-                
-                if img_ratio > canvas_ratio:
-                    # Изображение шире - заполняем по ширине
-                    display_width = canvas_width
-                    display_height = int(canvas_width / img_ratio)
-                else:
-                    # Изображение выше - заполняем по высоте  
-                    display_height = canvas_height
-                    display_width = int(canvas_height * img_ratio)
-                
-                # Убираем уменьшение для отступов - используем максимальный размер
-                scaled_image = preview_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
-                
-                # Обновляем canvas
-                photo = ImageTk.PhotoImage(scaled_image)
-                canvas.image = photo  # Сохраняем ссылку
-                canvas.delete("all")
-                canvas.create_image(canvas_width//2, canvas_height//2, image=photo)
-                
+                return
+
+            img_ratio = preview_image.width / preview_image.height
+            canvas_ratio = canvas_width / canvas_height
+
+            if img_ratio > canvas_ratio:
+                display_width = canvas_width
+                display_height = int(canvas_width / img_ratio)
+            else:
+                display_height = canvas_height
+                display_width = int(canvas_height * img_ratio)
+
+            scaled_image = preview_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(scaled_image)
+            canvas.image = photo
+            canvas.delete("all")
+            canvas.create_image(canvas_width // 2, canvas_height // 2, image=photo)
+
         except Exception as e:
             print(f"Ошибка обновления canvas: {e}")
-            
+
+    @staticmethod
+    def _set_canvas_aspect_ratio(canvas, width_mm, height_mm):
+        """Задаёт пропорции Canvas через bind к событию <Configure>"""
+        aspect = width_mm / height_mm
+
+        def enforce_aspect(event):
+            current_width = event.width
+            current_height = event.height
+            target_width = current_height * aspect
+
+            if target_width <= current_width:
+                new_width = int(target_width)
+                canvas.config(width=new_width)
+            else:
+                new_height = int(current_width / aspect)
+                canvas.config(height=new_height)
+
+        canvas.bind("<Configure>", enforce_aspect)
+
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика для отслеживания данных"""
         self.connected_roll_module = roll_module

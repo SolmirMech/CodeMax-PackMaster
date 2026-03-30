@@ -38,8 +38,8 @@ class SettingsDialog:
         self.excel_folder_path = ""  # Папка для Excel
 
         # === НАСТРОЙКИ НОМЕРА ЗАКАЗА ===
-        self.settings_prefix_var = tk.StringVar(value="")  # Префикс (Ф)
-        self.settings_suffix_var = tk.StringVar(value="")  # Суффикс (/5)
+        self.settings_prefix_var = tk.StringVar(value="")  # Префикс ()
+        self.settings_suffix_var = tk.StringVar(value="")  # Суффикс ()
 
         # === ДОПОЛНИТЕЛЬНЫЕ ЭЛЕМЕНТЫ ===
         self.elements_status_var = tk.StringVar(value="Скрыть")  # Показать/скрыть доп. элементы
@@ -220,7 +220,7 @@ class SettingsDialog:
 
         # Префикс заказа
         order_settings = shared_settings.get("order_number", {})
-        saved_prefix = order_settings.get("prefix", "Ф")
+        saved_prefix = order_settings.get("prefix", "")
         self.settings_prefix_var = tk.StringVar(value=saved_prefix)
 
         ttk.Label(manufacturer_frame, text="Префикс заказа:").grid(row=1, column=0, sticky="w", pady=5)
@@ -228,7 +228,7 @@ class SettingsDialog:
         prefix_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
         # Суффикс заказа
-        saved_suffix = order_settings.get("suffix", "/5")
+        saved_suffix = order_settings.get("suffix", "")
         self.settings_suffix_var = tk.StringVar(value=saved_suffix)
 
         ttk.Label(manufacturer_frame, text="Суффикс заказа:").grid(row=2, column=0, sticky="w", pady=5)
