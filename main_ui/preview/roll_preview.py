@@ -302,6 +302,7 @@ class RollPreview:
 
         # Обновляем превью
         self.update_preview_displays()
+        self._adjust_canvas_height()
 
     def cancel_update_timer(self):
         """Безопасно отменяет таймер обновления"""
@@ -363,6 +364,7 @@ class RollPreview:
             
             # Явно обновляем превью
             self.update_preview_displays()
+            self._adjust_canvas_height()
             
         except Exception as e:
             print(f"Ошибка в _on_settings_changed: {e}")
@@ -378,8 +380,8 @@ class RollPreview:
         
         # Используем grid для расположения (2 колонки: превью и управление)
         frame.columnconfigure(0, weight=1)  # Превью
-        frame.rowconfigure(0, weight=1)     # Ролик
-        frame.rowconfigure(1, weight=1)     # Коробка
+        frame.rowconfigure(0, weight=0)     # Ролик
+        frame.rowconfigure(1, weight=0)     # Коробка
         
         # Превью ролика - строка 0, колонка 0
         self.roll_frame = ttk.LabelFrame(frame, text="Ролик", padding=2)
@@ -388,7 +390,7 @@ class RollPreview:
         self.roll_canvas_frame = ttk.Frame(self.roll_frame, relief="solid", borderwidth=2)
         self.roll_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, bg="white")
+        self.roll_canvas = tk.Canvas(self.roll_canvas_frame, bg="white", height=200)
         self.roll_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.roll_canvas.bind("<Button-1>", lambda e: self.roll_canvas.focus_set())
         
@@ -404,7 +406,7 @@ class RollPreview:
         self.box_canvas_frame = ttk.Frame(self.box_frame, relief="sunken", borderwidth=1)
         self.box_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         
-        self.box_canvas = tk.Canvas(self.box_canvas_frame, bg="white")
+        self.box_canvas = tk.Canvas(self.box_canvas_frame, bg="white", height=200)
         self.box_canvas.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.box_canvas.bind("<Button-1>", lambda e: self.box_canvas.focus_set())
         
@@ -431,9 +433,45 @@ class RollPreview:
             wraplength=450
         )
         self.tirazh_label.grid(row=3, column=0, pady=(0, 5))
+
+        # Привязываем обновление высоты к изменению размеров
+        self.roll_frame.bind("<Configure>", lambda e: self._adjust_canvas_height())
+        self.box_frame.bind("<Configure>", lambda e: self._adjust_canvas_height())
         
         # Сразу загружаем PDF и показываем превью
         self.load_and_show_previews()
+
+    def _adjust_canvas_height(self):
+        """Корректирует высоту Canvas в соответствии с пропорциями этикетки"""
+        need_update = False
+
+        for canvas, pdf_filler, label_frame in [
+            (self.roll_canvas, self.roll_pdf_filler, self.roll_frame),
+            (self.box_canvas, self.box_pdf_filler, self.box_frame)
+        ]:
+            if not pdf_filler:
+                continue
+
+            w_mm, h_mm = pdf_filler.get_template_size_mm()
+            if w_mm <= 0 or h_mm <= 0:
+                continue
+
+            aspect = h_mm / w_mm
+            current_width = canvas.winfo_width()
+
+            if current_width <= 1:
+                continue
+
+            target_height = int(current_width * aspect)
+
+            # Проверяем, нужно ли менять
+            if canvas.winfo_height() != target_height:
+                canvas.config(height=target_height)
+                need_update = True
+
+        # Если хотя бы один canvas изменил высоту - обновляем превью
+        if need_update:
+            self.update_preview_displays()
 
     def update_label_sizes(self):
         """Обновляет отображение размеров этикеток в заголовках фреймов"""
@@ -878,20 +916,20 @@ class RollPreview:
     def update_preview_displays(self):
         """Обновляет оба превью"""
         try:
+            # Принудительно обновляем геометрию перед рендером
+            self.roll_canvas.update_idletasks()
+            self.box_canvas.update_idletasks()
+
             # Обновляем превью ролика
             if self.roll_pdf_filler:
                 roll_data_map = self._prepare_roll_data_map()
                 roll_preview_image = self.roll_pdf_filler.generate_preview(roll_data_map)
-                w_mm, h_mm = self.roll_pdf_filler.get_template_size_mm()
-                self._set_canvas_aspect_ratio(self.roll_canvas, w_mm, h_mm)
                 self._update_canvas_preview(self.roll_canvas, roll_preview_image)
 
             # Обновляем превью коробки
             if self.box_pdf_filler:
                 box_data_map = self._prepare_box_data_map()
                 box_preview_image = self.box_pdf_filler.generate_preview(box_data_map)
-                w_mm, h_mm = self.box_pdf_filler.get_template_size_mm()
-                self._set_canvas_aspect_ratio(self.box_canvas, w_mm, h_mm)
                 self._update_canvas_preview(self.box_canvas, box_preview_image)
 
         except Exception as e:
@@ -925,25 +963,6 @@ class RollPreview:
 
         except Exception as e:
             print(f"Ошибка обновления canvas: {e}")
-
-    @staticmethod
-    def _set_canvas_aspect_ratio(canvas, width_mm, height_mm):
-        """Задаёт пропорции Canvas через bind к событию <Configure>"""
-        aspect = width_mm / height_mm
-
-        def enforce_aspect(event):
-            current_width = event.width
-            current_height = event.height
-            target_width = current_height * aspect
-
-            if target_width <= current_width:
-                new_width = int(target_width)
-                canvas.config(width=new_width)
-            else:
-                new_height = int(current_width / aspect)
-                canvas.config(height=new_height)
-
-        canvas.bind("<Configure>", enforce_aspect)
 
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика для отслеживания данных"""

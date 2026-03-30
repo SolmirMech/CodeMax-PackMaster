@@ -634,14 +634,14 @@ class SettingsDialog:
         folder = filedialog.askdirectory(title="Выберите папку с XML файлами")
         if folder:
             self.xml_folder_path.set(folder)
-            # Сохраняем в настройки
             settings = self.config_manager.load_json_settings("shared_utils.json")
             settings["weight_data_base"] = folder
             self.config_manager.save_json_settings("shared_utils.json", settings)
             self.update_folder_status()
-            # Уведомляем подписчиков об изменении XML папки
+
+            # Уведомляем с указанием типа изменения
             if self.coordinator is not None:
-                self.coordinator.notify_subscribers()
+                self.coordinator.notify_subscribers(context={"type": "xml_folder_changed"})
 
     def save_excel_folder_path(self):
         """Сохраняет путь к папке с Excel файлом в настройки"""

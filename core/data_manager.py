@@ -85,11 +85,18 @@ class XMLDataManager:
         # Флаг для периодической проверки
         self._periodic_check_running = False
         self._start_periodic_check()
-        
+
     def on_settings_changed(self, context=None):
+        """Обработчик уведомлений от координатора"""
         if context and isinstance(context, dict):
-            # Проверяем тип уведомления
             if context.get("type") == "list_changed" and context.get("list_name") == "update_date_request":
+                self.start_background_check(silent=False)
+
+            if context.get("type") == "xml_folder_changed":
+                # Обновляем путь к XML папке
+                new_path = self.config.get_weight_data_base_path()
+                self.xml_folder = Path(new_path)
+                # Запускаем пересканирование
                 self.start_background_check(silent=False)
             
     def _start_periodic_check(self):
