@@ -48,9 +48,9 @@ class WeightOrdersPrinter:
         
         # Префикс и суффикс номера заказа
         order_settings = self.config_manager.load_json_settings("shared_utils.json").get("order_number", {})
-        self.order_prefix = StringVar(value=order_settings.get("prefix", "Ф"))
+        self.order_prefix = StringVar(value=order_settings.get("prefix", ""))
         self.order_number = StringVar(value="")
-        self.order_suffix = StringVar(value=order_settings.get("suffix", "/5"))
+        self.order_suffix = StringVar(value=order_settings.get("suffix", ""))
         
         # Переменные для веса
         self.gross_weight = StringVar(value="")

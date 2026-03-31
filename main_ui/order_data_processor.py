@@ -58,6 +58,8 @@ class OrderDataProcessor:
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
 
+        self.comment_popup = None  # Ссылка на всплывающее окно
+
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
@@ -110,7 +112,7 @@ class OrderDataProcessor:
     def create_ui(self):
         """Создает правую часть интерфейса (XML парсинг и Excel экспорт)"""
         # Основной контейнер
-        main_container = ttk.Frame(self.parent)
+        main_container = ttk.Frame(self.parent, padding=5)
         main_container.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
 
         # Верхняя часть: Парсинг XML
@@ -150,7 +152,7 @@ class OrderDataProcessor:
             font=("Arial", 14), 
             wraplength=500
         )
-        self.parse_status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        self.parse_status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 5))
 
         # Выбор названия
         ttk.Label(xml_frame, text="Выбор вида:").grid(row=2, column=0, sticky="w", pady=5)
@@ -168,27 +170,28 @@ class OrderDataProcessor:
             justify=tk.CENTER,
             height=2
         )
-        self.data_manager_status_label.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 5))
+        self.data_manager_status_label.grid(row=3, column=0, columnspan=2, sticky="w", pady=5)
 
         xml_frame.columnconfigure(0, weight=1)
         xml_frame.columnconfigure(1, weight=1)
         
         # === Секция комментариев ===
         self.comment_label_frame = ttk.LabelFrame(xml_frame, text="Комментарии", padding=5)
-        self.comment_label_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(5, 5))
-        
+        self.comment_label_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky="w")
+        self.comment_label_frame.grid_propagate(False)
+        self.comment_label_frame.config(width=600, height=200)
+
         # Text виджет с прокруткой
         self.comment_text = tk.Text(
             self.comment_label_frame,
             height=8,
-            width=70,
             wrap=tk.WORD,
-            font=("Arial", 10),
+            font=("Arial", 12),
             background="#FFFFE0",
             state="disabled"  # Только для чтения
         )
-        self.comment_text.grid(row=0, column=0, sticky="nsew")
-        
+        self.comment_text.grid(row=0, column=0, sticky="ns")
+
         # Scrollbar
         comment_scrollbar = ttk.Scrollbar(
             self.comment_label_frame,
@@ -196,16 +199,113 @@ class OrderDataProcessor:
         )
         comment_scrollbar.grid(row=0, column=1, sticky="ns")
         self.comment_text.config(yscrollcommand=comment_scrollbar.set)
+
+        self.comment_label_frame.columnconfigure(0, weight=1)
+        self.comment_label_frame.rowconfigure(0, weight=1)
         
         # Скрываем по умолчанию
         self.comment_label_frame.grid_remove()
-        
-        # Настраиваем grid weights
-        self.comment_label_frame.columnconfigure(0, weight=1)
-        self.comment_label_frame.rowconfigure(0, weight=1)        
+        self.comment_label_frame.bind("<Button-1>", self.toggle_comment_popup)
         
         # Инициализируем статусы
         self.reset_status_messages()
+
+    # noinspection PyUnusedLocal
+    def toggle_comment_popup(self, event=None):
+        """Открывает или фокусирует всплывающее окно с комментариями"""
+        # Проверяем, есть ли комментарии
+        if not self.comment_label_frame.winfo_ismapped():
+            return
+
+        if self.comment_popup is not None and self.comment_popup.winfo_exists():
+            # Окно уже открыто — поднимаем на передний план
+            self.comment_popup.lift()
+            self.comment_popup.focus_force()
+        else:
+            # Создаём новое окно
+            self._create_comment_popup()
+
+    def _create_comment_popup(self):
+        """Создаёт всплывающее окно с полным текстом комментариев"""
+        if not self.comment_label_frame.winfo_ismapped():
+            return
+
+        # Получаем текущий текст из comment_text
+        current_text = self.comment_text.get("1.0", tk.END).strip()
+        if not current_text:
+            return
+
+        # Создаём окно
+        self.comment_popup = tk.Toplevel(self.parent)
+        self.comment_popup.title("Комментарии (отдельное окно)")
+        self.comment_popup.geometry("605x400")
+
+        # Позиционируем так, чтобы низ окна был на уровне низа xml_frame
+        self.comment_popup.update_idletasks()
+        x = self.comment_label_frame.winfo_rootx() - 14
+        # Вычисляем y: низ xml_frame минус высота окна
+        xml_frame_y_bottom = self.comment_label_frame.master.winfo_rooty() + self.comment_label_frame.master.winfo_height()
+        window_height = 400  # высота окна
+        y = xml_frame_y_bottom - window_height
+        self.comment_popup.geometry(f"+{x}+{y}")
+        self.comment_popup.bind("<Escape>", lambda e: self._close_comment_popup())
+
+        # Делаем окно перемещаемым
+        self.comment_popup.transient(self.parent)
+
+        # Text виджет с прокруткой
+        text_widget = tk.Text(
+            self.comment_popup,
+            wrap=tk.WORD,
+            font=("Arial", 12),
+            background="#FFFFE0"
+        )
+        text_widget.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        text_widget.insert("1.0", current_text)
+        text_widget.config(state="disabled")
+
+        scrollbar = ttk.Scrollbar(self.comment_popup, command=text_widget.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        text_widget.config(yscrollcommand=scrollbar.set)
+
+        # Кнопка закрытия
+        close_btn = ttk.Button(
+            self.comment_popup,
+            text="Закрыть",
+            command=self._close_comment_popup
+        )
+        close_btn.pack(pady=5)
+
+        # Закрытие по крестику
+        self.comment_popup.protocol("WM_DELETE_WINDOW", self._close_comment_popup)
+
+    def _close_comment_popup(self):
+        """Закрывает всплывающее окно"""
+        if self.comment_popup is not None and self.comment_popup.winfo_exists():
+            self.comment_popup.destroy()
+            self.comment_popup = None
+
+    def _update_comment_popup_content(self):
+        """Обновляет содержимое всплывающего окна, если оно открыто"""
+        if self.comment_popup is None or not self.comment_popup.winfo_exists():
+            return
+
+        # Получаем текущий текст
+        current_text = self.comment_text.get("1.0", tk.END).strip()
+
+        if not current_text:
+            # Нет комментариев — закрываем окно
+            self._close_comment_popup()
+            return
+
+        # Ищем текстовый виджет в окне
+        for child in self.comment_popup.winfo_children():
+            if isinstance(child, tk.Text):
+                child.config(state="normal")
+                child.delete("1.0", tk.END)
+                child.insert("1.0", current_text)
+                child.config(state="disabled")
+                break
 
     def open_packaging_log(self):
         """Открывает окно журнала упаковки"""
@@ -336,7 +436,7 @@ class OrderDataProcessor:
 
             title = "Комментарии"
             if result['has_aggregation']:
-                title = f"🔄 ЕСТЬ АГРЕГАЦИЯ | {title}"
+                title = f"🔄 ЕСТЬ АГРЕГАЦИЯ"
             if result['has_comments']:
                 title = f"⚠ {title}"
 
@@ -352,6 +452,7 @@ class OrderDataProcessor:
             self.comment_label_frame.grid_remove()
 
         self.comment_text.config(state="disabled")
+        self._update_comment_popup_content()
 
     def _blink_comment_title(self, blink_count=3):
         """Мигает треугольником в заголовке 2-3 раза"""
