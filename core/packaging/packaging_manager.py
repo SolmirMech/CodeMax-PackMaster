@@ -77,7 +77,9 @@ class PackagingManager:
                 # Валидируем
                 entry_errors = self._validate_entry(entry)
                 if entry_errors:
-                    all_errors.append(f"Запись {imported + 1}: {', '.join(entry_errors)}")
+                    # Используем реальный номер строки из Excel
+                    row_info = f"строка {row_idx}" if row_idx else "неизвестная строка"
+                    all_errors.append(f"{row_info}, лист '{sheet_name}': {', '.join(entry_errors)}")
                     return
 
                 # Добавляем source_type и sheet_index
@@ -95,7 +97,7 @@ class PackagingManager:
                     imported_ids.append(entry_id)
                     imported += 1
                 except Exception as e:
-                    all_errors.append(f"Ошибка сохранения записи: {str(e)}")
+                    all_errors.append(f"Ошибка сохранения: {str(e)}")
 
             # Запускаем импорт с callback'ами
             total_found, errors = PackagingExcel.import_from_excel(

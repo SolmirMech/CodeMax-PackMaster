@@ -571,9 +571,8 @@ class PackagingLogWindow:
             if exported > 0:
                 self.set_status(f"✅ Журнал восстановлен: {new_file}", "green")
                 # Открываем папку с восстановленным файлом
-                path = self.config_manager.get_packaging_log_path()
-                folder_to_open = os.path.dirname(path)
-                os.startfile(folder_to_open)
+                folder_to_open = os.path.dirname(new_file).replace('/', '\\')
+                os.system(f'start {folder_to_open}')
             else:
                 self.set_status("❌ Ошибка при восстановлении", "red")
 

@@ -70,7 +70,7 @@ class PackagingExcel:
 
         try:
             # Используем read_only + keep_links=False для скорости
-            wb = load_workbook(file_path, read_only=True, data_only=True, keep_links=False)
+            wb = load_workbook(file_path, read_only=True, data_only=True, keep_links=False, keep_vba=False)
 
             if only_first_sheet:
                 sheets_to_process = [wb.sheetnames[0]] if wb.sheetnames else []
@@ -96,7 +96,7 @@ class PackagingExcel:
                     try:
                         entry = PackagingExcel._row_to_entry_from_readonly(row, row_idx, mapping, import_format)
                         if db_callback:
-                            db_callback(entry, sheet_name)
+                            db_callback(entry, sheet_name, row_idx)
                         sheet_imported += 1
 
                         if sheet_imported % 50 == 0:
