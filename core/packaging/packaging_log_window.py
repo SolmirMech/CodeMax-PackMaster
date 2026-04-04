@@ -319,9 +319,12 @@ class PackagingLogWindow:
             bd=1,
             relief=tk.SUNKEN,
             anchor=tk.W,
-            padx=5
+            padx=5,
+            wraplength=1400,
+            justify=tk.LEFT
         )
         self.network_status_label.pack(side=tk.BOTTOM, fill=tk.X, before=table_frame)
+        self.network_status_label.bind("<Button-3>", self.show_network_menu)
 
         # Запускаем проверку статуса сети
         self._update_network_status()
@@ -332,6 +335,32 @@ class PackagingLogWindow:
         self.load_recent()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    def show_network_menu(self, event):
+        """Показывает контекстное меню для строки статуса сети
+         с опциями открытия папок БД и Excel журнала"""
+        menu = tk.Menu(self.window, tearoff=0)
+        menu.add_command(label="📁 Открыть папку с БД", command=self.open_db_folder)
+        menu.add_command(label="📂 Открыть папку с Excel журналом", command=self.open_excel_folder)
+        menu.post(event.x_root, event.y_root)
+
+    def open_db_folder(self):
+        """Открывает проводник с выделенным файлом сетевой базы данных (packaging_logs.db)"""
+        db_path = self.manager.data_manager.network_db_path
+        if db_path and os.path.exists(os.path.dirname(db_path)):
+            # Нормализуем путь
+            db_path = db_path.replace('/', '\\')
+            os.system(f'explorer /select, "{db_path}"')
+        else:
+            self.set_status("❌ Файл БД не найден", "red")
+
+    def open_excel_folder(self):
+        """Открывает проводник с выделенным файлом Excel журнала упаковки"""
+        if self.packaging_log_file and os.path.exists(self.packaging_log_file):
+            excel_path = self.packaging_log_file.replace('/', '\\')
+            os.system(f'explorer /select, "{excel_path}"')
+        else:
+            self.set_status("❌ Файл Excel журнала не найден", "red")
+
     def _update_network_status(self):
         """Обновляет индикатор статуса сетевой БД"""
         try:
@@ -341,14 +370,14 @@ class PackagingLogWindow:
                 excel_path = self.packaging_log_file if self.packaging_log_file else "не задан"
 
                 self.network_status_label.config(
-                    text=f"✅ Сетевая База данных доступна | Цех: {workshop} | Файл базы: {db_path} | Текущий Excel журнал: {excel_path}",
+                    text=f"✅ Сетевая База данных доступна | Цех: {workshop} | Файл базы: {db_path}\n| Текущий Excel журнал: {excel_path}",
                     background="#90EE90",
                     foreground="#006400"
                 )
             elif self.manager and not self.manager.is_network_available():
                 excel_path = self.packaging_log_file if self.packaging_log_file else "не задан"
                 self.network_status_label.config(
-                    text=f"⚠️ Сетевая База недоступна, режим локальной записи | Текущий Excel журнал: {excel_path}",
+                    text=f"⚠️ Сетевая База недоступна, режим локальной записи\n| Текущий Excel журнал: {excel_path}",
                     background="#FFB347",
                     foreground="#8B4513"
                 )

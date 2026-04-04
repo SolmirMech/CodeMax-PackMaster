@@ -318,7 +318,7 @@ class RollLabelPrinter:
 
     def create_ui(self):
         """Создает интерфейс для печати этикеток на ролик"""
-        frame = ttk.Frame(self.parent, padding=5)
+        frame = ttk.Frame(self.parent, padding=3)
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Добавляем стиль для автоматического выбора

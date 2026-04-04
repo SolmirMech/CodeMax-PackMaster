@@ -112,12 +112,12 @@ class OrderDataProcessor:
     def create_ui(self):
         """Создает правую часть интерфейса (XML парсинг и Excel экспорт)"""
         # Основной контейнер
-        main_container = ttk.Frame(self.parent, padding=5)
+        main_container = ttk.Frame(self.parent, padding=2)
         main_container.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
 
         # Верхняя часть: Парсинг XML
         xml_frame = ttk.LabelFrame(main_container, text="Получение названия", padding=5)
-        xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
+        xml_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 5))
         
         ttk.Label(xml_frame, text="Поиск вида:").grid(
             row=0, column=0, sticky="w", pady=5
@@ -170,21 +170,20 @@ class OrderDataProcessor:
             justify=tk.CENTER,
             height=2
         )
-        self.data_manager_status_label.grid(row=3, column=0, columnspan=2, sticky="w", pady=5)
+        self.data_manager_status_label.grid(row=3, column=0, columnspan=2, sticky="w", pady=2)
 
         xml_frame.columnconfigure(0, weight=1)
         xml_frame.columnconfigure(1, weight=1)
         
         # === Секция комментариев ===
-        self.comment_label_frame = ttk.LabelFrame(xml_frame, text="Комментарии", padding=5)
+        self.comment_label_frame = ttk.LabelFrame(xml_frame, text="Комментарии", padding=2)
         self.comment_label_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky="w")
         self.comment_label_frame.grid_propagate(False)
-        self.comment_label_frame.config(width=600, height=200)
+        self.comment_label_frame.config(width=600, height=120)
 
         # Text виджет с прокруткой
         self.comment_text = tk.Text(
             self.comment_label_frame,
-            height=8,
             wrap=tk.WORD,
             font=("Arial", 12),
             background="#FFFFE0",
@@ -246,7 +245,7 @@ class OrderDataProcessor:
         # Вычисляем y: низ xml_frame минус высота окна
         xml_frame_y_bottom = self.comment_label_frame.master.winfo_rooty() + self.comment_label_frame.master.winfo_height()
         window_height = 400  # высота окна
-        y = xml_frame_y_bottom - window_height
+        y = xml_frame_y_bottom - window_height - 33
         self.comment_popup.geometry(f"+{x}+{y}")
         self.comment_popup.bind("<Escape>", lambda e: self._close_comment_popup())
 
@@ -257,7 +256,7 @@ class OrderDataProcessor:
         text_widget = tk.Text(
             self.comment_popup,
             wrap=tk.WORD,
-            font=("Arial", 12),
+            font=("Arial", 14),
             background="#FFFFE0"
         )
         text_widget.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
