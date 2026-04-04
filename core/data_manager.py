@@ -189,6 +189,7 @@ class XMLDataManager:
                         order_prefix TEXT,
                         order_suffix TEXT,
                         order_name TEXT,
+                        order_manager TEXT,
                         customer TEXT,
                         executor TEXT,
                         tu_number TEXT,
@@ -603,6 +604,7 @@ class XMLDataManager:
                 parsed_data.get('order_prefix', ''),
                 parsed_data.get('order_suffix', ''),
                 parsed_data.get('order_name', ''),
+                parsed_data.get('order_manager', ''),
                 parsed_data.get('customer', ''),
                 parsed_data.get('executor', ''),
                 parsed_data.get('tu_number', ''),
@@ -616,9 +618,9 @@ class XMLDataManager:
             cursor.execute("""
                 INSERT OR REPLACE INTO orders 
                 (file_name, file_path, order_number, order_prefix, order_suffix, 
-                 order_name, customer, executor, tu_number, parsed_data, file_hash, 
+                 order_name, order_manager, customer, executor, tu_number, parsed_data, file_hash, 
                  last_modified, cached_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, order_data)
             
             # Удаляем старые записи для этого файла в products и sheets

@@ -190,6 +190,7 @@ class XMLOrderParser:
             executor = self._get_text(root, './/Исполнитель')
             tu_number = self._get_text(root, './/ТУ')
             order_name = self._get_text(root, './/НаименЗаказа', '').lower()
+            order_manager = self._get_text(root, './/МенеджерЗаказа', '')
             
             # Нормализация заказчика
             customer_info = self._normalize_customer(raw_customer, order_name)
@@ -294,7 +295,7 @@ class XMLOrderParser:
                     products.append(product)
                                 
             # Данные из операций (технические свойства и комментарии)
-            operations, comments, has_solmark = self._parse_operations_and_comments(root)
+            operations, comments, has_solmark= self._parse_operations_and_comments(root)
             
             return {
                 'format': 'NEW_FORMAT',
@@ -306,6 +307,7 @@ class XMLOrderParser:
                 'order_prefix': order_prefix,
                 'order_suffix': order_suffix,
                 'order_name': order_name,
+                'order_manager': order_manager,
                 'products': products,
                 'operations': operations,
                 'comments': comments,
@@ -442,7 +444,7 @@ class XMLOrderParser:
                             # Ищем единицу измерения
                             unit_prop = operation.find('.//Свойство[@Код="8522"]')
                             unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
-                            
+
                             if unit == 'шт.':
                                 operations['max_labels_per_roll'] = value  # Кол-во в штуках
                             else:
@@ -526,6 +528,25 @@ class XMLOrderParser:
             
             # Формируем полное название с джит
             full_name = product_name
+
+            # В _parse_product, после получения sheet_full_name:
+            max_labels_per_roll = ""
+            if sheet_full_name and root:
+                for operation in root.findall('.//ОперацииЗаказа//Операция'):
+                    op_id = operation.get('ВнутреннийИдентификатор', '')
+                    if op_id not in ['31', '230']:
+                        continue
+
+                    op_sheet_name = operation.get('НаименованиеЭлементаОперации', '')
+                    if sheet_full_name in op_sheet_name or op_sheet_name in sheet_full_name:
+                        for prop in operation.findall('.//Свойство'):
+                            if prop.get('Код', '') == '8519':
+                                unit_prop = operation.find('.//Свойство[@Код="8522"]')
+                                unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
+                                if unit == 'шт.':
+                                    max_labels_per_roll = prop.get('Значение', '')
+                                break
+                        break
             
             # Создаём словарь продукта
             product_dict = {
@@ -538,7 +559,8 @@ class XMLOrderParser:
                 'sheet_number': sheet_number,        # ← Только цифры (для совместимости)
                 'sheet_full_name': sheet_full_name,  # ← Полное название оттиска
                 'stream': stream,
-                'order_metrage': order_metrage
+                'order_metrage': order_metrage,
+                'max_labels_per_roll': max_labels_per_roll
             }          
             
             return product_dict

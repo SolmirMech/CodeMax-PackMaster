@@ -376,7 +376,7 @@ class RollPreview:
         style = ttk.Style()
         style.configure("Selected.TFrame", background="green", bordercolor="blue")
         frame = ttk.Frame(self.parent, padding=5)
-        frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        frame.pack(fill=tk.BOTH, expand=True)
         
         # Используем grid для расположения (2 колонки: превью и управление)
         frame.columnconfigure(0, weight=1)  # Превью
@@ -430,7 +430,7 @@ class RollPreview:
             text="",
             foreground="green",
             font=("Arial", 16),
-            wraplength=450
+            wraplength=410
         )
         self.tirazh_label.grid(row=3, column=0, pady=(0, 5))
 

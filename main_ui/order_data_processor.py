@@ -330,11 +330,7 @@ class OrderDataProcessor:
             'customer': '',
             'product_name': '',
             'packer_name': '',
-            'quantity_labels': None,
-            'large_boxes': None,
-            'small_boxes': None,
-            'aquaLife_boxes': None,
-            'note': ''
+            'quantity_labels': None
         }
 
         # Номер заказа из roll_module
@@ -884,6 +880,8 @@ class OrderDataProcessor:
                 gtin = product.get('gtin', '')
                 if gtin:
                     display_name = self._add_gtin_suffix(display_name, gtin)
+
+                order_manager = order.get('order_manager', '')
                 
                 product_dict = {
                     'name': display_name,  # ← Сокращенное или оригинальное имя
@@ -896,7 +894,9 @@ class OrderDataProcessor:
                     'date_emission': product.get('date_emission', ''),
                     'gtin': gtin,
                     'tirazh': product.get('quantity', ''),
-                    'stream': product.get('stream', '1')                   
+                    'stream': product.get('stream', '1'),
+                    'order_manager': order_manager,
+                    'max_labels_per_roll': product.get('max_labels_per_roll', '')
                 }
                 
                 if not any(item['name'] == product_dict['name'] and 
@@ -950,15 +950,19 @@ class OrderDataProcessor:
                 # Отправляем тираж в preview_module
                 tirazh_value = product_data.get('tirazh')
                 formatted_tirazh = f"{int(tirazh_value):,}".replace(",", " ")
+                order_manager = product_data.get('order_manager', '')
+                manager_info = f" | Менеджер: {order_manager}" if order_manager else ""
+                max_labels = product_data.get('max_labels_per_roll', '')
+                labels_info = f" | Max меток: {max_labels}" if max_labels else ""
                 
                 # Расчёт вместимости коробки
                 capacity_info = ""
                 capacity = self._calculate_box_capacity()
                 if capacity:
                     capacity_info = f" | Влезет в коробку: {capacity}"
-                
+
                 self.preview_module.tirazh_label.config(
-                    text=f"Тираж: {formatted_tirazh} шт{capacity_info}",
+                    text=f"Тираж: {formatted_tirazh} шт{capacity_info}{manager_info}{labels_info}",
                     foreground="green"
                 )
                 
