@@ -161,7 +161,7 @@ class WeightOrdersApp:
         # Верх - RollLabelPrinter
         roll_frame = ttk.Frame(left_frame)
         roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.roll_module = RollLabelPrinter(roll_frame, self.coordinator, self.data_manager, self.config_manager)
+        self.roll_module = OrderDataController(roll_frame, self.coordinator, self.data_manager, self.config_manager)
 
         # Низ - OrderDataProcessor
         order_data_frame = ttk.Frame(left_frame)
@@ -257,6 +257,7 @@ if __name__ == "__main__":
         
     from main_ui.order_data_processor import OrderDataProcessor
     from main_ui.weight_roll_printer import RollLabelPrinter
+    from main_ui.order_data.controller import OrderDataController
     from main_ui.preview.roll_preview import RollPreview
     from main_ui.print_module import PrintModule
     from main_ui.export_module import ExportModule
