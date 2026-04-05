@@ -731,7 +731,7 @@ class RollPreview:
         if (self.connected_roll_module and 
             self.connected_roll_module.product_text.edit_modified()):
             self.connected_roll_module.product_text.edit_modified(False)
-            self._update_from_connected_roll_module()
+            self.update_from_connected_roll_module()
 
     # noinspection PyUnusedLocal
     def _on_roll_data_changed(self, *args):
@@ -740,9 +740,9 @@ class RollPreview:
         self.cancel_update_timer()
         
         # Создаем новый таймер
-        self._update_timer = self.parent.after(300, self._update_from_connected_roll_module)
+        self._update_timer = self.parent.after(300, self.update_from_connected_roll_module)
 
-    def _update_from_connected_roll_module(self):
+    def update_from_connected_roll_module(self):
         """Обновляет данные из подключенного модуля ролика через конфигурацию"""
         self.preview_timer_id = None
         if not self.connected_roll_module:

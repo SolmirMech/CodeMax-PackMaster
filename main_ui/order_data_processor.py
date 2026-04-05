@@ -397,7 +397,7 @@ class OrderDataProcessor:
 
         return defaults
 
-    def _display_comments(self, comments, operations):
+    def display_comments(self, comments, operations):
         """Отображает комментарии в интерфейсе"""
         cutting_comment = comments.get('cutting_comment', '')
         packaging_comment = comments.get('packaging_comment', '')
@@ -521,7 +521,7 @@ class OrderDataProcessor:
         
         if gtin:
             # 3. Это сканирование - обрабатываем GTIN
-            self._process_scanned_gtin(gtin)
+            self.process_scanned_gtin(gtin)
             return "break"
         
         # 4. Это обычный ручной ввод
@@ -607,7 +607,7 @@ class OrderDataProcessor:
         
         return None
         
-    def _process_scanned_gtin(self, gtin):
+    def process_scanned_gtin(self, gtin):
         """Обрабатывает отсканированный GTIN"""
         # Ищем detail_num для этого GTIN
         detail_num_suffix = self._get_detail_num_by_gtin(gtin)
@@ -952,8 +952,6 @@ class OrderDataProcessor:
                 formatted_tirazh = f"{int(tirazh_value):,}".replace(",", " ")
                 order_manager = product_data.get('order_manager', '')
                 manager_info = f" | Менеджер: {order_manager}" if order_manager else ""
-                max_labels = product_data.get('max_labels_per_roll', '')
-                labels_info = f" | Max меток: {max_labels}" if max_labels else ""
                 
                 # Расчёт вместимости коробки
                 capacity_info = ""
@@ -962,7 +960,7 @@ class OrderDataProcessor:
                     capacity_info = f" | Влезет в коробку: {capacity}"
 
                 self.preview_module.tirazh_label.config(
-                    text=f"Тираж: {formatted_tirazh} шт{capacity_info}{manager_info}{labels_info}",
+                    text=f"Тираж: {formatted_tirazh} шт{capacity_info}{manager_info}",
                     foreground="green"
                 )
                 

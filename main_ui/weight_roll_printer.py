@@ -7,8 +7,8 @@ from tkinter import ttk, StringVar, BooleanVar
 
 
 # noinspection SpellCheckingInspection,PyTypeChecker,PyUnusedLocal,PyProtectedMember
-class RollLabelPrinter:
-    """Управление заказами с весом"""
+class OrderDataController:
+    """Управление заказами: ввод данных"""
 
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
         # ========== БАЗОВЫЕ СВЯЗИ ==========
@@ -310,7 +310,7 @@ class RollLabelPrinter:
             self.coordinator.check_weight_status(self)
         if self.preview_module is not None:
             # Обновляем данные в preview_module
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
             
     def _on_producer_visibility_changed(self, *args):
         """Обрабатывает изменение видимости производителя"""
@@ -672,7 +672,7 @@ class RollLabelPrinter:
         self.order_suffix.set(current_suffix)
 
         if self.preview_module is not None:
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
     def extract_label_size_from_db(self):
         """Извлекает размер этикетки из order_name для Росинки из кэша"""
@@ -842,7 +842,7 @@ class RollLabelPrinter:
         gtin = self.order_data_module._extract_gtin_from_input(text)
         if gtin:
             self.product_text.delete("1.0", tk.END)
-            self.order_data_module._process_scanned_gtin(gtin)
+            self.order_data_module.process_scanned_gtin(gtin)
         
     def search_in_product_text(self, event=None):
         """Ищет продукты по тексту в поле изделия"""
@@ -860,7 +860,7 @@ class RollLabelPrinter:
         if gtin:
             # Это GTIN - обрабатываем сканирование
             self.product_text.delete("1.0", tk.END)
-            self.order_data_module._process_scanned_gtin(gtin)
+            self.order_data_module.process_scanned_gtin(gtin)
             return "break"
         
         found_products = []
@@ -1172,7 +1172,7 @@ class RollLabelPrinter:
         # Комментарии
         comments = parsed_data.get('comments', {})
         operations = parsed_data.get('operations', {})
-        self.order_data_module._display_comments(comments, operations)
+        self.order_data_module.display_comments(comments, operations)
         
     def get_manufacturer_full_data(self):
         """Возвращает готовые данные производителя для preview"""
@@ -1616,7 +1616,7 @@ class RollLabelPrinter:
         """Обрабатывает выбор типа продукта"""
         self.manual_product_selection = True
         self.xml_tu_number = ""
-        self.preview_module._update_from_connected_roll_module()
+        self.preview_module.update_from_connected_roll_module()
 
     def on_order_number_changed(self, *args):
         """Обрабатывает изменение номера заказа"""

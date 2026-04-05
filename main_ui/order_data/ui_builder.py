@@ -121,7 +121,7 @@ class OrderUIBuilder:
             left_frame,
             text="Сократить текст",
             variable=self.controller.shorten_text_var,
-            command=self.controller._on_shorten_text_changed
+            command=self.controller.on_shorten_text_changed
         )
         self.controller.shorten_checkbutton.pack(anchor="w", pady=(5, 0))
 
@@ -289,13 +289,7 @@ class OrderUIBuilder:
         # Начальная видимость
         self.toggle_weight_visibility()
         self.update_elements_visibility()
-        self._update_cutter_visibility()
-
-    def _on_producer_visibility_changed(self, *args):
-        """Обрабатывает изменение видимости производителя"""
-        # Метод-пустышка. Само значение show_manufacturer_var уже используется
-        # в preview_module и других модулях через get_manufacturer_full_data()
-        pass
+        self.update_cutter_visibility()
 
     def _on_date_emission_key_release(self, event=None):
         """Автоматически расставляет точки при вводе даты эмиссии"""
@@ -352,7 +346,7 @@ class OrderUIBuilder:
         self.controller.order_suffix.set(current_suffix)
 
         if self.controller.preview_module is not None:
-            self.controller.preview_module._update_from_connected_roll_module()
+            self.controller.preview_module.update_from_connected_roll_module()
 
     def update_date_field(self):
         """Обновляет поле даты на текущую дату"""
@@ -497,7 +491,7 @@ class OrderUIBuilder:
         except Exception as e:
             print(f"Ошибка обновления видимости элементов: {e}")
 
-    def _update_cutter_visibility(self):
+    def update_cutter_visibility(self):
         """Показывает/скрывает резчика и поля автогенерации в зависимости от цеха"""
         workshop = self.coordinator.get_workshop() if self.coordinator else "1"
 

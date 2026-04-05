@@ -2,6 +2,7 @@
 """Основной контроллер данных заказа — фасад, объединяющий подмодули"""
 
 import os
+import re
 import tkinter as tk
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from .calculator import OrderCalculator
 from .ui_builder import OrderUIBuilder
 
 
+# noinspection PyUnusedLocal
 class OrderDataController:
     """Контроллер данных заказа. Хранит состояние, координирует подмодули."""
 
@@ -110,7 +112,7 @@ class OrderDataController:
         self.ui_builder.create_ui()
         self.load_manufacturer_options()
 
-        # Инициализация калькулятора и автозаполнителя
+        # Инициализация калькулятора и автозаполнение
         self.calculator = OrderCalculator()
         self.auto_filler = OrderAutoFiller(self, data_manager, config_manager, coordinator)
 
@@ -120,7 +122,7 @@ class OrderDataController:
         # Подписка на координатор
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
-            self.ui_builder._update_cutter_visibility()
+            self.ui_builder.update_cutter_visibility()
             self.load_sleeve_weights()
 
         # ========== ПОДПИСКИ НА ИЗМЕНЕНИЯ ==========
@@ -129,7 +131,6 @@ class OrderDataController:
         self.rolls_count_var.trace_add("write", self._on_weight_changed)
         self.box_weight_var.trace_add("write", self._on_weight_changed)
         self.quantity_var.trace_add("write", self.calculate_total_quantity)
-        self.show_manufacturer_var.trace_add("write", self.ui_builder._on_producer_visibility_changed)
 
     def _init_variables(self):
         """Инициализирует все StringVar и BooleanVar"""
@@ -223,7 +224,7 @@ class OrderDataController:
         if self.coordinator:
             self.coordinator.check_weight_status(self)
         if self.preview_module is not None:
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
     def calculate_total_quantity(self, *args):
         """Рассчитывает общее количество с дебаунсингом"""
@@ -293,7 +294,7 @@ class OrderDataController:
         if not manufacturer:
             return result
 
-        normalized_manufacturer = self._normalize_string(manufacturer)
+        normalized_manufacturer = self.normalize_string(manufacturer)
 
         if normalized_manufacturer in self.manufacturer_full_data_map:
             manufacturer_data = self.manufacturer_full_data_map[normalized_manufacturer]
@@ -350,7 +351,7 @@ class OrderDataController:
                 manufacturer_name = manufacturer_info["name"]
                 product_name = product_info["name"]
 
-                normalized_name = self._normalize_string(manufacturer_name)
+                normalized_name = self.normalize_string(manufacturer_name)
 
                 if normalized_name not in seen_manufacturers_normalized:
                     manufacturers.append(manufacturer_name)
@@ -452,7 +453,7 @@ class OrderDataController:
         self.manual_product_selection = True
         self.xml_tu_number = ""
         if self.preview_module:
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
     def load_sleeve_weights(self):
         """Загружает данные о весе втулок из настроек"""
@@ -503,7 +504,7 @@ class OrderDataController:
         except Exception as e:
             print(f"Ошибка выбора веса втулки: {e}")
 
-    def _normalize_string(self, text: str) -> str:
+    def normalize_string(self, text: str) -> str:
         """Нормализация строки с кэшированием"""
         if not text:
             return ""
@@ -526,7 +527,7 @@ class OrderDataController:
             self.config_manager.reload_settings()
             self.update_packers_list()
             self.update_cutters_list()
-            self.ui_builder._update_cutter_visibility()
+            self.ui_builder.update_cutter_visibility()
             self.load_manufacturer_options()
             self.load_sleeve_weights()
             self.ui_builder.update_elements_visibility()
@@ -641,7 +642,7 @@ class OrderDataController:
         else:
             self.ros_size_var.set("")
 
-    def _on_shorten_text_changed(self):
+    def on_shorten_text_changed(self):
         """Обрабатывает изменение галочки сокращения текста"""
         if hasattr(self, 'order_data_module') and self.order_data_module:
             self.order_data_module.get_product_name()
@@ -660,7 +661,7 @@ class OrderDataController:
         gtin = self._extract_gtin_from_input(search_text)
         if gtin:
             self.product_text.delete("1.0", tk.END)
-            self.order_data_module._process_scanned_gtin(gtin)
+            self.order_data_module.process_scanned_gtin(gtin)
             return "break"
 
         found_products = []
@@ -682,9 +683,9 @@ class OrderDataController:
             )
             return None
 
-    def _extract_gtin_from_input(self, text: str) -> str:
+    @staticmethod
+    def _extract_gtin_from_input(text: str) -> str:
         """Извлекает GTIN из введённого текста"""
-        import re
         gtin_pattern = r'\b(\d{13,14})\b'
         match = re.search(gtin_pattern, text)
         if match:

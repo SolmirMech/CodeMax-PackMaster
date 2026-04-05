@@ -20,10 +20,12 @@ class OrderAutoFiller:
         self.config_manager = config_manager
         self.coordinator = coordinator
 
+    # noinspection PyUnusedLocal
     def on_order_enter_pressed(self, event=None):
         """Запускает поиск заказа в БД при нажатии Enter"""
         # Сброс временных данных
         self.controller.xml_tu_number = ""
+        self.controller.roll_length.set("")
         self.controller.quantity_var.set("")
         self.controller.customer_var.set("")
         self.controller.rolls_count_var.set("1")
@@ -107,11 +109,11 @@ class OrderAutoFiller:
         tu_number = parsed_data.get('tu_number', '')
         
         if executor:
-            normalized_executor = self.controller._normalize_string(executor)
+            normalized_executor = self.controller.normalize_string(executor)
             
             found_manufacturer = None
             for manufacturer in self.controller.manufacturer_options:
-                if self.controller._normalize_string(manufacturer) == normalized_executor:
+                if self.controller.normalize_string(manufacturer) == normalized_executor:
                     found_manufacturer = manufacturer
                     break
             
@@ -180,7 +182,7 @@ class OrderAutoFiller:
         # Комментарии
         comments = parsed_data.get('comments', {})
         if self.controller.order_data_module:
-            self.controller.order_data_module._display_comments(comments, operations)
+            self.controller.order_data_module.display_comments(comments, operations)
 
     def _show_multiple_orders(self, results: list):
         """Показывает выбор при нескольких найденных заказах"""
@@ -205,6 +207,7 @@ class OrderAutoFiller:
             foreground="orange"
         )
 
+    # noinspection PyUnusedLocal
     def on_order_selected(self, event=None):
         """Обрабатывает выбор заказа из комбобокса"""
         selected_index = self.controller.order_combobox.current()

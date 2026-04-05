@@ -363,7 +363,7 @@ class PrintModule:
             # === печать роликов (rolls_count = 1) ===
             self.connected_roll_module.rolls_count_var.set("1")
             self.connected_roll_module.calculate_total_quantity()
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
             data_map = self.preview_module._prepare_roll_data_map()
             print_image = self.preview_module.roll_pdf_filler.generate_print_image(data_map,
@@ -375,7 +375,7 @@ class PrintModule:
             # === Печать коробки (rolls_count = copies) ===
             self.connected_roll_module.rolls_count_var.set(str(copies))
             self.connected_roll_module.force_recalculate_total()
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
             box_data_map = self.preview_module._prepare_box_data_map()
             box_print_image = self.preview_module.box_pdf_filler.generate_print_image(box_data_map,
@@ -386,7 +386,7 @@ class PrintModule:
             # === Восстанавливаем оригинальное значение ===
             self.connected_roll_module.rolls_count_var.set(original_rolls_count)
             self.connected_roll_module.calculate_total_quantity()
-            self.preview_module._update_from_connected_roll_module()
+            self.preview_module.update_from_connected_roll_module()
 
             self.set_status(f"✅ Печать завершена: {copies} роликов + 1 коробка", "green")
 
@@ -395,7 +395,7 @@ class PrintModule:
                 self.connected_roll_module.rolls_count_var.set(original_rolls_count)
                 self.connected_roll_module.calculate_total_quantity()
                 if self.preview_module is not None:
-                    self.preview_module._update_from_connected_roll_module()
+                    self.preview_module.update_from_connected_roll_module()
             self.print_status_label.config(text=f"Ошибка печати: {str(e)}", foreground="red")
 
     def print_label(self):
@@ -491,7 +491,7 @@ class PrintModule:
                 self.connected_roll_module.roll_num_var.set(roll)
                 
                 # Обновляем превью и печатаем
-                self.preview_module._update_from_connected_roll_module()
+                self.preview_module.update_from_connected_roll_module()
                 self._print_standard_label(copies)             
             
             # Восстанавливаем оригинальные данные
