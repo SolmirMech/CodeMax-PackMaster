@@ -223,7 +223,7 @@ DATA_MAPPING_CONFIG = {
 
 
 # noinspection PyTypeChecker, SpellCheckingInspection
-class RollPreview:
+class MainPreview:
     """Модуль предпросмотра этикеток ролика и коробки"""
 
     def __init__(self, parent, coordinator=None, config_manager=None):

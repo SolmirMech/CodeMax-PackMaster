@@ -8,7 +8,7 @@ from main_ui.second_ui.comment_manager import CommentManager
 
 
 # noinspection PyTypeChecker,SpellCheckingInspection
-class OrderDataProcessor:
+class OrderDetailsController:
     """Модуль обработки данных заказов (правая часть интерфейса)."""
     
     def __init__(self, parent, coordinator=None, data_manager=None, config_manager=None):
@@ -208,6 +208,14 @@ class OrderDataProcessor:
         
         # Инициализируем статусы
         self.reset_status_messages()
+
+    def sync_cache_from_roll_module(self):
+        """Синхронизирует кэш из roll_module"""
+        if self.roll_module and hasattr(self.roll_module, 'cached_order_data'):
+            self.cached_order_data = self.roll_module.cached_order_data
+            self.cached_order_number = self.roll_module.cached_order_number
+            return True
+        return False
 
     # noinspection PyUnusedLocal
     def toggle_comment_popup(self, event=None):
@@ -517,7 +525,7 @@ class OrderDataProcessor:
             input_value = self.detail_num_search.get().strip()
         
         # 2. Проверяем, не сканирование ли это (ищем GTIN)
-        gtin = self._extract_gtin_from_input(input_value)
+        gtin = self.extract_gtin_from_input(input_value)
         
         if gtin:
             # 3. Это сканирование - обрабатываем GTIN
@@ -555,7 +563,7 @@ class OrderDataProcessor:
         return "break"
         
     @staticmethod
-    def _extract_gtin_from_input(text):
+    def extract_gtin_from_input(text):
         """Извлекает GTIN из введённого текста"""
         if not text:
             return None
@@ -684,6 +692,28 @@ class OrderDataProcessor:
         if not order_num:
             self.parse_status.config(text="Введите номер заказа", foreground="red")
             return
+
+        # Синхронизируем кэш из roll_module
+        self.sync_cache_from_roll_module()
+
+        # Используем кэш, если данные уже получены
+        if (self.cached_order_data is not None and
+                self.cached_order_data and
+                self.cached_order_number is not None and
+                self.cached_order_number == order_num):
+
+            # Данные уже есть в кэше, ничего не делаем
+            pass
+        else:
+            # Иначе получаем данные из DataManager
+            results = self.data_manager.search_combined(order_num)
+            # Сохраняем в локальный кэш
+            self.cached_order_data = results
+            self.cached_order_number = order_num
+            # И в roll_module для синхронизации в обратную сторону
+            if self.roll_module:
+                self.roll_module.cached_order_data = results
+                self.roll_module.cached_order_number = order_num
             
         if self.current_order is None:
             self.current_order = ""
@@ -908,21 +938,28 @@ class OrderDataProcessor:
 
     # noinspection PyUnusedLocal
     def on_name_selected(self, event):
-        """Обрабатывает выбор названия из комбобокса и отправляет все данные"""
         selected_name = self.selected_name.get()
-        if selected_name and self.parsed_data and self.roll_module:
-            # Находим полные данные по выбранному названию
-            selected_data = None
-            for item in self.parsed_data:
-                if item['name'] == selected_name:
-                    selected_data = item
-                    break
-            
-            if selected_data:
-                self.filtered_parsed_data = [selected_data]
-                self.send_to_roll_module(selected_data)
-            else:
-                self.parse_status.config(text="Ошибка: данные не найдены", foreground="red")
+        if not selected_name or not self.roll_module:
+            return
+
+        # Определяем, откуда брать данные
+        source_data = self.filtered_parsed_data if self.filtered_parsed_data else self.parsed_data
+
+        if not source_data:
+            self.parse_status.config(text="Ошибка: данные не найдены", foreground="red")
+            return
+
+        # Находим полные данные по выбранному названию
+        selected_data = None
+        for item in source_data:
+            if item['name'] == selected_name:
+                selected_data = item
+                break
+
+        if selected_data:
+            self.send_to_roll_module(selected_data)
+        else:
+            self.parse_status.config(text="Ошибка: данные не найдены", foreground="red")
 
     def send_to_roll_module(self, product_data):
         """Отправляет все данные продукта в модуль ролика"""

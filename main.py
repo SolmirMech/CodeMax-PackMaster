@@ -163,20 +163,20 @@ class WeightOrdersApp:
         roll_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
         self.roll_module = OrderDataController(roll_frame, self.coordinator, self.data_manager, self.config_manager)
 
-        # Низ - OrderDataProcessor
+        # Низ - OrderDetailsController
         order_data_frame = ttk.Frame(left_frame)
         order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.order_data_module = OrderDataProcessor(
+        self.order_data_module = OrderDetailsController(
             order_data_frame, 
             self.coordinator, 
             self.data_manager,
             self.config_manager
 )
 
-        # Правая часть - RollPreview (слева от печати и экспорта)
+        # Правая часть - MainPreview (слева от печати и экспорта)
         preview_frame = ttk.Frame(right_frame)
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
-        self.preview_module = RollPreview(preview_frame, self.coordinator, self.config_manager)
+        self.preview_module = MainPreview(preview_frame, self.coordinator, self.config_manager)
         
         # Правая часть - PrintModule и ExportModule (справа от предпросмотра)
         print_export_frame = ttk.Frame(right_frame)
@@ -255,10 +255,9 @@ if __name__ == "__main__":
     if not check_demo_mode():
         sys.exit(1)
         
-    from main_ui.order_data_processor import OrderDataProcessor
-    from main_ui.weight_roll_printer import OrderDataController
-    # рефакт from main_ui.order_data.controller import OrderDataController
-    from main_ui.preview.roll_preview import RollPreview
+    from main_ui.order_data_processor import OrderDetailsController
+    from main_ui.order_data.controller import OrderDataController
+    from main_ui.preview.main_preview import MainPreview
     from main_ui.print_module import PrintModule
     from main_ui.export_module import ExportModule
 

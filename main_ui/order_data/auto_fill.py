@@ -178,7 +178,9 @@ class OrderAutoFiller:
         
         if operations.get('stream_width'):
             self.controller.stream_width_var.set(operations['stream_width'])
-        
+
+        self.controller.update_sleeve_weight_from_settings()
+
         # Комментарии
         comments = parsed_data.get('comments', {})
         if self.controller.order_data_module:

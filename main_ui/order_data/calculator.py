@@ -1,6 +1,8 @@
 # main_ui/order_data/calculator.py
 """Модуль расчётов весов, количества и длины для заказа"""
 
+import math
+
 
 class OrderCalculator:
     """Калькулятор для расчётов, связанных с заказом (не зависит от tkinter)"""
@@ -101,7 +103,6 @@ class OrderCalculator:
     @staticmethod
     def calculate_quantity_from_length(roll_length_m_str: str, label_length_mm_str: str) -> str:
         """Рассчитывает количество этикеток из длины ролика и длины этикетки."""
-        import math
         
         roll_m = OrderCalculator.parse_float(roll_length_m_str)
         label_mm = OrderCalculator.parse_float(label_length_mm_str)

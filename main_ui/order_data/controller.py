@@ -2,7 +2,6 @@
 """Основной контроллер данных заказа — фасад, объединяющий подмодули"""
 
 import os
-import re
 import tkinter as tk
 from datetime import datetime
 
@@ -477,6 +476,7 @@ class OrderDataController:
         try:
             width_str = self.stream_width_var.get().strip()
             diameter_str = self.sleeve_diameter_var.get().strip()
+
             if not width_str or not diameter_str:
                 return
 
@@ -485,22 +485,31 @@ class OrderDataController:
             except ValueError:
                 return
 
-            if diameter_str in self.parsed_sleeve_weights:
-                diameter_data = self.parsed_sleeve_weights[diameter_str]
-                if width in diameter_data:
-                    self.sleeve_weight_var.set(str(diameter_data[width]))
-                    return
+            if diameter_str not in self.parsed_sleeve_weights:
+                return
 
-                available_widths = sorted(diameter_data.keys())
-                if available_widths:
-                    closest = None
-                    for w in available_widths:
-                        if w <= width:
-                            closest = w
-                        else:
-                            break
-                    if closest is not None:
-                        self.sleeve_weight_var.set(str(diameter_data[closest]))
+            diameter_data = self.parsed_sleeve_weights[diameter_str]
+            available_widths = sorted(diameter_data.keys())
+
+            if width in diameter_data:
+                self.sleeve_weight_var.set(str(diameter_data[width]))
+                return
+
+            # Ищем ближайшую меньшую ширину
+            closest = None
+            for w in available_widths:
+                if w <= width:
+                    closest = w
+                else:
+                    break
+
+            if closest is not None:
+                self.sleeve_weight_var.set(str(diameter_data[closest]))
+            else:
+                # Нет меньшей ширины — берём минимальную доступную
+                min_width = available_widths[0]
+                self.sleeve_weight_var.set(str(diameter_data[min_width]))
+
         except Exception as e:
             print(f"Ошибка выбора веса втулки: {e}")
 
@@ -658,7 +667,7 @@ class OrderDataController:
             )
             return None
 
-        gtin = self._extract_gtin_from_input(search_text)
+        gtin = self.order_data_module.extract_gtin_from_input(search_text)
         if gtin:
             self.product_text.delete("1.0", tk.END)
             self.order_data_module.process_scanned_gtin(gtin)
@@ -682,15 +691,6 @@ class OrderDataController:
                 foreground="red"
             )
             return None
-
-    @staticmethod
-    def _extract_gtin_from_input(text: str) -> str:
-        """Извлекает GTIN из введённого текста"""
-        gtin_pattern = r'\b(\d{13,14})\b'
-        match = re.search(gtin_pattern, text)
-        if match:
-            return match.group(1)
-        return ""
 
     # Прокси-методы для OrderAutoFiller (чтобы внешний код не ломался)
     def on_order_enter_pressed(self, event=None):

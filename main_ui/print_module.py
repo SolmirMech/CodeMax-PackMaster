@@ -124,7 +124,7 @@ class PrintModule:
         self.print_status_label.grid(row=2, column=0, sticky="w", pady=(7, 0))
         
     def update_preview_displays(self):
-        """Обновляет превью в preview_module (RollPreview)"""
+        """Обновляет превью в preview_module"""
         if self.preview_module is not None:
             self.preview_module.update_preview_displays()
 
