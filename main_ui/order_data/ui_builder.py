@@ -4,6 +4,7 @@
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
+import subprocess
 
 
 # noinspection PyTypeChecker
@@ -27,10 +28,6 @@ class OrderUIBuilder:
         """Создает интерфейс для ввода данных заказа"""
         frame = ttk.Frame(self.parent, padding=3)
         frame.pack(fill=tk.BOTH, expand=True)
-
-        # Стиль для автоматического выбора
-        style = ttk.Style()
-        style.configure("AutoSelect.TCombobox", fieldbackground="#fffacd")
 
         # Основной контейнер для данных
         data_frame = ttk.LabelFrame(frame, text="Данные для этикетки", padding=5)
@@ -355,7 +352,6 @@ class OrderUIBuilder:
             if hasattr(self.coordinator, 'notify_list_changed'):
                 self.coordinator.notify_list_changed("update_date_request")
 
-            import subprocess
             try:
                 result = subprocess.run(
                     ["powershell", "-Command", "Get-Date -Format 'dd.MM.yyyy'"],
