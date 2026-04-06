@@ -148,7 +148,7 @@ class WeightOrdersApp:
         left_frame = ttk.Frame(container)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         left_frame.columnconfigure(0, weight=1)
-        left_frame.rowconfigure(0, weight=0, minsize=550)  # фикс высоты RollLabelPrinter
+        left_frame.rowconfigure(0, weight=0, minsize=550)  # фикс высоты OrderDataController
         left_frame.rowconfigure(1, weight=1)  # OrderDataProcessor растягивается
 
         # Правая часть

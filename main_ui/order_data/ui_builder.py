@@ -114,7 +114,7 @@ class OrderUIBuilder:
         left_frame = ttk.Frame(data_frame)
         left_frame.grid(row=2, column=0, sticky="nw", pady=5)
 
-        ttk.Label(left_frame, text="Изделие:").pack(anchor="w")
+        ttk.Label(left_frame, text="Изделие:").grid(row=0, column=0, sticky="w")
 
         # Галочка "Сократить текст"
         self.controller.shorten_checkbutton = ttk.Checkbutton(
@@ -123,7 +123,7 @@ class OrderUIBuilder:
             variable=self.controller.shorten_text_var,
             command=self.controller.on_shorten_text_changed
         )
-        self.controller.shorten_checkbutton.pack(anchor="w", pady=(5, 0))
+        self.controller.shorten_checkbutton.grid(row=1, column=0, sticky="w", pady=(2, 0))
 
         # Галочка Росинка
         self.controller.rosinka_checkbutton = ttk.Checkbutton(
@@ -132,7 +132,8 @@ class OrderUIBuilder:
             variable=self.controller.rosinka_var,
             command=self._on_rosinka_toggled
         )
-        self.controller.rosinka_checkbutton.pack(anchor="w", pady=(5, 0))
+        self.controller.rosinka_checkbutton.grid(row=2, column=0, sticky="w", pady=(3, 0))
+        self.controller.rosinka_checkbutton.grid_remove()  # изначально скрыта
 
         # Многострочное текстовое поле
         self.controller.product_text = tk.Text(data_frame, width=35, height=4, font=("Arial", 12))
@@ -151,13 +152,13 @@ class OrderUIBuilder:
         self.controller.podlo_entry.grid_remove()
 
         # Номер заказа
-        ttk.Label(data_frame, text="№ заказа:").grid(row=4, column=0, sticky="w", pady=5)
+        ttk.Label(data_frame, text="№ заказа:").grid(row=4, column=0, sticky="w", pady=(5, 5))
         
         entry_prefix = ttk.Entry(data_frame, textvariable=self.controller.order_prefix, width=4)
-        entry_prefix.grid(row=4, column=1, padx=(5, 0), pady=5, sticky="w")
+        entry_prefix.grid(row=4, column=1, padx=(5, 0), pady=(5, 5), sticky="w")
 
         self.controller.order_entry = ttk.Entry(data_frame, textvariable=self.controller.order_number, width=7)
-        self.controller.order_entry.grid(row=4, column=1, padx=(42, 0), pady=5, sticky="w")
+        self.controller.order_entry.grid(row=4, column=1, padx=(42, 0), pady=(5, 5), sticky="w")
         self.controller.order_entry.bind("<Return>", self.controller.on_order_enter_pressed)
         self.controller.order_entry.bind("<Down>", lambda e: self.controller.quantity_entry.focus_set())
         self.controller.order_entry.bind("<FocusIn>", lambda e: self.controller.order_entry.select_range(0, tk.END))
@@ -168,12 +169,12 @@ class OrderUIBuilder:
             width=7,
             state="readonly"
         )
-        self.controller.order_combobox.grid(row=4, column=1, padx=(42, 0), pady=5, sticky="w")
+        self.controller.order_combobox.grid(row=4, column=1, padx=(42, 0), pady=(5, 5), sticky="w")
         self.controller.order_combobox.bind("<<ComboboxSelected>>", self.controller.on_order_selected)
         self.controller.order_combobox.grid_remove()
 
         self.controller.entry_suffix = ttk.Entry(data_frame, textvariable=self.controller.order_suffix, width=6)
-        self.controller.entry_suffix.grid(row=4, column=1, padx=(95, 0), pady=5, sticky="w")
+        self.controller.entry_suffix.grid(row=4, column=1, padx=(95, 0), pady=(5, 5), sticky="w")
 
         # Обновление даты
         date_update_label = tk.Label(
@@ -182,12 +183,12 @@ class OrderUIBuilder:
             font=("Arial", 18),
             cursor="hand2"
         )
-        date_update_label.grid(row=4, column=1, sticky="w", padx=(200, 0), pady=5)
+        date_update_label.grid(row=4, column=1, sticky="w", padx=(200, 0), pady=(5, 5))
         date_update_label.bind("<Button-1>", lambda e: self.update_date_field())
 
         # Дата
         self.controller.date_entry = ttk.Entry(data_frame, textvariable=self.controller.date_var, width=12)
-        self.controller.date_entry.grid(row=4, column=1, padx=(240, 0), pady=5, sticky="w")
+        self.controller.date_entry.grid(row=4, column=1, padx=(240, 0), pady=(5, 5), sticky="w")
 
         # Количество этикеток/роликов
         ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
@@ -559,9 +560,9 @@ class OrderUIBuilder:
 
         if hasattr(self.controller, 'rosinka_checkbutton'):
             if show_rosinka:
-                self.controller.rosinka_checkbutton.pack(anchor="w", pady=(5, 0))
+                self.controller.rosinka_checkbutton.grid()
             else:
-                self.controller.rosinka_checkbutton.pack_forget()
+                self.controller.rosinka_checkbutton.grid_remove()
                 self.controller.rosinka_var.set(False)
 
     # ========== Методы для работы с буфером обмена ==========
