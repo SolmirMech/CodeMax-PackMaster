@@ -147,6 +147,7 @@ class OrderUIBuilder:
         self.controller.podlo_entry = ttk.Entry(data_frame, textvariable=self.controller.ros_podlo_var, width=35)
         self.controller.podlo_label.grid(row=3, column=1, sticky="w", pady=3)
         self.controller.podlo_entry.grid(row=3, column=1, padx=(115, 0), pady=3, sticky="w")
+        self.add_context_menu(self.controller.podlo_entry)
         self.controller.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
         self.controller.podlo_label.grid_remove()
         self.controller.podlo_entry.grid_remove()
@@ -240,8 +241,10 @@ class OrderUIBuilder:
         # № ролика
         self.controller.roll_label = ttk.Label(data_frame, text="№ ролика:")
         self.controller.roll_label.grid(row=7, column=1, sticky="w", padx=(160, 0), pady=3)
+        self.controller.roll_label.grid_remove()
         self.controller.roll_entry = ttk.Entry(data_frame, textvariable=self.controller.roll_num_var, width=7)
         self.controller.roll_entry.grid(row=7, column=1, padx=(265, 0), pady=3, sticky="w")
+        self.controller.roll_entry.grid_remove()
 
         # Ширина ручья
         self.controller.stream_width_label = ttk.Label(data_frame, text="Ширина ручья, мм:")
@@ -327,8 +330,6 @@ class OrderUIBuilder:
             ('label_length_entry', self.controller.label_length_entry),
             ('emission_label', self.controller.emission_label),
             ('emission_entry', self.controller.emission_entry),
-            ('roll_label', self.controller.roll_label),
-            ('roll_entry', self.controller.roll_entry),
         ]
 
         for key, widget in widgets_to_register:

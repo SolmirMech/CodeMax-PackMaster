@@ -121,9 +121,6 @@ class OrderDataController:
         self.calculator = OrderCalculator()
         self.auto_filler = OrderAutoFiller(self, data_manager, config_manager, coordinator)
 
-        # Загрузка данных
-        self.load_box_sizes()
-
         # Подписка на координатор
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
             self.coordinator.subscribe(self.on_settings_changed)
@@ -595,10 +592,6 @@ class OrderDataController:
         else:
             self.show_manufacturer_var.set(False)
 
-    def set_show_manufacturer(self, show):
-        """Устанавливает видимость производителя извне"""
-        self.show_manufacturer_var.set(show)
-
     def on_order_number_changed(self, *args):
         """Обрабатывает изменение номера заказа"""
         if self.manual_manufacturer_selection:
@@ -611,30 +604,6 @@ class OrderDataController:
             if hasattr(self, 'manufacturer_options') and self.manufacturer_options:
                 self.manufacturer_var.set(self.manufacturer_options[0])
                 self.update_product_options()
-
-    def load_box_sizes(self):
-        """Загружает список коробок из shared_utils.json"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            weight_box = settings.get("weight_box", {})
-            return list(weight_box.keys())
-        except Exception as e:
-            print(f"Ошибка загрузки списка коробок: {e}")
-            return []
-
-    def on_box_selected(self, event=None):
-        """Обрабатывает выбор коробки из списка"""
-        selected_size = self.box_size_var.get()
-        if selected_size:
-            try:
-                settings = self.config_manager.load_json_settings("shared_utils.json")
-                weight_box = settings.get("weight_box", {})
-                box_weight_g = weight_box.get(selected_size, 0)
-                box_weight_kg = box_weight_g / 1000.0
-                self.box_weight_var.set(f"{box_weight_kg:.2f}")
-                self._calculate_all_weights()
-            except Exception as e:
-                print(f"Ошибка загрузки веса коробки: {e}")
 
     def extract_label_size_from_db(self):
         """Извлекает размер этикетки из order_name для Росинки"""
@@ -707,10 +676,6 @@ class OrderDataController:
     def on_order_enter_pressed(self, event=None):
         """Прокси для auto_filler.on_order_enter_pressed"""
         self.auto_filler.on_order_enter_pressed(event)
-
-    def auto_fill_from_xml(self):
-        """Прокси для auto_filler.auto_fill_from_xml"""
-        return self.auto_filler.auto_fill_from_xml()
 
     def on_order_selected(self, event=None):
         """Прокси для auto_filler.on_order_selected"""
