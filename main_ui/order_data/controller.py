@@ -108,6 +108,12 @@ class OrderDataController:
 
         # Создание UI через UIBuilder
         self.ui_builder = OrderUIBuilder(parent, self, config_manager, coordinator)
+        # Подписки на изменения контекста для маппера
+        self.customer_var.trace_add("write", self._apply_mapping)
+        self.manufacturer_var.trace_add("write", self._apply_mapping)
+        self.rosinka_var.trace_add("write", self._apply_mapping)
+        self.show_weight_var.trace_add("write", self._apply_mapping)
+
         self.ui_builder.create_ui()
         self.load_manufacturer_options()
 
@@ -188,6 +194,10 @@ class OrderDataController:
         self.show_weight_var = tk.BooleanVar(value=False)
 
     # ========== ОБРАБОТЧИКИ СОБЫТИЙ (тонкая прослойка) ==========
+
+    def _apply_mapping(self, *args):
+        """Применяет маппинг интерфейса при изменении контекста (заказчик, производитель, галочки)"""
+        self.ui_builder.apply_mapping()
 
     def _on_weight_changed(self, *args):
         """Обработчик изменений веса с дебаунсингом"""
@@ -540,6 +550,7 @@ class OrderDataController:
             self.load_manufacturer_options()
             self.load_sleeve_weights()
             self.ui_builder.update_elements_visibility()
+            self.ui_builder.apply_mapping()
         except Exception as e:
             print(f"Ошибка обновления списков после изменения настроек: {e}")
 

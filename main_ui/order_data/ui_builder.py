@@ -6,6 +6,8 @@ from tkinter import ttk
 from datetime import datetime
 import subprocess
 
+from .interface_mapper import InterfaceMapper
+
 
 # noinspection PyTypeChecker
 class OrderUIBuilder:
@@ -23,6 +25,7 @@ class OrderUIBuilder:
         self.controller = controller
         self.config_manager = config_manager
         self.coordinator = coordinator
+        self.mapper = InterfaceMapper(config_manager, controller, coordinator)
 
     def create_ui(self):
         """Создает интерфейс для ввода данных заказа"""
@@ -277,6 +280,12 @@ class OrderUIBuilder:
         self.controller.emission_entry.grid(row=10, column=1, padx=(150, 0), pady=3, sticky="w")
         self.controller.emission_entry.bind("<KeyRelease>", self._on_date_emission_key_release)
 
+        # Регистрация всех управляемых виджетов в маппере
+        self._register_all_widgets()
+
+        # Применяем начальный маппинг
+        self.mapper.apply()
+
         # Привязываем обработчики
         self.controller.order_prefix.trace_add("write", self.controller.on_order_number_changed)
         self.controller.roll_length.trace_add("write", self.controller.calculate_quantity_from_length)
@@ -288,6 +297,53 @@ class OrderUIBuilder:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         self.update_cutter_visibility()
+
+    def _register_all_widgets(self):
+        """Регистрирует все виджеты, управляемые маппером"""
+        widgets_to_register = [
+            ('cutter_label', self.controller.cutter_label),
+            ('cutter_combo', self.controller.cutter_combo),
+            ('batch_label', self.controller.batch_label),
+            ('batch_entry', self.controller.batch_entry),
+            ('roll_length_label', self.controller.roll_length_label),
+            ('roll_length_entry', self.controller.roll_length_entry),
+            ('podlo_label', self.controller.podlo_label),
+            ('podlo_entry', self.controller.podlo_entry),
+            ('rosinka_checkbutton', self.controller.rosinka_checkbutton),
+            ('weight_label', self.controller.weight_label),
+            ('gross_entry', self.controller.gross_entry),
+            ('sleeve_label', self.controller.sleeve_label),
+            ('sleeve_entry', self.controller.sleeve_entry),
+            ('date_entry', self.controller.date_entry),
+            ('winding_label', self.controller.winding_label),
+            ('winding_entry', self.controller.winding_entry),
+            ('diameter_label', self.controller.diameter_label),
+            ('diameter_entry', self.controller.diameter_entry),
+            ('streams_label', self.controller.streams_label),
+            ('streams_entry', self.controller.streams_entry),
+            ('stream_width_label', self.controller.stream_width_label),
+            ('stream_width_entry', self.controller.stream_width_entry),
+            ('label_length_label', self.controller.label_length_label),
+            ('label_length_entry', self.controller.label_length_entry),
+            ('emission_label', self.controller.emission_label),
+            ('emission_entry', self.controller.emission_entry),
+            ('roll_label', self.controller.roll_label),
+            ('roll_entry', self.controller.roll_entry),
+        ]
+
+        for key, widget in widgets_to_register:
+            if widget is not None:
+                default_label = None
+                if 'label' in key or key.endswith('_label'):
+                    try:
+                        default_label = widget.cget('text')
+                    except:
+                        pass
+                self.mapper.register_widget(key, widget, default_label)
+
+    def apply_mapping(self):
+        """Применяет маппинг (вызывается при изменении контекста)"""
+        self.mapper.apply()
 
     def _on_date_emission_key_release(self, event=None):
         """Автоматически расставляет точки при вводе даты эмиссии"""
@@ -329,19 +385,16 @@ class OrderUIBuilder:
         current_suffix = self.controller.order_suffix.get()
 
         if self.controller.rosinka_var.get():
-            self.controller.podlo_label.grid()
-            self.controller.podlo_entry.grid()
             self.controller.extract_label_size_from_db()
-        else:
-            self.controller.podlo_label.grid_remove()
-            self.controller.podlo_entry.grid_remove()
-            self.controller.ros_size_var.set("")
 
-        if self.coordinator:
-            self.coordinator.notify_list_changed("rosinka")
+        # Вместо grid/grid_remove просто применяем маппинг
+        self.mapper.apply()
 
         self.controller.order_prefix.set(current_prefix)
         self.controller.order_suffix.set(current_suffix)
+
+        if self.coordinator:
+            self.coordinator.notify_list_changed("rosinka")
 
         if self.controller.preview_module is not None:
             self.controller.preview_module.update_from_connected_roll_module()
@@ -447,119 +500,32 @@ class OrderUIBuilder:
             )
 
     def update_elements_visibility(self):
-        """Обновляет видимость дополнительных элементов на основе настроек"""
-        try:
-            settings = self.config_manager.load_json_settings("shared_utils.json")
-            elements_status = settings.get("elements_status", "Скрыть")
-            show_elements = (elements_status == "Показать")
-
-            if show_elements:
-                self.controller.date_entry.grid()
-                self.controller.winding_label.grid()
-                self.controller.winding_entry.grid()
-                self.controller.diameter_label.grid()
-                self.controller.diameter_entry.grid()
-                self.controller.streams_label.grid()
-                self.controller.streams_entry.grid()
-                self.controller.stream_width_label.grid()
-                self.controller.stream_width_entry.grid()
-                self.controller.label_length_label.grid()
-                self.controller.label_length_entry.grid()
-                self.controller.emission_label.grid()
-                self.controller.emission_entry.grid()
-                self.controller.roll_label.grid()
-                self.controller.roll_entry.grid()
-            else:
-                self.controller.date_entry.grid_remove()
-                self.controller.winding_label.grid_remove()
-                self.controller.winding_entry.grid_remove()
-                self.controller.diameter_label.grid_remove()
-                self.controller.diameter_entry.grid_remove()
-                self.controller.streams_label.grid_remove()
-                self.controller.streams_entry.grid_remove()
-                self.controller.stream_width_label.grid_remove()
-                self.controller.stream_width_entry.grid_remove()
-                self.controller.label_length_label.grid_remove()
-                self.controller.label_length_entry.grid_remove()
-                self.controller.emission_label.grid_remove()
-                self.controller.emission_entry.grid_remove()
-                self.controller.roll_label.grid_remove()
-                self.controller.roll_entry.grid_remove()
-        except Exception as e:
-            print(f"Ошибка обновления видимости элементов: {e}")
+        """Обновляет видимость элементов — делегирует мапперу"""
+        self.mapper.apply()
 
     def update_cutter_visibility(self):
-        """Показывает/скрывает резчика и поля автогенерации в зависимости от цеха"""
-        workshop = self.coordinator.get_workshop() if self.coordinator else "1"
-
-        if hasattr(self.controller, 'cutter_label') and hasattr(self.controller, 'cutter_combo'):
-            if workshop == "1":
-                self.controller.cutter_label.grid_remove()
-                self.controller.cutter_combo.grid_remove()
-            else:
-                self.controller.cutter_label.grid()
-                self.controller.cutter_combo.grid()
-
-        if workshop == "1":
-            self.controller.batch_label.grid_remove()
-            self.controller.batch_entry.grid_remove()
-            self.controller.roll_length_label.grid_remove()
-            self.controller.roll_length_entry.grid_remove()
-        else:
-            self.controller.batch_label.grid()
-            self.controller.batch_entry.grid()
-            self.controller.roll_length_label.grid()
-            self.controller.roll_length_entry.grid()
+        """Обновляет видимость резчика — делегирует мапперу"""
+        self.mapper.apply()
 
     def toggle_weight_visibility(self):
-        """Показывает/скрывает строку с весом"""
-        show_weight = self.controller.show_weight_var.get()
+        """Очищает переменные веса при снятии галочки"""
+        if not self.controller.show_weight_var.get():
+            self.controller.gross_weight_kg_var.set("")
+            self.controller.net_weight_kg_var.set("")
+            self.controller.total_gross_var.set("")
+            self.controller.total_net_var.set("")
+            self.controller.calculate_total_quantity()
 
-        # Устанавливаем флаг для предотвращения расчетов при программной очистке
-        self.controller._skip_weight_calculation = True
-
-        try:
-            if show_weight:
-                self.controller.weight_label.grid()
-                self.controller.gross_entry.grid()
-                self.controller.sleeve_label.grid()
-                self.controller.sleeve_entry.grid()
-
-                self.controller.gross_weight_kg_var.set("")
-                self.controller.net_weight_kg_var.set("")
-                self.controller.total_gross_var.set("")
-                self.controller.total_net_var.set("")
-
-                self.controller.parent.after(50, lambda: self.controller.gross_entry.focus_set())
-            else:
-                self.controller.gross_weight_kg_var.set("")
-                self.controller.net_weight_kg_var.set("")
-                self.controller.total_gross_var.set("")
-                self.controller.total_net_var.set("")
-
-                self.controller.weight_label.grid_remove()
-                self.controller.gross_entry.grid_remove()
-                self.controller.sleeve_label.grid_remove()
-                self.controller.sleeve_entry.grid_remove()
-
-                self.controller.calculate_total_quantity()
-
-                if hasattr(self.coordinator, 'check_weight_status'):
-                    self.coordinator.check_weight_status(self.controller)
-        finally:
-            self.controller._skip_weight_calculation = False
+            if hasattr(self.coordinator, 'check_weight_status'):
+                self.coordinator.check_weight_status(self.controller)
 
     def update_rosinka_visibility(self):
-        """Показывает/скрывает галочку Росинка в зависимости от заказчика"""
+        """Обновляет состояние галочки Росинка при смене заказчика"""
         customer = self.controller.customer_var.get()
         show_rosinka = customer and "росинка" in customer.lower()
 
-        if hasattr(self.controller, 'rosinka_checkbutton'):
-            if show_rosinka:
-                self.controller.rosinka_checkbutton.grid()
-            else:
-                self.controller.rosinka_checkbutton.grid_remove()
-                self.controller.rosinka_var.set(False)
+        if not show_rosinka and self.controller.rosinka_var.get():
+            self.controller.rosinka_var.set(False)
 
     # ========== Методы для работы с буфером обмена ==========
 

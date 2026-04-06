@@ -71,6 +71,10 @@ class OrderAutoFiller:
         else:
             self._show_multiple_orders(results)
 
+        # Применяем маппинг после успешной загрузки
+        if hasattr(self.controller, 'ui_builder'):
+            self.controller.ui_builder.apply_mapping()
+
     def auto_fill_from_xml(self) -> list:
         """Автоматически заполняет технические поля из XML"""
         order_number = self.controller.order_number.get().strip()
@@ -186,6 +190,10 @@ class OrderAutoFiller:
         if self.controller.order_data_module:
             self.controller.order_data_module.display_comments(comments, operations)
 
+        # Применяем маппинг после заполнения данных
+        if hasattr(self.controller, 'ui_builder'):
+            self.controller.ui_builder.apply_mapping()
+
     def _show_multiple_orders(self, results: list):
         """Показывает выбор при нескольких найденных заказах"""
         
@@ -222,6 +230,9 @@ class OrderAutoFiller:
             self.controller.order_combobox_visible = False
             
             self._fill_technical_fields_only(selected_order_data)
+            # Применяем маппинг
+            if hasattr(self.controller, 'ui_builder'):
+                self.controller.ui_builder.apply_mapping()
             
             self.controller.order_data_module.cached_order_data = [selected_order_data]
             self.controller.order_data_module.cached_order_number = self.controller.order_number.get().strip()
