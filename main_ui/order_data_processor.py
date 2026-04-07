@@ -970,10 +970,9 @@ class OrderDetailsController:
 
                 product_name = product_data.get('name', '')
                 detail_number = product_data.get('detail_num', '')
-                customer = product_data.get('customer', '')
 
-                # Для заказчика Прогресс АО добавляем detail_number полностью
-                if customer == "ПРОГРЕСС АО" and detail_number:
+                # добавляем detail_number полностью (раньше только для "ПРОГРЕСС АО")
+                if detail_number:
                     display_text = f"{detail_number}, {product_name}"
                 else:
                     display_text = product_name
