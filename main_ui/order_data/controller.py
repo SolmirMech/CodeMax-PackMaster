@@ -143,6 +143,7 @@ class OrderDataController:
         self.customer_var = tk.StringVar(value="")
         self.date_var = tk.StringVar(value=datetime.now().strftime("%d.%m.%Y"))
         self.date_emission_var = tk.StringVar(value="")
+        self.detail_num_var = tk.StringVar(value="")
 
         # Производитель и продукт
         self.manufacturer_var = tk.StringVar(value="")

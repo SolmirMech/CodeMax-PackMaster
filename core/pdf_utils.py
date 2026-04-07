@@ -109,7 +109,7 @@ ALL_PLACEHOLDERS = [
     "$printhouse", "$printaddress", "$total", "$tu_number",
     "$box_brut", "$box_net", "$cutter", "$rll_length", "$emission",
     "$batch_num", "$roul_num", "$ros_podlo", "$ros_size", "$gtin",
-    "$box_qr",
+    "$box_qr", "$detail_num",
 ]
 
 # noinspection SpellCheckingInspection
@@ -164,6 +164,7 @@ class PDFTemplateFiller:
         "Кол-во этикеток:": "$rol",
         "—": "$roul_num",
         "№ съема /№ ролика:": "$batch_num",
+        "Деталь:" : "$detail_num"
     }    
     
     def __init__(self, template_path: str):

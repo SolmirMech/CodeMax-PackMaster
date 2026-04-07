@@ -970,14 +970,18 @@ class OrderDetailsController:
 
                 product_name = product_data.get('name', '')
                 detail_number = product_data.get('detail_num', '')
+                customer = product_data.get('customer', '')
 
-                # добавляем detail_number полностью (раньше только для "ПРОГРЕСС АО")
-                if detail_number:
+                # Для заказчика Прогресс АО добавляем detail_number полностью
+                if customer == "ПРОГРЕСС АО" and detail_number:
                     display_text = f"{detail_number}, {product_name}"
                 else:
                     display_text = product_name
 
                 self.roll_module.product_text.insert("1.0", display_text)
+
+                # Отправляем в переменную OrderDataController номер детали
+                self.roll_module.detail_num_var.set(detail_number)
                 
                 # устанавливаем дату эмиссии если она есть в данных
                 if 'date_emission' in product_data and product_data['date_emission']:

@@ -109,6 +109,11 @@ DATA_MAPPING_CONFIG = {
             'condition': lambda self: True,
             'placeholder': '$tr'
         },
+        'detail_num': {
+            'source': lambda rm: rm.detail_num_var.get(),
+            'condition': lambda self: True,
+            'placeholder': '$detail_num'
+        },
     },
     
     # Технические параметры

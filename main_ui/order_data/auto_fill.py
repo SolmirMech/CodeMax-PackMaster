@@ -28,6 +28,7 @@ class OrderAutoFiller:
         self.controller.roll_length.set("")
         self.controller.quantity_var.set("")
         self.controller.customer_var.set("")
+        self.controller.detail_num_var.set("")
         self.controller.rolls_count_var.set("1")
         self.controller.product_text.delete("1.0", tk.END)
         
