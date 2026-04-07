@@ -1,18 +1,31 @@
-# Автоматически сгенерировано CodeMax Import Analyzer
-# Python 3.12
-# Project: CodeMax-PackMaster
-# django-qrcode не нужен
-
-pillow==12.0.0
-PyMuPDF==1.26.6
-chardet>=5.0
-openpyxl==3.1.2
-psutil>=5.8
-pywin32==306
-qrcode==8.2
+altgraph==0.17.5
+chardet==7.4.0.post2
+colorama==0.4.6
+contourpy==1.3.3
+cycler==0.12.1
+et_xmlfile==2.0.0
+fonttools==4.62.1
+kiwisolver==1.5.0
+lxml==6.0.2
+matplotlib==3.10.8
+numpy==2.4.4
+openpyxl==3.1.5
+packaging==26.0
+pandas==3.0.2
 pdf2image==1.17.0
 pdfrw==0.4
-lxml==5.2.1
-matplotlib==3.9.2
-pyinstaller==6.14.1
-
+pefile==2024.8.26
+pillow==12.2.0
+psutil==7.2.2
+pyinstaller==6.19.0
+pyinstaller-hooks-contrib==2026.4
+PyMuPDF==1.27.2.2
+pyparsing==3.3.2
+python-barcode==0.16.1
+python-dateutil==2.9.0.post0
+pywin32==311
+pywin32-ctypes==0.2.3
+qrcode==8.2
+setuptools==82.0.1
+six==1.17.0
+tzdata==2026.1

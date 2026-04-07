@@ -210,7 +210,7 @@ DATA_MAPPING_CONFIG = {
     'ROSINKA': {
         'ros_podlo': {
             'source': lambda rm: rm.ros_podlo_var.get(),
-            'condition': lambda self: self.rosinka_enabled,
+            'condition': lambda self: True,
             'placeholder': '$ros_podlo'
         },
         'ros_size': {
@@ -922,6 +922,13 @@ class MainPreview:
 
             # Обновляем превью ролика
             if self.roll_pdf_filler:
+                # устанавливаем флаг для штрих-кода
+                manufacturer = self.current_data.get('manufacturer_name', '').lower()
+                if 'экосистема' in manufacturer:
+                    self.roll_pdf_filler._draw_as_barcode = True
+                else:
+                    self.roll_pdf_filler._draw_as_barcode = False
+
                 roll_data_map = self._prepare_roll_data_map()
                 roll_preview_image = self.roll_pdf_filler.generate_preview(roll_data_map)
                 self._update_canvas_preview(self.roll_canvas, roll_preview_image)

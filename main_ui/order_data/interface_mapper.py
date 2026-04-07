@@ -86,15 +86,14 @@ class InterfaceMapper:
                         "podlo_label": {"label": "Артикул:", "visible": True},
                         "podlo_entry": {"visible": True}
                     },
-                    "else_mapping": {
-                        "podlo_label": {"label": "Подложка:", "visible": False},
-                        "podlo_entry": {"visible": False}
-                    }
+                    "else_mapping": {}
                 },
                 "customer_rosinka": {
                     "condition": {"type": "contains", "target": "customer", "value": ["росинка"]},
                     "mapping": {
-                        "rosinka_checkbutton": {"visible": True}
+                        "rosinka_checkbutton": {"visible": True},
+                        "podlo_label": {"label": "Подложка:", "visible": True},
+                        "podlo_entry": {"visible": True}
                     },
                     "else_mapping": {
                         "rosinka_checkbutton": {"visible": False}
@@ -147,6 +146,14 @@ class InterfaceMapper:
                         "emission_label": {"visible": True, "label": "Дата эмиссии:"},
                         "emission_entry": {"visible": True}
                     }
+                },
+                "hide_podlo": {
+                    "condition": {"type": "always"},
+                    "mapping": {},
+                    "else_mapping": {
+                        "podlo_label": {"visible": False},
+                        "podlo_entry": {"visible": False}
+                    }
                 }
             },
             "priority": [
@@ -154,7 +161,8 @@ class InterfaceMapper:
                 "manufacturer_ekosistema",
                 "customer_rosinka",
                 "show_weight",
-                "elements_visibility"
+                "elements_visibility",
+                "hide_podlo"
             ]
         }
         try:
@@ -163,7 +171,7 @@ class InterfaceMapper:
                 json.dump(default_rules, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Ошибка создания default маппинга: {e}")
-
+            
     def register_widget(self, key, widget, default_label=None):
         """Регистрирует виджет для управления маппером"""
         self.registered_widgets[key] = {

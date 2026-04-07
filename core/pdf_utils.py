@@ -26,6 +26,15 @@ except ImportError:
     HAS_QRCODE = False
     print("Библиотека qrcode не установлена. Установите: pip install qrcode[pil]")
 
+try:
+    import barcode
+    from barcode import Code128
+    from barcode.writer import ImageWriter
+    HAS_BARCODE = True
+except ImportError:
+    HAS_BARCODE = False
+    print("Библиотека python-barcode не установлена. Установите: pip install python-barcode")
+
 # Добавляем конфигурацию форматирования полей
 FIELD_FORMATTING = {
     'brutto': {
@@ -180,6 +189,57 @@ class PDFTemplateFiller:
         # добавляем версионность
         self._cache_version = 0
         self._current_version = 0
+
+    # noinspection PyMethodMayBeStatic
+    def _draw_barcode(self, draw, rect, data: str, mat):
+        """Рисует штрих-код Code128 в указанной области"""
+        if not data:
+            transformed_rect = rect * mat
+            draw.rectangle([transformed_rect.x0, transformed_rect.y0, transformed_rect.x1, transformed_rect.y1],
+                           fill='white')
+            return
+
+        try:
+            from barcode import Code128
+            from barcode.writer import ImageWriter
+
+            barcode_obj = Code128(data, writer=ImageWriter())
+            barcode_bytes = io.BytesIO()
+            barcode_obj.write(barcode_bytes, options={"write_text": False, "dpi": 200})
+            barcode_img = Image.open(barcode_bytes)
+
+            transformed_rect = rect * mat
+            rect_width = transformed_rect.x1 - transformed_rect.x0
+            rect_height = transformed_rect.y1 - transformed_rect.y0
+
+            # Желаемая ширина в мм (40 мм для этикетки 90x72)
+            target_width_mm = 40
+            target_width_pixels = int(target_width_mm * (mat.a / 25.4 * 72))
+
+            # Масштабируем до нужной ширины
+            aspect = barcode_img.height / barcode_img.width
+            target_height_pixels = int(target_width_pixels * aspect)
+            barcode_img = barcode_img.resize((target_width_pixels, target_height_pixels), Image.Resampling.LANCZOS)
+
+            img_w, img_h = barcode_img.size
+            x = transformed_rect.x0 + (rect_width - img_w) / 2
+            y = transformed_rect.y0 + (rect_height - img_h) / 2
+
+            draw.rectangle([transformed_rect.x0, transformed_rect.y0, transformed_rect.x1, transformed_rect.y1],
+                           fill='white')
+            # noinspection PyProtectedMember
+            draw._image.paste(barcode_img, (int(x), int(y)))
+
+        except ImportError:
+            print("Библиотека python-barcode не установлена")
+            transformed_rect = rect * mat
+            draw.rectangle([transformed_rect.x0, transformed_rect.y0, transformed_rect.x1, transformed_rect.y1],
+                           fill='white')
+        except Exception as e:
+            print(f"Ошибка генерации штрих-кода: {e}")
+            transformed_rect = rect * mat
+            draw.rectangle([transformed_rect.x0, transformed_rect.y0, transformed_rect.x1, transformed_rect.y1],
+                           fill='white')
 
     def get_template_size_mm(self) -> tuple[float, float]:
         """Возвращает размер первой страницы шаблона в миллиметрах"""
@@ -472,6 +532,12 @@ class PDFTemplateFiller:
             if field_type == "box_qr":
                 self._draw_qr_code(draw, rect, text, mat)
                 return
+
+            # Штрих-код для $ros_podlo
+            if field_type == "ros_podlo":
+                if getattr(self, '_draw_as_barcode', False):
+                    self._draw_barcode(draw, rect, text, mat)
+                    return
 
             # Если текст пустой - очищаем область и выходим
             if not text or text.strip() == "":
