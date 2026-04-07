@@ -82,18 +82,13 @@ class InterfaceMapper:
                 },
                 "manufacturer_ekosistema": {
                     "condition": {"type": "contains", "target": "manufacturer_normalized", "value": ["экосистема"]},
-                    "mapping": {
-                        "podlo_label": {"label": "Артикул:", "visible": True},
-                        "podlo_entry": {"visible": True}
-                    },
+                    "mapping": {},
                     "else_mapping": {}
                 },
                 "customer_rosinka": {
                     "condition": {"type": "contains", "target": "customer", "value": ["росинка"]},
                     "mapping": {
-                        "rosinka_checkbutton": {"visible": True},
-                        "podlo_label": {"label": "Подложка:", "visible": True},
-                        "podlo_entry": {"visible": True}
+                        "rosinka_checkbutton": {"visible": True}
                     },
                     "else_mapping": {
                         "rosinka_checkbutton": {"visible": False}
@@ -147,9 +142,30 @@ class InterfaceMapper:
                         "emission_entry": {"visible": True}
                     }
                 },
-                "hide_podlo": {
-                    "condition": {"type": "always"},
-                    "mapping": {},
+                "podlo_smart": {
+                    "condition": {"type": "or", "conditions": [
+                        {"type": "contains", "target": "manufacturer_normalized", "value": ["экосистема"]},
+                        {"type": "contains", "target": "customer", "value": ["росинка"]},
+                        {"type": "eq", "key": "checkbox.rosinka_var", "value": True}
+                    ]},
+                    "mapping": {
+                        "podlo_label": {
+                            "visible": True,
+                            "label": {
+                                "type": "dynamic_label",
+                                "rules": [
+                                    {"condition": {"type": "contains", "target": "manufacturer_normalized",
+                                                   "value": ["экосистема"]}, "label": "Артикул:"},
+                                    {"condition": {"type": "or", "conditions": [
+                                        {"type": "contains", "target": "customer", "value": ["росинка"]},
+                                        {"type": "eq", "key": "checkbox.rosinka_var", "value": True}
+                                    ]}, "label": "Подложка:"}
+                                ],
+                                "default": "Подложка:"
+                            }
+                        },
+                        "podlo_entry": {"visible": True}
+                    },
                     "else_mapping": {
                         "podlo_label": {"visible": False},
                         "podlo_entry": {"visible": False}
@@ -162,7 +178,7 @@ class InterfaceMapper:
                 "customer_rosinka",
                 "show_weight",
                 "elements_visibility",
-                "hide_podlo"
+                "podlo_smart"
             ]
         }
         try:
@@ -214,23 +230,18 @@ class InterfaceMapper:
 
         return context
 
-    @staticmethod
-    def _check_condition(condition, context):
-        """Проверяет условие, возвращает True/False.
-        Поддерживает операторы: eq, contains, not_contains, always, and, or"""
+    def _check_condition(self, condition, context):
+        """Проверяет условие, возвращает True/False."""
         cond_type = condition.get("type")
         cond_value = condition.get("value")
 
-        # Оператор "always" — всегда True
         if cond_type == "always":
             return True
 
-        # Равенство (eq)
         elif cond_type == "eq":
             key = condition.get("key")
             if not key:
                 return False
-            # Поддержка вложенных ключей через точку: "checkbox.rosinka_var"
             parts = key.split('.')
             val = context
             for part in parts:
@@ -239,7 +250,6 @@ class InterfaceMapper:
                     return False
             return val == cond_value
 
-        # Содержит подстроку (contains)
         elif cond_type == "contains":
             target = condition.get("target", "")
             target_val = context
@@ -252,7 +262,6 @@ class InterfaceMapper:
             keywords = cond_value if isinstance(cond_value, list) else [cond_value]
             return any(str(kw).lower() in target_str for kw in keywords)
 
-        # НЕ содержит (not_contains)
         elif cond_type == "not_contains":
             target = condition.get("target", "")
             target_val = context
@@ -260,30 +269,52 @@ class InterfaceMapper:
                 target_val = target_val.get(part, {}) if isinstance(target_val, dict) else getattr(target_val, part,
                                                                                                    None)
                 if target_val is None:
-                    return True  # нет значения — считаем как "не содержит"
+                    return True
             target_str = str(target_val).lower()
             keywords = cond_value if isinstance(cond_value, list) else [cond_value]
             return not any(str(kw).lower() in target_str for kw in keywords)
 
-        # Логическое И (and)
         elif cond_type == "and":
             conditions = condition.get("conditions", [])
-            return all(InterfaceMapper._check_condition(c, context) for c in conditions)
+            return all(self._check_condition(c, context) for c in conditions)
 
-        # Логическое ИЛИ (or)
         elif cond_type == "or":
             conditions = condition.get("conditions", [])
-            return any(InterfaceMapper._check_condition(c, context) for c in conditions)
+            return any(self._check_condition(c, context) for c in conditions)
 
-        # НЕ (not)
         elif cond_type == "not":
             sub_cond = condition.get("condition", {})
-            return not InterfaceMapper._check_condition(sub_cond, context)
+            return not self._check_condition(sub_cond, context)
 
         return False
 
+    def _get_dynamic_value(self, value_config, context):
+        """Возвращает динамическое значение (для label, visible и т.д.)"""
+        if not isinstance(value_config, dict):
+            return value_config
+
+        value_type = value_config.get("type")
+
+        if value_type == "dynamic_label":
+            rules = value_config.get("rules", [])
+            for rule in rules:
+                rule_condition = rule.get("condition")
+                if self._check_condition(rule_condition, context):
+                    return rule.get("label")
+            return value_config.get("default", "")
+
+        elif value_type == "dynamic_visible":
+            rules = value_config.get("rules", [])
+            for rule in rules:
+                rule_condition = rule.get("condition")
+                if self._check_condition(rule_condition, context):
+                    return rule.get("visible", True)
+            return value_config.get("default", False)
+
+        return value_config
+
     def apply(self, force_context=None):
-        """Применяет маппинг на основе контекста, с поддержкой else_mapping"""
+        """Применяет маппинг с поддержкой динамических значений"""
         context = force_context or self._get_context()
         rules = self.rules
         priority = rules.get("priority", [])
@@ -300,10 +331,21 @@ class InterfaceMapper:
             mapping = profile.get("mapping", {})
             else_mapping = profile.get("else_mapping", {})
 
-            if self._check_condition(condition, context):
-                final_mapping.update(mapping)
-            else:
-                final_mapping.update(else_mapping)
+            active_mapping = mapping if self._check_condition(condition, context) else else_mapping
+
+            # Применяем изменения с учётом приоритета
+            for widget_key, changes in active_mapping.items():
+                if widget_key not in final_mapping:
+                    final_mapping[widget_key] = {}
+
+                # Обрабатываем каждое изменение
+                for change_key, change_value in changes.items():
+                    # Если это динамическое значение — вычисляем
+                    if isinstance(change_value, dict) and change_value.get("type") in ["dynamic_label",
+                                                                                       "dynamic_visible"]:
+                        final_mapping[widget_key][change_key] = self._get_dynamic_value(change_value, context)
+                    else:
+                        final_mapping[widget_key][change_key] = change_value
 
         # Применяем к зарегистрированным виджетам
         for widget_key, changes in final_mapping.items():
@@ -324,4 +366,3 @@ class InterfaceMapper:
                         pass
 
         return final_mapping
-
