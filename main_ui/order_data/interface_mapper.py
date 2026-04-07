@@ -171,7 +171,7 @@ class InterfaceMapper:
                 json.dump(default_rules, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Ошибка создания default маппинга: {e}")
-            
+
     def register_widget(self, key, widget, default_label=None):
         """Регистрирует виджет для управления маппером"""
         self.registered_widgets[key] = {

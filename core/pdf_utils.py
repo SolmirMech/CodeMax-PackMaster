@@ -212,18 +212,17 @@ class PDFTemplateFiller:
             rect_width = transformed_rect.x1 - transformed_rect.x0
             rect_height = transformed_rect.y1 - transformed_rect.y0
 
-            # Желаемая ширина в мм (40 мм для этикетки 90x72)
-            target_width_mm = 40
-            target_width_pixels = int(target_width_mm * (mat.a / 25.4 * 72))
+            # Устанавливаем целевые размеры с нужными пропорциями
+            # Желаемая ширина в мм (как у заказчика - 50 мм)
+            target_width_mm = 70
+            target_width = target_width_mm * (mat.a / 25.4 * 72)
+            target_height = target_width * 0.24  # пропорция 50x12
 
-            # Масштабируем до нужной ширины
-            aspect = barcode_img.height / barcode_img.width
-            target_height_pixels = int(target_width_pixels * aspect)
-            barcode_img = barcode_img.resize((target_width_pixels, target_height_pixels), Image.Resampling.LANCZOS)
+            barcode_img = barcode_img.resize((int(target_width), int(target_height)), Image.Resampling.LANCZOS)
 
-            img_w, img_h = barcode_img.size
-            x = transformed_rect.x0 + (rect_width - img_w) / 2
-            y = transformed_rect.y0 + (rect_height - img_h) / 2
+            # Центрируем в области плейсхолдера
+            x = transformed_rect.x0 + (rect_width - target_width) / 2
+            y = transformed_rect.y0 + (rect_height - target_height) / 2
 
             draw.rectangle([transformed_rect.x0, transformed_rect.y0, transformed_rect.x1, transformed_rect.y1],
                            fill='white')
