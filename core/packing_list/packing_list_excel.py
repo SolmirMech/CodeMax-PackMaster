@@ -14,26 +14,19 @@ class PackingListExcel:
     def fill_template(work_path, header_data, places_data, items_data):
         """
         Открывает копию шаблона, заполняет данными, сохраняет.
-
-        Args:
-            work_path: путь к копии шаблона
-            header_data: dict с полями шапки
-            places_data: list[dict] — данные таблицы мест (до 5 строк)
-            items_data: list[dict] — данные таблицы товаров (до 5 строк)
         """
         wb = None
         try:
             wb = load_workbook(work_path)
             sheet = wb["Экосистема"]
 
-            # 1. Заполняем шапку (фиксированные ячейки)
+            # Заполняем шапку (фиксированные ячейки)
             for field, cell_info in mapping.HEADER_MAPPING.items():
                 cell = sheet[cell_info["cell"]]
                 value = header_data.get(field, "")
                 if value is not None:
                     cell.value = value
 
-                # Применяем стили
                 style = cell_info.get("style", {})
                 if style.get("font"):
                     cell.font = copy(style["font"])
@@ -42,36 +35,62 @@ class PackingListExcel:
                 if style.get("alignment"):
                     cell.alignment = copy(style["alignment"])
 
-            # 2. Заполняем таблицу мест (строки 13-17)
+            # Заполняем таблицу мест
             for i, place in enumerate(places_data):
-                if i >= 5:  # ограничиваем 5 строками
+                if i >= 5:
                     break
                 row = mapping.PLACES_START_ROW + i
 
                 for field, col_info in mapping.PLACES_COLUMNS.items():
                     cell = sheet.cell(row=row, column=col_info["col"])
                     value = place.get(field, "")
-                    if value is not None:
-                        cell.value = value
 
-                    # Применяем стиль таблицы
+                    # Числовые поля
+                    if field in ["net_weight", "gross_weight", "length", "width", "height"]:
+                        if value == "0" or value == "" or value == " ":
+                            cell.value = None  # пустая ячейка
+                        else:
+                            try:
+                                cell.value = float(str(value).replace(',', '.'))
+                            except:
+                                cell.value = value
+                    else:
+                        # Текстовые поля
+                        if value == " ":
+                            cell.value = ""
+                        else:
+                            cell.value = value
+
                     cell.font = copy(mapping.TABLE_CELL_STYLE["font"])
                     cell.border = copy(mapping.TABLE_CELL_STYLE["border"])
                     cell.alignment = copy(mapping.TABLE_CELL_STYLE["alignment"])
 
-            # 3. Заполняем таблицу товаров (строки 24-28)
+            # Заполняем таблицу товаров
             for i, item in enumerate(items_data):
-                if i >= 5:  # ограничиваем 5 строками
+                if i >= 5:
                     break
                 row = mapping.ITEMS_START_ROW + i
 
                 for field, col_info in mapping.ITEMS_COLUMNS.items():
                     cell = sheet.cell(row=row, column=col_info["col"])
                     value = item.get(field, "")
-                    if value is not None:
-                        cell.value = value
 
-                    # Применяем стиль таблицы
+                    # Числовое поле quantity
+                    if field == "quantity":
+                        if value == "0" or value == "" or value == " ":
+                            cell.value = None
+                        else:
+                            try:
+                                cell.value = int(float(str(value).replace(',', '.')))
+                            except:
+                                cell.value = value
+                    else:
+                        # Текстовые поля
+                        if value == " ":
+                            cell.value = ""
+                        else:
+                            cell.value = value
+
                     cell.font = copy(mapping.TABLE_CELL_STYLE["font"])
                     cell.border = copy(mapping.TABLE_CELL_STYLE["border"])
                     cell.alignment = copy(mapping.TABLE_CELL_STYLE["alignment"])

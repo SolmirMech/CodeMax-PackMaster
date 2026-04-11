@@ -4,8 +4,8 @@ import os
 import tkinter as tk
 from tkinter import ttk, StringVar
 
-from core.packing_list.packing_list_excel import PackingListExcel
 from core.packing_list import packing_list_mapping as mapping
+from core.packing_list.packing_list_excel import PackingListExcel
 
 
 # noinspection PyTypeChecker
@@ -37,43 +37,14 @@ class PackingListWindow:
         self.items_tree = None
         self.status_label = None
 
-        self.create_window()
         self._init_empty_data()
+        self.create_window()
         self._load_defaults()
 
     def _load_defaults(self):
         """Загружает значения по умолчанию из настроек или координатора"""
         # Поставщик — можно взять из настроек
         self.supplier_var.set('Общество с ограниченной ответственностью "НПО Экосистема"')
-
-    def _init_empty_data(self):
-        """Инициализирует пустые данные для таблиц (5 строк)"""
-        # Таблица мест
-        self.places_data = []
-        for i in range(5):
-            self.places_data.append({
-                "place_number": str(i + 1),
-                "net_weight": "",
-                "gross_weight": "",
-                "length": "",
-                "width": "",
-                "height": "",
-                "storage_type": "",
-            })
-
-        # Таблица товаров
-        self.items_data = []
-        for i in range(5):
-            self.items_data.append({
-                "item_number": str(i + 1),
-                "order_request": "",
-                "article_vn": "",
-                "name": "",
-                "unit": "",
-                "quantity": "",
-                "article_vn_product": "",
-                "product": "",
-            })
 
     def create_window(self):
         """Создаёт окно упаковочного листа"""
@@ -149,19 +120,19 @@ class PackingListWindow:
 
         ttk.Button(
             buttons_frame,
-            text="🖨️ Распечатать лист",
+            text="🖨️ Распечатать",
             command=self.print_sheet,
             width=18
         ).pack(side=tk.LEFT, padx=5)
 
         # === Таблица 1: Места ===
-        places_frame = ttk.LabelFrame(scrollable_frame, text="Грузовые места (5 строк)", padding=10)
+        places_frame = ttk.LabelFrame(scrollable_frame, text="Грузовые места", padding=10)
         places_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self._create_places_table(places_frame)
 
         # === Таблица 2: Товары ===
-        items_frame = ttk.LabelFrame(scrollable_frame, text="В грузовом месте находятся (5 строк)", padding=10)
+        items_frame = ttk.LabelFrame(scrollable_frame, text="В грузовом месте находятся", padding=10)
         items_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self._create_items_table(items_frame)
@@ -178,10 +149,6 @@ class PackingListWindow:
         )
         self.status_label.pack(fill=tk.X)
 
-        # Заполняем таблицы данными
-        self._refresh_places_table()
-        self._refresh_items_table()
-
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _create_places_table(self, parent):
@@ -192,16 +159,22 @@ class PackingListWindow:
         tree_frame = ttk.Frame(parent)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Настройка стилей для таблиц
+        style = ttk.Style()
+        style.configure("PackingList.Treeview", rowheight=35)
+        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), padding=(0, 10))
+
         self.places_tree = ttk.Treeview(
             tree_frame,
             columns=columns,
             show="headings",
             height=5,
-            selectmode="browse"
+            selectmode="browse",
+            style="PackingList.Treeview"
         )
 
         # Настройка колонок
-        widths = [80, 80, 80, 80, 80, 80, 150]  # примерные ширины
+        widths = [80, 80, 80, 80, 80, 80, 150]
         for i, (field, header) in enumerate(zip(columns, display_columns)):
             self.places_tree.heading(field, text=header)
             self.places_tree.column(field, width=widths[i] if i < len(widths) else 100, anchor="center")
@@ -216,6 +189,9 @@ class PackingListWindow:
         # Привязка событий
         self.places_tree.bind("<Double-Button-1>", self.on_place_double_click)
 
+        # СРАЗУ ЗАПОЛНЯЕМ ДАННЫМИ
+        self._refresh_places_table()
+
     def _create_items_table(self, parent):
         """Создаёт таблицу товаров"""
         columns = list(mapping.ITEMS_COLUMNS.keys())
@@ -224,12 +200,18 @@ class PackingListWindow:
         tree_frame = ttk.Frame(parent)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Настройка стилей для таблиц
+        style = ttk.Style()
+        style.configure("PackingList.Treeview", rowheight=35)
+        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), padding=(0, 10))
+
         self.items_tree = ttk.Treeview(
             tree_frame,
             columns=columns,
             show="headings",
             height=5,
-            selectmode="browse"
+            selectmode="browse",
+            style="PackingList.Treeview"
         )
 
         # Настройка колонок
@@ -248,52 +230,99 @@ class PackingListWindow:
         # Привязка событий
         self.items_tree.bind("<Double-Button-1>", self.on_item_double_click)
 
+        # СРАЗУ ЗАПОЛНЯЕМ ДАННЫМИ
+        self._refresh_items_table()
+
+    def _init_empty_data(self):
+        """Инициализирует данные для таблиц с нулями вместо пустых строк"""
+        # Таблица мест
+        self.places_data = []
+        for i in range(5):
+            self.places_data.append({
+                "place_number": " ",
+                "net_weight": "0",
+                "gross_weight": "0",
+                "length": "0",
+                "width": "0",
+                "height": "0",
+                "storage_type": " ",
+            })
+
+        # Таблица товаров
+        self.items_data = []
+        for i in range(5):
+            self.items_data.append({
+                "item_number": " ",
+                "order_request": " ",
+                "article_vn": " ",
+                "name": " ",
+                "unit": " ",
+                "quantity": "0",
+                "article_vn_product": " ",
+                "product": " ",
+            })
+
     def _refresh_places_table(self):
-        """Обновляет таблицу мест"""
+        """Обновляет таблицу мест — заменяет '0' на пробел для отображения"""
+
         for item in self.places_tree.get_children():
             self.places_tree.delete(item)
 
-        for i, place in enumerate(self.places_data):
-            values = [place.get(field, "") or " " for field in mapping.PLACES_COLUMNS.keys()]
-            self.places_tree.insert("", "end", iid=str(i), values=values)
+        for place in self.places_data:
+            values = []
+            for field in mapping.PLACES_COLUMNS.keys():
+                val = place.get(field, " ")
+                # Для отображения заменяем "0" на пробел
+                if val == "0":
+                    val = " "
+                values.append(val)
+            self.places_tree.insert("", "end", values=values)
 
     def _refresh_items_table(self):
-        """Обновляет таблицу товаров"""
+        """Обновляет таблицу товаров — заменяет '0' на пробел для отображения"""
         for item in self.items_tree.get_children():
             self.items_tree.delete(item)
 
-        for i, item in enumerate(self.items_data):
-            values = [item.get(field, "") or " " for field in mapping.ITEMS_COLUMNS.keys()]
-            self.items_tree.insert("", "end", iid=str(i), values=values)
+        for item_data in self.items_data:
+            values = []
+            for field in mapping.ITEMS_COLUMNS.keys():
+                val = item_data.get(field, " ")
+                # Для отображения заменяем "0" на пробел
+                if val == "0":
+                    val = " "
+                values.append(val)
+            self.items_tree.insert("", "end", values=values)
 
-    def _edit_tree_cell(self, tree, data_list, columns_dict, refresh_callback, event):
-        """Универсальный метод редактирования ячейки Treeview"""
-        region = tree.identify_region(event.x, event.y)
+    def on_place_double_click(self, event):
+        """Редактирование ячейки в таблице мест — как в syc_register_printer"""
+        region = self.places_tree.identify_region(event.x, event.y)
         if region != "cell":
             return
 
-        column = tree.identify_column(event.x)
-        item = tree.identify_row(event.y)
+        column = self.places_tree.identify_column(event.x)
+        item = self.places_tree.identify_row(event.y)
 
         if not item or not column:
             return
 
         col_index = int(column.replace("#", "")) - 1
-        fields = list(columns_dict.keys())
+        fields = list(mapping.PLACES_COLUMNS.keys())
         field_name = fields[col_index]
 
-        # item — это наш iid (индекс строки)
-        row_index = int(item)
+        # Получаем индекс строки
+        row_index = self.places_tree.index(item)
 
         # Координаты ячейки
-        x, y, width, height = tree.bbox(item, column)
+        x, y, width, height = self.places_tree.bbox(item, column)
 
         # Создаём Entry
-        entry = ttk.Entry(tree)
+        entry = ttk.Entry(self.places_tree)
         entry.place(x=x, y=y, width=width, height=height)
 
-        current_value = data_list[row_index].get(field_name, "")
-        entry.insert(0, str(current_value) if current_value else "")
+        current_value = self.places_data[row_index].get(field_name, "")
+        # Для отображения в Entry показываем пустую строку если значение "0"
+        display_value = "" if current_value == "0" else str(current_value)
+        entry.insert(0, display_value)
         entry.select_range(0, tk.END)
         entry.focus()
 
@@ -301,24 +330,72 @@ class PackingListWindow:
             new_value = entry.get().strip()
             entry.destroy()
 
-            if new_value != str(current_value):
-                data_list[row_index][field_name] = new_value
-                refresh_callback()
+            # Если пусто — сохраняем "0" для числовых полей, пробел для текстовых
+            if not new_value:
+                if field_name in ["net_weight", "gross_weight", "length", "width", "height"]:
+                    new_value = "0"
+                else:
+                    new_value = " "
+
+            if new_value != current_value:
+                self.places_data[row_index][field_name] = new_value
+                self._refresh_places_table()
 
         entry.bind("<Return>", save_edit)
-        entry.bind("<Control-KeyPress>", self.control_key_handler)
         entry.bind("<FocusOut>", save_edit)
         entry.bind("<Escape>", lambda e: entry.destroy())
 
-    def on_place_double_click(self, event):
-        """Редактирование ячейки в таблице мест"""
-        self._edit_tree_cell(self.places_tree, self.places_data, mapping.PLACES_COLUMNS,
-                             self._refresh_places_table, event)
-
     def on_item_double_click(self, event):
-        """Редактирование ячейки в таблице товаров"""
-        self._edit_tree_cell(self.items_tree, self.items_data, mapping.ITEMS_COLUMNS,
-                             self._refresh_items_table, event)
+        """Редактирование ячейки в таблице товаров — как в syc_register_printer"""
+        region = self.items_tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+
+        column = self.items_tree.identify_column(event.x)
+        item = self.items_tree.identify_row(event.y)
+
+        if not item or not column:
+            return
+
+        col_index = int(column.replace("#", "")) - 1
+        fields = list(mapping.ITEMS_COLUMNS.keys())
+        field_name = fields[col_index]
+
+        # Получаем индекс строки
+        row_index = self.items_tree.index(item)
+
+        # Координаты ячейки
+        x, y, width, height = self.items_tree.bbox(item, column)
+
+        # Создаём Entry
+        entry = ttk.Entry(self.items_tree)
+        entry.place(x=x, y=y, width=width, height=height)
+
+        current_value = self.items_data[row_index].get(field_name, "")
+        # Для отображения в Entry показываем пустую строку если значение "0"
+        display_value = "" if current_value == "0" else str(current_value)
+        entry.insert(0, display_value)
+        entry.select_range(0, tk.END)
+        entry.focus()
+
+        def save_edit(_=None):
+            new_value = entry.get().strip()
+            entry.destroy()
+
+            # Если пусто — сохраняем "0" для числовых полей, пробел для текстовых
+            if not new_value:
+                if field_name == "quantity":
+                    new_value = "0"
+                else:
+                    new_value = " "
+
+            if new_value != current_value:
+                self.items_data[row_index][field_name] = new_value
+                self._refresh_items_table()
+
+        entry.bind("<Return>", save_edit)
+        entry.bind("<FocusOut>", save_edit)
+        entry.bind("<Escape>", lambda e: entry.destroy())
 
     @staticmethod
     def control_key_handler(event):
