@@ -614,27 +614,37 @@ class OrderDetailsController:
                 return None
         
         return None
-        
+
     def process_scanned_gtin(self, gtin):
         """Обрабатывает отсканированный GTIN"""
-        # Ищем detail_num для этого GTIN
-        detail_num_suffix = self._get_detail_num_by_gtin(gtin)
-        
-        if not detail_num_suffix:
-            # GTIN не найден в текущем заказе
+        if not self.parsed_data:
+            self.parse_status.config(text="Нет данных заказа", foreground="red")
+            return
+
+        # Ищем продукт по GTIN напрямую
+        found_product = None
+        for product in self.parsed_data:
+            product_gtin = product.get('gtin', '')
+            if product_gtin == gtin or product_gtin.lstrip('0') == gtin.lstrip('0'):
+                found_product = product
+                break
+
+        if not found_product:
             self.parse_status.config(
-                text=f"GTIN {gtin} не найден в заказе {self.current_order}", 
+                text=f"GTIN {gtin} не найден в заказе {self.current_order}",
                 foreground="red"
             )
             self.parent.after(5000, lambda: self.parse_status.config(text=""))
             return
-        
-        
-        # Устанавливаем найденный detail_num в поле поиска
-        self.parent.after(100, lambda: self.detail_num_search.set(detail_num_suffix))
-        
-        # Запускаем поиск продукта по detail_num
-        self.parent.after(150, self.get_product_name)                            
+
+        # Очищаем поле поиска
+        self.detail_num_search.set("")
+
+        # Отправляем найденный продукт напрямую
+        self.selected_name.set(found_product['name'])
+        self.send_to_roll_module(found_product)
+        self.parse_status.config(text=f"Найден по GTIN", foreground="green")
+        self.parent.after(5000, lambda: self.parse_status.config(text=""))
         
     def open_archive_search_window(self):
         """Открывает окно поиска архивных поддонов"""

@@ -563,7 +563,7 @@ class PDFTemplateFiller:
                     font_size = 18
                 font_style = 'normal'
 
-            # Для поля product используем многострочную отрисовку
+            # Для поля product и customer используем многострочную отрисовку
             if field_type in ["product", "customer"] and self.font_settings:
                 wrap_settings = self.font_settings.get("multiline_settings", {})
                 if wrap_settings:
