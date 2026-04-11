@@ -563,11 +563,18 @@ class PDFTemplateFiller:
                     font_size = 18
                 font_style = 'normal'
 
-            # Для поля product и customer используем многострочную отрисовку
-            if field_type in ["product", "customer"] and self.font_settings:
-                wrap_settings = self.font_settings.get("multiline_settings", {})
+            # Для поля product и customer используем многострочную отрисовку с разными настройками
+            if field_type == "product" and self.font_settings:
+                wrap_settings = self.font_settings.get("product_wrap", {})
                 if wrap_settings:
-                    lines = self._prepare_text_lines(text, font_size, wrap_settings)
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings, max_lines=4)
+                    self._draw_multiline_text(draw, rect, lines, mat, font_size)
+                    return
+
+            if field_type == "customer" and self.font_settings:
+                wrap_settings = self.font_settings.get("customer_wrap", {})
+                if wrap_settings:
+                    lines = self._prepare_text_lines(text, font_size, wrap_settings, max_lines=2)
                     self._draw_multiline_text(draw, rect, lines, mat, font_size)
                     return
 
@@ -748,42 +755,33 @@ class PDFTemplateFiller:
                     x0, y0 = transformed_rect.x0, transformed_rect.y0
                     x1, y1 = transformed_rect.x1, transformed_rect.y1
                     draw.rectangle([x0, y0, x1, y1], fill='white')
-        
+
     @staticmethod
-    def _prepare_text_lines(text: str, font_size: int, wrap_settings: dict) -> List[str]:
+    def _prepare_text_lines(text: str, font_size: int, wrap_settings: dict, max_lines: int) -> list:
         """Разбивает текст на строки с учетом настроек переноса"""
-        # Получаем настройки
-        dpi = wrap_settings.get("printer_dpi", 203)
+        # Фиксированные значения
+        dpi = 203
+
+        # Из настроек берём только эти два параметра
         proportionality_factor = wrap_settings.get("font_factor", 0.3)
         label_width = wrap_settings.get("line_width_mm", 79)
-        max_lines = wrap_settings.get("max_lines", 3)
 
-        base_font_size = 20  # Размер шрифта превью, для которого настроен proportionality_factor
-        
-        # Большие шрифты имеют МЕНЬШУЮ пропорциональную ширину символов
+        base_font_size = 20
         size_correction = base_font_size / font_size
         effective_factor = proportionality_factor * size_correction
 
-        # Конвертируем в пиксели
         pixels_per_mm = dpi / 25.4
         points_per_pt = dpi / 72
 
-        # Расчет доступной ширины
         available_width_pixels = label_width * pixels_per_mm
-
-        # Расчет средней ширины символа в пикселях
         avg_char_width_pixels = (font_size * points_per_pt) * effective_factor
-
-        # Максимальное количество символов в строке
         max_chars = int(available_width_pixels / avg_char_width_pixels)
 
-        # Защита от крайних значений
         if max_chars < 5:
             max_chars = 5
         elif max_chars > 80:
             max_chars = 80
 
-        # Разбиение текста на строки
         words = text.split()
         lines = []
         current_line = ""
@@ -798,17 +796,15 @@ class PDFTemplateFiller:
                 else:
                     lines.append(current_line)
                     current_line = word
-            
-            # Проверяем лимит строк
+
             if len(lines) >= max_lines:
                 break
 
-        # Добавляем последнюю строку
         if current_line and len(lines) < max_lines:
             lines.append(current_line)
 
         return lines
-            
+
     def _draw_multiline_text(self, draw: ImageDraw.Draw, rect, lines: List[str], mat, font_size: int):
         """Рисует многострочный текст"""
         transformed_rect = rect * mat
