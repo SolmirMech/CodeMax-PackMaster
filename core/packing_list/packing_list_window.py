@@ -319,7 +319,7 @@ class PackingListWindow:
         """Редактирование ячейки в таблице товаров"""
         self._edit_tree_cell(self.items_tree, self.items_data, mapping.ITEMS_COLUMNS,
                              self._refresh_items_table, event)
-        
+
     @staticmethod
     def control_key_handler(event):
         """Обработчик горячих клавиш для Entry полей"""

@@ -9,6 +9,7 @@ class ExportModule:
     """Модуль управления экспортом в Excel"""
     
     def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
+        self.ecosystem_btn = None
         self.multitype_frame = None
         self.excel_preview_module = None
         self.pallet_num_entry = None
@@ -130,13 +131,14 @@ class ExportModule:
         btn_preview.grid(row=2, column=0, pady=5, sticky="w", columnspan=2)
 
         # Временная кнопка для Экосистемы
-        ttk.Button(
+        self.ecosystem_btn = ttk.Button(
             self.box_frame,
-            text="📋 Просмотр Экосистема",
+            text="🌿 Экосистема",
             width=18,
             command=self.show_ecosystem_list,
             style="Accent.TButton"
-        ).grid(row=3, column=0, pady=5, sticky="w", columnspan=2)
+        )
+        # Пока не размещаем, будет показана при необходимости
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
@@ -227,6 +229,21 @@ class ExportModule:
             width=18,
             style="Accent.TButton"
         ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
+
+    def _update_ecosystem_button_visibility(self):
+        """Показывает/скрывает кнопку Экосистема в зависимости от производителя"""
+        if not hasattr(self, 'ecosystem_btn') or not self.connected_roll_module:
+            return
+
+        manufacturer = ""
+        if hasattr(self.connected_roll_module, 'manufacturer_var'):
+            manufacturer = self.connected_roll_module.manufacturer_var.get().lower()
+
+        if "экосистема" in manufacturer:
+            if not self.ecosystem_btn.winfo_ismapped():
+                self.ecosystem_btn.grid(row=3, column=0, pady=5, sticky="w", columnspan=2)
+        else:
+            self.ecosystem_btn.grid_remove()
 
     def show_ecosystem_list(self):
         """Открывает окно упаковочного листа Экосистема"""
@@ -472,6 +489,9 @@ class ExportModule:
         self.load_pallet_sizes()
         self._update_number_visibility()
         self._update_section_titles()
+        # Обновляем видимость кнопки Экосистема только при изменении производителя
+        if context and context.get("type") == "manufacturer_changed":
+            self._update_ecosystem_button_visibility()
         
     def _update_number_visibility(self):
         """Показывает/скрывает номер поддона в зависимости от цеха"""
@@ -507,6 +527,7 @@ class ExportModule:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.connected_roll_module = roll_module
+        self._update_ecosystem_button_visibility()
 
     def load_box_sizes(self):
         """Загружает список коробок из shared_utils.json"""

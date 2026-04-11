@@ -452,6 +452,10 @@ class OrderDataController:
         if self.product_combo['values']:
             self.product_type_var.set("Обычная с\\к этикетка")
 
+        # Уведомляем подписчиков об изменении производителя
+        if self.coordinator:
+            self.coordinator.notify_subscribers({"type": "manufacturer_changed"})
+
         if self.preview_module is not None:
             self.preview_module.update_preview_displays()
 
