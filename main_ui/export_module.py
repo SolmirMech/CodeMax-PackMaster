@@ -128,6 +128,15 @@ class ExportModule:
         )
 
         btn_preview.grid(row=2, column=0, pady=5, sticky="w", columnspan=2)
+
+        # Временная кнопка для Экосистемы
+        ttk.Button(
+            self.box_frame,
+            text="📋 Просмотр Экосистема",
+            width=18,
+            command=self.show_ecosystem_list,
+            style="Accent.TButton"
+        ).grid(row=3, column=0, pady=5, sticky="w", columnspan=2)
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
@@ -218,6 +227,16 @@ class ExportModule:
             width=18,
             style="Accent.TButton"
         ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
+
+    def show_ecosystem_list(self):
+        """Открывает окно упаковочного листа Экосистема"""
+        from core.packing_list.packing_list_window import PackingListWindow
+
+        PackingListWindow(
+            parent=self.parent,
+            config_manager=self.config_manager,
+            coordinator=self.coordinator
+        )
 
     def _update_section_titles(self):
         """Обновляет названия разделов в зависимости от цеха и наличия веса"""

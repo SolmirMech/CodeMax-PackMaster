@@ -27,6 +27,24 @@ class ConfigManager:
         # Список упаковщиков по умолчанию
         self.default_packers = ["Некрасов", "Арзамасцев", "Малых"]
 
+    def get_ecosystem_list_template(self):
+        """Возвращает путь к шаблону упаковочного листа Экосистема из assets"""
+        return self.get_asset_path("ecosystem_list_template.xlsx")
+
+    def create_ecosystem_list_work_copy(self):
+        """
+        Создаёт временную рабочую копию шаблона в data_dir.
+        Возвращает путь к созданному файлу.
+        """
+        template_path = self.get_ecosystem_list_template()
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Шаблон {template_path} не найден")
+
+        work_path = self.data_dir / "ecosystem_list_template.xlsx"
+        shutil.copy2(template_path, work_path)
+
+        return str(work_path)
+
     def get_packaging_log_path(self):
         """Возвращает текущий путь к журналу из настроек"""
         settings = self.load_json_settings("shared_utils.json")
