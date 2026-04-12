@@ -1,8 +1,13 @@
 # core/packing_list/packing_list_window.py
 
-import os
+import threading
+import time
 import tkinter as tk
 from tkinter import ttk, StringVar
+
+import pythoncom
+import win32com.client
+import win32print
 
 from core.packing_list import packing_list_mapping as mapping
 from core.packing_list.packing_list_excel import PackingListExcel
@@ -13,6 +18,7 @@ class PackingListWindow:
     """Окно упаковочного листа Экосистема"""
 
     def __init__(self, parent, config_manager, coordinator=None):
+        self.equipment_text = None
         self.parent = parent
         self.config_manager = config_manager
         self.coordinator = coordinator
@@ -37,14 +43,62 @@ class PackingListWindow:
         self.items_tree = None
         self.status_label = None
 
+        # Настройки печати
+        self.settings_file = "print_settings.json"
+        self.default_settings = {
+            "printer": self._get_default_printer(),
+        }
+        self.settings = self.default_settings.copy()
+        self.load_settings("packing_list")
+        self.printer_var = tk.StringVar(value=self.settings.get("printer", ""))
+        self.copies_var = tk.IntVar(value=1)
         self._init_empty_data()
         self.create_window()
         self._load_defaults()
 
+    @staticmethod
+    def _get_default_printer():
+        """Возвращает принтер по умолчанию"""
+        try:
+            import win32print
+            return win32print.GetDefaultPrinter()
+        except:
+            return ""
+
+    def load_settings(self, settings_key):
+        """Загружает настройки печати из JSON-файла для конкретного ключа"""
+        try:
+            all_settings = self.config_manager.load_json_settings(self.settings_file)
+            if settings_key in all_settings:
+                self.settings = {**self.default_settings, **all_settings[settings_key]}
+        except Exception as e:
+            print(f"Ошибка загрузки настроек печати: {e}")
+            self.settings = self.default_settings.copy()
+
+    def save_settings(self):
+        """Сохраняет настройки печати"""
+        try:
+            all_settings = self.config_manager.load_json_settings(self.settings_file)
+            all_settings["packing_list"] = self.settings
+            self.config_manager.save_json_settings(self.settings_file, all_settings)
+        except Exception as e:
+            print(f"Ошибка сохранения настроек печати: {e}")
+
+    @staticmethod
+    def _get_system_printers():
+        """Получает список системных принтеров"""
+        try:
+            import win32print
+            printers = win32print.EnumPrinters(2)
+            return [p[2] for p in printers]
+        except Exception as e:
+            print(f"Ошибка получения принтеров: {e}")
+            return []
+
     def _load_defaults(self):
         """Загружает значения по умолчанию из настроек или координатора"""
         # Поставщик — можно взять из настроек
-        self.supplier_var.set('Общество с ограниченной ответственностью "НПО Экосистема"')
+        self.supplier_var.set('ООО "НПО Экосистема"')
 
     def create_window(self):
         """Создаёт окно упаковочного листа"""
@@ -65,27 +119,15 @@ class PackingListWindow:
         self.window.geometry(f"+{x}+{y}")
         self.window.bind("<Escape>", lambda e: self.window.destroy())
 
-        # Основной контейнер с прокруткой
-        canvas = tk.Canvas(self.window)
-        scrollbar = ttk.Scrollbar(self.window, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # Основной контейнер БЕЗ прокрутки
+        main_frame = ttk.Frame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # === Шапка ===
-        header_frame = ttk.LabelFrame(scrollable_frame, text="Данные упаковочного листа", padding=10)
+        header_frame = ttk.LabelFrame(main_frame, text="Данные упаковочного листа", padding=10)
         header_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Сетка для полей шапки
+        # Поля в левой колонке (друг под другом)
         fields = [
             ("Номер листа:", self.list_number_var),
             ("Поставщик:", self.supplier_var),
@@ -93,52 +135,91 @@ class PackingListWindow:
             ("Грузополучатель:", self.consignee_var),
             ("Договор:", self.contract_var),
             ("Проект:", self.project_var),
-            ("Наименование оборудования:", self.equipment_name_var),
         ]
 
         for i, (label_text, var) in enumerate(fields):
-            row = i // 2
-            col = (i % 2) * 2
-
-            ttk.Label(header_frame, text=label_text, width=22, anchor="e").grid(
-                row=row, column=col, padx=(0, 5), pady=5, sticky="e"
+            ttk.Label(header_frame, text=label_text, width=22, anchor="w").grid(
+                row=i, column=0, padx=(0, 5), pady=5, sticky="w"
             )
-            entry = ttk.Entry(header_frame, textvariable=var, width=50)
-            entry.grid(row=row, column=col + 1, padx=(0, 20), pady=5, sticky="w")
+            entry = ttk.Entry(header_frame, textvariable=var, width=40)
+            entry.grid(row=i, column=1, padx=(0, 5), pady=5, sticky="w")
             entry.bind("<Control-KeyPress>", self.control_key_handler)
 
-        # Кнопки управления
+        # Многострочное поле "Наименование оборудования"
+        ttk.Label(header_frame, text="Наименование единицы\nОборудования по Договору:", width=25, anchor="w").grid(
+            row=len(fields), column=0, padx=(0, 5), pady=5, sticky="ne"
+        )
+        equipment_text = tk.Text(header_frame, height=2, width=50)
+        equipment_text.grid(row=len(fields), column=1, padx=(0, 20), pady=5, sticky="w")
+        equipment_text.insert("1.0", self.equipment_name_var.get())
+        equipment_text.bind("<Control-KeyPress>", self.control_key_handler_text)
+        self.equipment_text = equipment_text
+
+        # Кнопки в правой колонке
         buttons_frame = ttk.Frame(header_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=4, pady=(15, 5))
+        buttons_frame.grid(row=0, column=2, rowspan=len(fields)+1, padx=(5, 0), sticky="n")
 
         ttk.Button(
             buttons_frame,
-            text="📄 Обновить Excel",
+            text="🔄 Обновить Excel",
             command=self.export_to_excel,
-            width=18
-        ).pack(side=tk.LEFT, padx=5)
+            width=16
+        ).pack(pady=(0, 20))
 
         ttk.Button(
             buttons_frame,
-            text="🖨️ Распечатать",
+            text="🖨 Распечатать",
             command=self.print_sheet,
-            width=18
-        ).pack(side=tk.LEFT, padx=5)
+            width=16
+        ).pack()
+
+        # Выбор принтера
+        printer_frame = ttk.Frame(buttons_frame)
+        printer_frame.pack(pady=20, fill=tk.X)
+
+        ttk.Label(printer_frame, text="Принтер:").grid(row=0, column=0, padx=(0, 5), sticky="w")
+
+        system_printers = self._get_system_printers()
+        printer_values = [""] + system_printers
+
+        printer_combo = ttk.Combobox(
+            printer_frame,
+            textvariable=self.printer_var,
+            values=printer_values,
+            state="readonly",
+            width=25
+        )
+        printer_combo.grid(row=0, column=1, sticky="w")
+        printer_combo.bind('<<ComboboxSelected>>', self._on_printer_selected)
+
+        # Количество копий
+        copies_frame = ttk.Frame(buttons_frame)
+        copies_frame.pack(pady=(0, 10), fill=tk.X)
+
+        ttk.Label(copies_frame, text="Копий:").pack(side=tk.LEFT)
+
+        ttk.Spinbox(
+            copies_frame,
+            from_=1,
+            to=10,
+            textvariable=self.copies_var,
+            width=5
+        ).pack(side=tk.LEFT, padx=(5, 0))
 
         # === Таблица 1: Места ===
-        places_frame = ttk.LabelFrame(scrollable_frame, text="Грузовые места", padding=10)
+        places_frame = ttk.LabelFrame(main_frame, text="Грузовые места", padding=10)
         places_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self._create_places_table(places_frame)
 
         # === Таблица 2: Товары ===
-        items_frame = ttk.LabelFrame(scrollable_frame, text="В грузовом месте находятся", padding=10)
+        items_frame = ttk.LabelFrame(main_frame, text="В грузовом месте находятся", padding=10)
         items_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self._create_items_table(items_frame)
 
         # === Статусная строка ===
-        status_frame = ttk.Frame(scrollable_frame, height=25)
+        status_frame = ttk.Frame(main_frame, height=25)
         status_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self.status_label = ttk.Label(
@@ -232,6 +313,44 @@ class PackingListWindow:
 
         # СРАЗУ ЗАПОЛНЯЕМ ДАННЫМИ
         self._refresh_items_table()
+
+    # noinspection PyUnusedLocal
+    def _on_printer_selected(self, event=None):
+        """Сохраняет выбранный принтер"""
+        self.settings["printer"] = self.printer_var.get()
+        self.save_settings()
+
+    def control_key_handler_text(self, event):
+        """Обработчик горячих клавиш для Text виджетов"""
+        if event.keycode in (86, 118):  # Ctrl+V
+            self.paste_text_to_text_widget(event.widget)
+            return "break"
+        elif event.keycode in (67, 99):  # Ctrl+C
+            self.copy_text_from_text_widget(event.widget)
+            return "break"
+        return None
+
+    @staticmethod
+    def copy_text_from_text_widget(widget):
+        """Копирует текст из Text виджета"""
+        try:
+            text = widget.get("1.0", "end-1c")
+            if text:
+                widget.clipboard_clear()
+                widget.clipboard_append(text)
+        except Exception:
+            pass
+
+    @staticmethod
+    def paste_text_to_text_widget(widget):
+        """Вставляет текст в Text виджет"""
+        try:
+            text = widget.clipboard_get()
+            if text:
+                widget.delete("1.0", tk.END)
+                widget.insert("1.0", text)
+        except Exception:
+            pass
 
     def _init_empty_data(self):
         """Инициализирует данные для таблиц с нулями вместо пустых строк"""
@@ -428,7 +547,7 @@ class PackingListWindow:
             "consignee": self.consignee_var.get(),
             "contract": self.contract_var.get(),
             "project": self.project_var.get(),
-            "equipment_name": self.equipment_name_var.get(),
+            "equipment_name": self.equipment_text.get("1.0", tk.END).strip(),
         }
 
     def export_to_excel(self):
@@ -457,10 +576,16 @@ class PackingListWindow:
 
     def print_sheet(self):
         """Печать упаковочного листа"""
-        try:
-            # Сначала экспортируем
-            work_path = self.config_manager.create_ecosystem_list_work_copy()
+        printer = self.printer_var.get().strip()
 
+        if not printer:
+            self.set_status("❌ Выберите принтер", "red")
+            return
+
+        try:
+            self.set_status("⏳ Подготовка к печати...", "blue")
+
+            work_path = self.config_manager.create_ecosystem_list_work_copy()
             header_data = self._collect_header_data()
 
             PackingListExcel.fill_template(
@@ -470,12 +595,63 @@ class PackingListWindow:
                 self.items_data
             )
 
-            # Отправляем на печать
-            os.startfile(work_path, "print")
-            self.set_status("🖨️ Документ отправлен на печать", "green")
+            thread = threading.Thread(
+                target=self._print_excel,
+                args=(work_path, printer, self.copies_var.get()),
+                daemon=True
+            )
+            thread.start()
 
         except Exception as e:
-            self.set_status(f"❌ Ошибка печати: {str(e)}", "red")
+            self.set_status(f"❌ Ошибка: {str(e)}", "red")
+
+    def _print_excel(self, excel_path, printer_name, copies):
+        """Печать Excel файла"""
+
+        pythoncom.CoInitialize()
+        excel = None
+        wb = None
+        original_printer = None
+
+        try:
+            original_printer = win32print.GetDefaultPrinter()
+            win32print.SetDefaultPrinter(printer_name)
+            time.sleep(0.5)
+
+            excel = win32com.client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+
+            wb = excel.Workbooks.Open(excel_path)
+            ws = wb.Sheets(1)
+
+            for i in range(copies):
+                ws.PrintOut()
+                if i < copies - 1:
+                    time.sleep(0.3)
+
+            self.window.after(0, lambda: self.set_status("✅ Печать завершена", "green"))
+
+        except Exception:
+            self.window.after(0, lambda: self.set_status(f"❌ Ошибка печати", "red"))
+
+        finally:
+            if original_printer:
+                try:
+                    win32print.SetDefaultPrinter(original_printer)
+                except:
+                    pass
+            if wb:
+                try:
+                    wb.Close(SaveChanges=False)
+                except:
+                    pass
+            if excel:
+                try:
+                    excel.Quit()
+                except:
+                    pass
+            pythoncom.CoUninitialize()
 
     def set_status(self, message, color="green"):
         """Устанавливает статусное сообщение"""
