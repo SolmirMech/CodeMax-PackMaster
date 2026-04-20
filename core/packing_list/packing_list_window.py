@@ -11,6 +11,7 @@ import win32print
 
 from core.packing_list import packing_list_mapping as mapping
 from core.packing_list.packing_list_excel import PackingListExcel
+from core.archive.archive_manager import ArchiveManager
 
 
 # noinspection PyTypeChecker
@@ -23,6 +24,7 @@ class PackingListWindow:
         self.config_manager = config_manager
         self.coordinator = coordinator
         self.current_workshop = coordinator.get_workshop() if coordinator else "1"
+        self.archive_manager = ArchiveManager(config_manager, coordinator)
 
         # Переменные для шапки
         self.list_number_var = StringVar()
@@ -206,6 +208,13 @@ class PackingListWindow:
             width=5
         ).pack(side=tk.LEFT, padx=(5, 0))
 
+        ttk.Button(
+            buttons_frame,
+            text="📦 В архив",
+            command=self.add_to_archive,
+            width=16
+        ).pack(pady=(10, 0))
+
         # === Таблица 1: Места ===
         places_frame = ttk.LabelFrame(main_frame, text="Грузовые места", padding=10)
         places_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -313,6 +322,33 @@ class PackingListWindow:
 
         # СРАЗУ ЗАПОЛНЯЕМ ДАННЫМИ
         self._refresh_items_table()
+
+    def add_to_archive(self):
+        """Добавляет текущий упаковочный лист в архив"""
+        try:
+            # Создаём/обновляем Excel с текущими данными
+            work_path = self.config_manager.create_ecosystem_list_work_copy()
+            header_data = self._collect_header_data()
+
+            PackingListExcel.fill_template(
+                work_path,
+                header_data,
+                self.places_data,
+                self.items_data
+            )
+
+            # Архивируем этот же файл
+            self.set_status("⏳ Добавление в архив...", "blue")
+
+            result = self.archive_manager.archive_ecosystem_sheet(work_path)
+
+            if result.get("success"):
+                self.set_status(f"✅ {result.get('message')}", "green")
+            else:
+                self.set_status(f"❌ {result.get('error')}", "red")
+
+        except Exception as e:
+            self.set_status(f"❌ Ошибка: {str(e)}", "red")
 
     # noinspection PyUnusedLocal
     def _on_printer_selected(self, event=None):

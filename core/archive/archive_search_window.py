@@ -306,6 +306,8 @@ class ArchiveSearchWindow:
                 return "Много видов без веса (цех 1)"
             elif archive_type == "box_noweight":
                 return "Коробка без веса (ПоддонРолики)"
+            elif archive_type == "ecosystem":
+                return "Экосистема"
         else:  # workshop == "2"
             if archive_type == "box":
                 return "Поддон (цех 2)"

@@ -25,6 +25,42 @@ class ArchiveManager:
         self.on_settings_changed()  # сразу получаем актуальные значения
         self.clean_old_archive_records(3)
 
+    def archive_ecosystem_sheet(self, excel_path):
+        """
+        Архивирует лист Экосистемы.
+        Вызывается напрямую из PackingListWindow.
+        """
+        try:
+            if not excel_path or not os.path.exists(excel_path):
+                return {"success": False, "error": f"Файл не найден: {excel_path}"}
+
+            # Получаем маппинг для Экосистемы
+            mapping = CellMappingRegistry.get_mapping("1", "ecosystem")
+
+            # Извлекаем данные из переданного файла
+            result = self._extract_using_mapping(excel_path, mapping, has_weight=False)
+
+            if result.get("success"):
+                archive_data = result.get("archive_data")
+
+                # Добавляем дату в basic_fields в нужном формате
+                from datetime import datetime
+                archive_data["basic_fields"]["date"] = datetime.now().strftime("%d.%m.%Y")
+
+                # Сохраняем в архив
+                archive = self.config.get_pallet_archive()
+                if "pallets" not in archive:
+                    archive["pallets"] = []
+                archive["pallets"].append(archive_data)
+                self.config.save_pallet_archive(archive)
+
+                return {"success": True, "message": "Упаковочный лист добавлен в архив"}
+
+            return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def clean_old_archive_records(self, max_age_years=3):
         """Удаляет записи старше указанного количества лет"""
         try:
@@ -261,6 +297,8 @@ class ArchiveManager:
             return "pallet_list"
         elif mapping.sheet_name == "Много видов":
             return "multitype"
+        elif mapping.sheet_name == "Экосистема":
+            return "ecosystem"
         else:
             return "unknown"
 
@@ -296,6 +334,9 @@ class ArchiveManager:
     def _restore_using_mapping(self, archive_data, excel_path, mapping, workshop):
         """Восстанавливает данные используя маппинг"""
         try:
+            if mapping.sheet_name == "Экосистема":
+                return self._restore_ecosystem(archive_data)
+
             workbook = load_workbook(excel_path)
 
             if mapping.sheet_name not in workbook.sheetnames:
@@ -395,3 +436,94 @@ class ArchiveManager:
                 if data_key in row_data:
                     cell = f"{col_letter}{row}"
                     sheet[cell] = row_data[data_key]
+
+    def _restore_ecosystem(self, archive_data):
+        """
+        Восстанавливает лист Экосистемы из архива.
+        Использует существующий PackingListExcel.
+        """
+        try:
+            from core.packing_list.packing_list_excel import PackingListExcel
+
+            ecosystem_path = self.config.create_ecosystem_list_work_copy()
+
+            basic_fields = archive_data.get("basic_fields", {})
+            dynamic_data = archive_data.get("dynamic_data", {})
+
+            # Собираем данные шапки
+            header_data = {
+                "list_number": basic_fields.get("list_number", ""),
+                "supplier": basic_fields.get("supplier", ""),
+                "customer": basic_fields.get("customer", ""),
+                "consignee": basic_fields.get("consignee", ""),
+                "contract": basic_fields.get("order_number", ""),  # в архиве это order_number
+                "project": basic_fields.get("project", ""),
+                "equipment_name": basic_fields.get("product_text", ""),  # в архиве это product_text
+            }
+
+            # Собираем данные таблицы мест
+            places_data = []
+            for place in dynamic_data.get("places", []):
+                places_data.append({
+                    "place_number": place.get("place_number", " "),
+                    "net_weight": place.get("net_weight", "0"),
+                    "gross_weight": place.get("gross_weight", "0"),
+                    "length": place.get("length", "0"),
+                    "width": place.get("width", "0"),
+                    "height": place.get("height", "0"),
+                    "storage_type": place.get("storage_type", " "),
+                })
+
+            # Дополняем до 5 строк пустыми значениями
+            while len(places_data) < 5:
+                places_data.append({
+                    "place_number": " ",
+                    "net_weight": "0",
+                    "gross_weight": "0",
+                    "length": "0",
+                    "width": "0",
+                    "height": "0",
+                    "storage_type": " ",
+                })
+
+            # Собираем данные таблицы товаров
+            items_data = []
+            for item in dynamic_data.get("items", []):
+                items_data.append({
+                    "item_number": item.get("item_number", " "),
+                    "order_request": item.get("order_request", " "),
+                    "article_vn": item.get("article_vn", " "),
+                    "name": item.get("name", " "),
+                    "unit": item.get("unit", " "),
+                    "quantity": item.get("quantity", "0"),
+                    "article_vn_product": item.get("article_vn_product", " "),
+                    "product": item.get("product", " "),
+                })
+
+            # Дополняем до 5 строк пустыми значениями
+            while len(items_data) < 5:
+                items_data.append({
+                    "item_number": " ",
+                    "order_request": " ",
+                    "article_vn": " ",
+                    "name": " ",
+                    "unit": " ",
+                    "quantity": "0",
+                    "article_vn_product": " ",
+                    "product": " ",
+                })
+
+            # Заполняем шаблон через PackingListExcel
+            PackingListExcel.fill_template(ecosystem_path, header_data, places_data, items_data)
+
+            # Формируем результат
+            order_num = basic_fields.get("order_number", "неизвестно")
+
+            return {
+                "success": True,
+                "sheet_name": "Экосистема",
+                "order": order_num
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Ошибка восстановления Экосистемы: {str(e)}"}

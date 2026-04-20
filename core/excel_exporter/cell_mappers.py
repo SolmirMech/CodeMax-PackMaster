@@ -33,6 +33,8 @@ from .cell_mappers_data import (
     WORKSHOP1_MULTITYPE_NOWEIGHT_DYNAMIC,
     WORKSHOP1_BOX_NOWEIGHT_STATIC,
     WORKSHOP1_BOX_NOWEIGHT_DYNAMIC,
+    WORKSHOP1_ECOSYSTEM_STATIC,
+    WORKSHOP1_ECOSYSTEM_DYNAMIC,
 )
 
 
@@ -44,6 +46,17 @@ class CellMappingRegistry:
     """
     
     # ==================== МАППИНГИ ДЛЯ ЦЕХА 1 ====================
+
+    @staticmethod
+    def get_ecosystem_mapping() -> SheetMapping:
+        """Маппинг для упаковочного листа Экосистема"""
+        return SheetMapping(
+            sheet_name="Экосистема",
+            workshop="1",
+            description="Упаковочный лист Экосистема",
+            static_cells=WORKSHOP1_ECOSYSTEM_STATIC,
+            dynamic_sections=WORKSHOP1_ECOSYSTEM_DYNAMIC,
+        )
 
     @staticmethod
     def get_workshop1_box_noweight_mapping() -> SheetMapping:
@@ -232,7 +245,8 @@ class CellMappingRegistry:
             ("1", "multitype"): cls.get_workshop1_multitype_mapping,
             ("1", "multitype_noweight"): cls.get_workshop1_multitype_noweight_mapping,
             ("1", "box_noweight"): cls.get_workshop1_box_noweight_mapping,
-            
+            ("1", "ecosystem"): cls.get_ecosystem_mapping,
+
             # Цех 2
             ("2", "box"): cls.get_workshop2_box_mapping,
             ("2", "pallet_list"): cls.get_workshop2_pallet_list_mapping,
@@ -296,6 +310,12 @@ class CellMappingRegistry:
                 "sheet_type": "box_noweight",
                 "sheet_name": "ПоддонРолики",
                 "description": "Этикетка для коробки без веса (цех 1)"
+            },
+            {
+                "workshop": "1",
+                "sheet_type": "ecosystem",
+                "sheet_name": "Экосистема",
+                "description": "Упаковочный лист Экосистема"
             },
             
             # Цех 2
@@ -372,6 +392,9 @@ class CellMappingRegistry:
         return result
 
 # ==================== ШОРТКАТЫ ДЛЯ БЫСТРОГО ДОСТУПА ====================
+def get_workshop1_ecosystem_mapping() -> SheetMapping:
+    """Краткая функция для получения маппинга Экосистемы"""
+    return CellMappingRegistry.get_ecosystem_mapping()
 
 def get_mapping(workshop: str, sheet_type: str, mode: str = "box") -> SheetMapping:
     """Краткая функция для получения маппинга"""

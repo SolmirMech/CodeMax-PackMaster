@@ -168,16 +168,14 @@ class ConfigManager:
             print(f"Ошибка получения списка принтеров: {e}")
             return []
         
-    # Архивация 2 цех
+    # Архивация
     def get_pallet_archive(self):
         """Загружает архив поддонов из файла"""
         archive = self.load_json_settings("archive_pallets.json")
         if not archive:
             archive = {
-                "workshop": "2",
                 "pallets": []
             }
-
         return archive
 
     def save_pallet_archive(self, archive_data):
