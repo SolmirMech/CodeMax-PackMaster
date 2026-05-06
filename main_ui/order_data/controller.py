@@ -35,6 +35,7 @@ class OrderDataController:
         self.last_manual_order = ""
         self.order_combobox_visible = False
         self.xml_tu_number = ""
+        self._ecosystem_xml_data = None
 
         self.manufacturer_options = []
         self.manufacturer_products_map = {}
@@ -192,6 +193,35 @@ class OrderDataController:
         self.show_weight_var = tk.BooleanVar(value=False)
 
     # ========== ОБРАБОТЧИКИ СОБЫТИЙ (тонкая прослойка) ==========
+
+    def on_article_enter_pressed(self, event=None):
+        """Обработчик нажатия Enter в поле Артикул — ищет XML и парсит"""
+        from core.parse.xml_parser import EcosystemXMLParser
+
+        article = self.ros_podlo_var.get().strip()
+        if not article:
+            return
+
+        xml_dir = self.config_manager.get_weight_data_base_path()
+        if not xml_dir:
+            return
+
+        xml_path = EcosystemXMLParser.find_xml(article, xml_dir)
+        if not xml_path:
+            return
+
+        data = EcosystemXMLParser.parse(xml_path)
+        if not data:
+            return
+
+        # Заполняем product_text
+        equipment_name = data.get("equipment_name", "")
+        if equipment_name:
+            self.product_text.delete("1.0", tk.END)
+            self.product_text.insert("1.0", equipment_name)
+
+        # Сохраняем данные для Экосистемы
+        self._ecosystem_xml_data = data
 
     def _apply_mapping(self, *args):
         """Применяет маппинг интерфейса при изменении контекста (заказчик, производитель, галочки)"""

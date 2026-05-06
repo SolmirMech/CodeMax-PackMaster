@@ -58,6 +58,19 @@ class PackingListWindow:
         self.create_window()
         self._load_defaults()
 
+    def fill_from_xml(self, data: dict):
+        self.supplier_var.set(data.get("supplier", ""))
+        self.customer_var.set(data.get("customer", ""))
+        self.consignee_var.set(data.get("consignee", ""))
+        self.contract_var.set(data.get("contract", ""))
+        self.project_var.set(data.get("project", ""))
+
+        equipment_name = data.get("equipment_name", "")
+        if self.equipment_text:
+            self.equipment_text.delete("1.0", tk.END)
+            self.equipment_text.insert("1.0", equipment_name)
+        self.equipment_name_var.set(equipment_name)
+
     @staticmethod
     def _get_default_printer():
         """Возвращает принтер по умолчанию"""

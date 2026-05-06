@@ -148,6 +148,7 @@ class OrderUIBuilder:
         self.controller.podlo_label.grid(row=3, column=1, sticky="w", pady=3)
         self.controller.podlo_entry.grid(row=3, column=1, padx=(115, 0), pady=3, sticky="w")
         self.add_context_menu(self.controller.podlo_entry)
+        self.controller.podlo_entry.bind("<Return>", self.controller.on_article_enter_pressed)
         self.controller.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
         self.controller.podlo_label.grid_remove()
         self.controller.podlo_entry.grid_remove()

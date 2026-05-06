@@ -249,11 +249,17 @@ class ExportModule:
         """Открывает окно упаковочного листа Экосистема"""
         from core.packing_list.packing_list_window import PackingListWindow
 
-        PackingListWindow(
+        self.ecosystem_window = PackingListWindow(
             parent=self.parent,
             config_manager=self.config_manager,
             coordinator=self.coordinator
         )
+
+        # Если есть распарсенные данные — заполняем окно
+        if self.connected_roll_module and hasattr(self.connected_roll_module, '_ecosystem_xml_data'):
+            data = self.connected_roll_module._ecosystem_xml_data
+            if data and hasattr(self.ecosystem_window, 'fill_from_xml'):
+                self.parent.after(100, lambda: self.ecosystem_window.fill_from_xml(data))
 
     def _update_section_titles(self):
         """Обновляет названия разделов в зависимости от цеха и наличия веса"""
