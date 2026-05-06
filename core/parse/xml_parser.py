@@ -59,7 +59,6 @@ class EcosystemXMLParser:
         Стратегия поиска:
         1. Точное совпадение: article.xml
         2. По последним 4 цифрам: *XXXX.xml
-        3. Поиск внутри файлов (штрих-код) — если не найден по имени
 
         Возвращает полный путь к файлу или None.
         """
@@ -82,23 +81,5 @@ class EcosystemXMLParser:
                         return os.path.join(search_dir, fname)
             except OSError:
                 pass
-
-        # 3. Поиск по содержимому (штрих-код может быть в любом теге)
-        try:
-            for fname in os.listdir(search_dir):
-                if not fname.endswith(".xml"):
-                    continue
-                full_path = os.path.join(search_dir, fname)
-                try:
-                    tree = ET.parse(full_path)
-                    root = tree.getroot()
-                    # Ищем артикул во всём тексте XML
-                    xml_text = ET.tostring(root, encoding="unicode").lower()
-                    if article_clean.lower() in xml_text:
-                        return full_path
-                except ET.ParseError:
-                    continue
-        except OSError:
-            pass
 
         return None
