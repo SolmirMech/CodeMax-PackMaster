@@ -99,18 +99,31 @@ class OrderCalculator:
             return ""
         
         return str(rolls * per_roll)
-    
+
     @staticmethod
-    def calculate_quantity_from_length(roll_length_m_str: str, label_length_mm_str: str) -> str:
-        """Рассчитывает количество этикеток из длины ролика и длины этикетки."""
-        
+    def calculate_quantity_from_length(
+            roll_length_m_str: str,
+            label_length_mm_str: str,
+            rounding_up: bool = True
+    ) -> str:
+        """
+        Рассчитывает количество этикеток из длины ролика и длины этикетки.
+
+        Args:
+            roll_length_m_str: длина ролика в метрах
+            label_length_mm_str: длина этикетки в мм
+            rounding_up: True - округление вверх (math.ceil), False - вниз (math.floor)
+        """
         roll_m = OrderCalculator.parse_float(roll_length_m_str)
         label_mm = OrderCalculator.parse_float(label_length_mm_str)
-        
+
         if roll_m <= 0 or label_mm <= 0:
             return ""
-        
+
         label_m = label_mm / 1000
-        quantity = math.ceil(roll_m / label_m)
-        
+        if rounding_up:
+            quantity = math.ceil(roll_m / label_m)
+        else:
+            quantity = math.floor(roll_m / label_m)
+
         return str(quantity)

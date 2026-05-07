@@ -359,6 +359,12 @@ class ConfigManager:
         settings = self.load_json_settings("shared_utils.json")
         return settings.get("special_clients", {})
 
+    def get_rounding_setting(self):
+        """Возвращает настройку округления (True = вверх, False = вниз)"""
+        settings = self.load_json_settings("shared_utils.json")
+        rounding = settings.get("rounding", {})
+        return rounding.get("rounding_up", True)
+
     # Список заказчиков без производителя
     def get_without_manufacturer_customers(self):
         """Возвращает список заказчиков без производителя"""

@@ -201,6 +201,7 @@ class OrderUIBuilder:
         self.controller.quantity_entry.grid(row=5, column=1, padx=5, pady=2, sticky="w")
         self.controller.quantity_entry.bind("<Up>", lambda e: self.controller.order_entry.focus_set())
         self.controller.quantity_entry.bind("<FocusIn>", lambda e: self.controller.quantity_entry.select_range(0, tk.END))
+        self._create_rounding_menu()
 
         rolls_entry = ttk.Entry(data_frame, textvariable=self.controller.rolls_count_var, width=15)
         rolls_entry.grid(row=5, column=1, padx=(115, 0), pady=2, sticky="w")
@@ -301,6 +302,45 @@ class OrderUIBuilder:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         self.update_cutter_visibility()
+
+    def _create_rounding_menu(self):
+        """Создаёт контекстное меню для quantity_entry с выбором округления"""
+        self.rounding_menu = tk.Menu(self.controller.quantity_entry, tearoff=0)
+        self.rounding_menu.add_command(
+            label="Округление вверх",
+            command=lambda: self._set_rounding(True)
+        )
+        self.rounding_menu.add_command(
+            label="Округление вниз",
+            command=lambda: self._set_rounding(False)
+        )
+
+        # Привязываем меню к правой кнопке мыши
+        self.controller.quantity_entry.bind(
+            "<Button-3>",
+            lambda e: self._show_rounding_menu(e)
+        )
+
+    def _show_rounding_menu(self, event):
+        """Показывает контекстное меню с отметкой текущего выбора"""
+        # Удаляем старые отметки
+        self.rounding_menu.entryconfig(0, label="Округление вверх")
+        self.rounding_menu.entryconfig(1, label="Округление вниз")
+
+        # Ставим галочку на текущем выборе
+        if self.controller.rounding_up.get():
+            self.rounding_menu.entryconfig(0, label="✓ Округление вверх")
+        else:
+            self.rounding_menu.entryconfig(1, label="✓ Округление вниз")
+
+        self.rounding_menu.tk_popup(event.x_root, event.y_root)
+
+    def _set_rounding(self, rounding_up: bool):
+        """Устанавливает тип округления и сохраняет настройку"""
+        self.controller.rounding_up.set(rounding_up)
+        self.controller.save_rounding_setting()
+        # Пересчитываем количество с новым округлением
+        self.controller.calculate_quantity_from_length()
 
     def _register_all_widgets(self):
         """Регистрирует все виджеты, управляемые маппером"""

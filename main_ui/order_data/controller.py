@@ -58,6 +58,7 @@ class OrderDataController:
         self._weight_timer = None
         self._quantity_timer = None
         self._length_timer = None
+        self.rounding_up = tk.BooleanVar(value=True)  # True = вверх, False = вниз
 
         # ========== UI ЭЛЕМЕНТЫ (будут созданы в UIBuilder) ==========
         self.manufacturer_combo = None
@@ -127,6 +128,10 @@ class OrderDataController:
             self.coordinator.subscribe(self.on_settings_changed)
             self.ui_builder.update_cutter_visibility()
             self.load_sleeve_weights()
+
+        # Загрузка настройки округления
+        rounding_settings = self.config_manager.load_json_settings("shared_utils.json").get("rounding", {})
+        self.rounding_up.set(rounding_settings.get("rounding_up", True))
 
         # ========== ПОДПИСКИ НА ИЗМЕНЕНИЯ ==========
         self.gross_weight_kg_var.trace_add("write", self._on_weight_changed)
@@ -293,10 +298,22 @@ class OrderDataController:
         """Фактический расчет количества из длины"""
         result = self.calculator.calculate_quantity_from_length(
             self.roll_length.get(),
-            self.label_length_mm.get()
+            self.label_length_mm.get(),
+            rounding_up=self.rounding_up.get()
         )
         if result:
             self.quantity_var.set(result)
+
+    def save_rounding_setting(self):
+        """Сохраняет настройку округления в shared_utils.json"""
+        try:
+            settings = self.config_manager.load_json_settings("shared_utils.json")
+            settings["rounding"] = {
+                "rounding_up": self.rounding_up.get()
+            }
+            self.config_manager.save_json_settings("shared_utils.json", settings)
+        except Exception as e:
+            print(f"Ошибка сохранения настройки округления: {e}")
 
     def force_recalculate_total(self):
         """Принудительный пересчёт общего количества"""
