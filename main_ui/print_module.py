@@ -451,7 +451,7 @@ class PrintModule:
 
         except Exception as e:
             self.preview_module.status_label.config(text=f"Ошибка печати: {e}", foreground="red")
-            
+
     def _print_single_combination(self, batch_num, roll_num, copies):
         """Печатает одну комбинацию съём/ролик"""
         # Сохраняем оригинальные данные
