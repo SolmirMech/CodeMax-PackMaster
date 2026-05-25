@@ -371,6 +371,8 @@ class OrderUIBuilder:
             ('label_length_entry', self.controller.label_length_entry),
             ('emission_label', self.controller.emission_label),
             ('emission_entry', self.controller.emission_entry),
+            ('roll_label', self.controller.roll_label),
+            ('roll_entry', self.controller.roll_entry),
         ]
 
         for key, widget in widgets_to_register:

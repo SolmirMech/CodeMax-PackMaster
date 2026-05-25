@@ -68,6 +68,8 @@ class InterfaceMapper:
                         "cutter_combo": {"visible": True},
                         "batch_label": {"visible": True, "label": "№ съёма:"},
                         "batch_entry": {"visible": True},
+                        "roll_label": {"visible": True, "label": "№ ролика:"},
+                        "roll_entry": {"visible": True},
                         "roll_length_label": {"visible": True, "label": "Длина ролика, м:"},
                         "roll_length_entry": {"visible": True}
                     },
@@ -76,6 +78,8 @@ class InterfaceMapper:
                         "cutter_combo": {"visible": False},
                         "batch_label": {"visible": False},
                         "batch_entry": {"visible": False},
+                        "roll_label": {"visible": False},
+                        "roll_entry": {"visible": False},
                         "roll_length_label": {"visible": False},
                         "roll_length_entry": {"visible": False}
                     }

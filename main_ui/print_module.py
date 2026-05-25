@@ -401,50 +401,57 @@ class PrintModule:
     def print_label(self):
         """Печатает выбранную этикетку с поддержкой автогенерации"""
         try:
-            
             # === Проверка необходимых полей ===
             required_fields = [
                 (self.connected_roll_module.quantity_var, "Количество"),
-                (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
+                (self.connected_roll_module.product_text, "Название продукции",
+                 self.connected_roll_module.product_text),
                 (self.connected_roll_module.customer_var, "Заказчик", None),
             ]
 
             empty_fields = self._validate_required_fields(required_fields)
             if empty_fields:
                 self.preview_module.status_label.config(
-                    text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
+                    text=f"❌ Заполните поля: {', '.join(empty_fields)}",
                     foreground="red"
                 )
                 self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
                 return
-            
+
             # Получаем данные из roll_module
             roll_module = self.connected_roll_module
             batch_num = roll_module.batch_num_var.get().strip()
-            roll_num = roll_module.roll_num_var.get().strip()  
+            roll_num = roll_module.roll_num_var.get().strip()
             streams = roll_module.streams_var.get().strip()
             copies_text = self.copies_var.get().strip()
-            
+
             copies = int(copies_text) if copies_text else 1
             if copies < 1:
                 copies = 1
-            
+
+            # Определяем, содержит ли batch_num диапазон (например, "1-5")
+            is_range = '-' in batch_num
+
             # Определяем режим печати
-            if batch_num and roll_num and not streams:
-                # Ручной режим - одна конкретная комбинация
+            if batch_num and roll_num and not is_range:
+                # Один конкретный съём и конкретный рулон — одиночная печать
                 self._print_single_combination(batch_num, roll_num, copies)
-                
-            elif streams and batch_num:
-                # Авторежим - генерируем все комбинации
-                self._print_auto_combinations(streams, batch_num, copies)
-                
+
+            elif batch_num and roll_num and is_range:
+                # Диапазон съёмов + конкретный рулон — печатаем все съёмы с одним рулоном
+                self._print_auto_combinations(streams, batch_num, copies, roll_specified=True)
+
+            elif batch_num and not roll_num:
+                # Указан только съём (или диапазон) — печатаем все ручьи для каждого съёма
+                self._print_auto_combinations(streams, batch_num, copies, roll_specified=False)
+
             else:
-                # Обычный режим - как раньше
+                # Обычный режим — без автогенерации
                 self._print_standard_label(copies)
-                
+
         except Exception as e:
             self.preview_module.status_label.config(text=f"Ошибка печати: {e}", foreground="red")
-
+            
     def _print_single_combination(self, batch_num, roll_num, copies):
         """Печатает одну комбинацию съём/ролик"""
         # Сохраняем оригинальные данные
@@ -466,45 +473,50 @@ class PrintModule:
             self.connected_roll_module.roll_num_var.set(original_roll)
             self.preview_module.update_preview_displays()
 
-    def _print_auto_combinations(self, streams, batch_range, copies):
-        """Печатает все комбинации по автогенерации"""
+    def _print_auto_combinations(self, streams, batch_range, copies, roll_specified=False):
+        """Печатает все комбинации по автогенерации.
+        Если roll_specified=True — печатает только указанный ручей для каждого съёма.
+        """
         try:
             # Парсим диапазон съёмов
             batch_numbers = self._parse_range(batch_range)
-            stream_count = int(streams)
-            
-            # Генерируем все комбинации
-            combinations = []
-            for batch in batch_numbers:
-                for stream in range(1, stream_count + 1):
-                    combinations.append((str(batch), str(stream)))
-            
+
             # Сохраняем оригинальные данные
             original_batch = self.connected_roll_module.batch_num_var.get()
             original_roll = self.connected_roll_module.roll_num_var.get()
-            
+
+            # Генерируем комбинации
+            if roll_specified:
+                # Печатаем только указанный ручей для каждого съёма
+                combinations = [(str(batch), original_roll) for batch in batch_numbers]
+            else:
+                # Печатаем все ручьи × все съёмы
+                stream_count = int(streams) if streams else 1
+                combinations = []
+                for batch in batch_numbers:
+                    for stream in range(1, stream_count + 1):
+                        combinations.append((str(batch), str(stream)))
+
             # Печатаем каждую комбинацию
             total_combinations = len(combinations)
             for i, (batch, roll) in enumerate(combinations):
-                # Устанавливаем текущую комбинацию
                 self.connected_roll_module.batch_num_var.set(batch)
                 self.connected_roll_module.roll_num_var.set(roll)
-                
-                # Обновляем превью и печатаем
+
                 self.preview_module.update_from_connected_roll_module()
-                self._print_standard_label(copies)             
-            
-            # Восстанавливаем оригинальные данные
+                self._print_standard_label(copies)
+
+                # Восстанавливаем оригинальные данные
             self.connected_roll_module.batch_num_var.set(original_batch)
             self.connected_roll_module.roll_num_var.set(original_roll)
             self.preview_module.update_preview_displays()
-            
+
             self.preview_module.status_label.config(
-                text=f"Автопечать завершена: {total_combinations} комбинаций × {copies} копий", 
+                text=f"Автопечать завершена: {total_combinations} комбинаций × {copies} копий",
                 foreground="green"
             )
             self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
-            
+
         except Exception as e:
             self.preview_module.status_label.config(text=f"Ошибка автопечати: {e}", foreground="red")
 
