@@ -115,6 +115,8 @@ class SettingsCoordinator:
             try:
                 callback(context)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 print(f"Ошибка уведомления подписчика: {e}")
 
     def notify_list_changed(self, list_name: str):

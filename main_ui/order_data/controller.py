@@ -35,7 +35,7 @@ class OrderDataController:
         self.last_manual_order = ""
         self.order_combobox_visible = False
         self.xml_tu_number = ""
-        self._ecosystem_xml_data = None
+        self.ecosystem_xml_data = None
 
         self.manufacturer_options = []
         self.manufacturer_products_map = {}
@@ -226,7 +226,7 @@ class OrderDataController:
             self.product_text.insert("1.0", equipment_name)
 
         # Сохраняем данные для Экосистемы
-        self._ecosystem_xml_data = data
+        self.ecosystem_xml_data = data
 
     def _apply_mapping(self, *args):
         """Применяет маппинг интерфейса при изменении контекста (заказчик, производитель, галочки)"""

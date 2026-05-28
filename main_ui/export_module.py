@@ -5,11 +5,11 @@ from core.excel_exporter.legacy_adapter import LegacyExporterAdapter as WeightOr
 
 
 # noinspection PyUnusedLocal,PyTypeChecker, SpellCheckingInspection
-class ExportModule:
+class ExportModule(ttk.Frame):
     """Модуль управления экспортом в Excel"""
     
     def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
-        self.ecosystem_btn = None
+        super().__init__(parent)
         self.multitype_frame = None
         self.excel_preview_module = None
         self.pallet_num_entry = None
@@ -129,16 +129,6 @@ class ExportModule:
         )
 
         btn_preview.grid(row=2, column=0, pady=5, sticky="w", columnspan=2)
-
-        # Временная кнопка для Экосистемы
-        self.ecosystem_btn = ttk.Button(
-            self.box_frame,
-            text="🌿 Экосистема",
-            width=18,
-            command=self.show_ecosystem_list,
-            style="Accent.TButton"
-        )
-        # Пока не размещаем, будет показана при необходимости
     
     def create_pallet_section(self, parent):
         """Создает секцию экспорта поддона"""
@@ -229,37 +219,6 @@ class ExportModule:
             width=18,
             style="Accent.TButton"
         ).grid(row=1, column=0, pady=(5, 0), sticky="w", columnspan=2)
-
-    def _update_ecosystem_button_visibility(self):
-        """Показывает/скрывает кнопку Экосистема в зависимости от производителя"""
-        if not hasattr(self, 'ecosystem_btn') or not self.connected_roll_module:
-            return
-
-        manufacturer = ""
-        if hasattr(self.connected_roll_module, 'manufacturer_var'):
-            manufacturer = self.connected_roll_module.manufacturer_var.get().lower()
-
-        if "экосистема" in manufacturer:
-            if not self.ecosystem_btn.winfo_ismapped():
-                self.ecosystem_btn.grid(row=3, column=0, pady=5, sticky="w", columnspan=2)
-        else:
-            self.ecosystem_btn.grid_remove()
-
-    def show_ecosystem_list(self):
-        """Открывает окно упаковочного листа Экосистема"""
-        from core.packing_list.packing_list_window import PackingListWindow
-
-        self.ecosystem_window = PackingListWindow(
-            parent=self.parent,
-            config_manager=self.config_manager,
-            coordinator=self.coordinator
-        )
-
-        # Если есть распарсенные данные — заполняем окно
-        if self.connected_roll_module and hasattr(self.connected_roll_module, '_ecosystem_xml_data'):
-            data = self.connected_roll_module._ecosystem_xml_data
-            if data and hasattr(self.ecosystem_window, 'fill_from_xml'):
-                self.parent.after(100, lambda: self.ecosystem_window.fill_from_xml(data))
 
     def _update_section_titles(self):
         """Обновляет названия разделов в зависимости от цеха и наличия веса"""
@@ -491,13 +450,17 @@ class ExportModule:
     # noinspection PyUnusedLocal
     def on_settings_changed(self, context=None):
         """Обработчик изменений настроек от координатора"""
+        # Проверка, что виджеты ещё существуют
+        try:
+            if not self.winfo_exists():
+                return
+        except:
+            return
+
         self.load_box_sizes()
         self.load_pallet_sizes()
         self._update_number_visibility()
         self._update_section_titles()
-        # Обновляем видимость кнопки Экосистема только при изменении производителя
-        if context and context.get("type") == "manufacturer_changed":
-            self._update_ecosystem_button_visibility()
         
     def _update_number_visibility(self):
         """Показывает/скрывает номер поддона в зависимости от цеха"""
@@ -533,11 +496,14 @@ class ExportModule:
     def set_roll_module(self, roll_module):
         """Устанавливает связь с модулем ролика"""
         self.connected_roll_module = roll_module
-        self._update_ecosystem_button_visibility()
 
     def load_box_sizes(self):
         """Загружает список коробок из shared_utils.json"""
         try:
+            # Проверка существования комбобокса
+            if self.box_sizes_combo is None or not self.box_sizes_combo.winfo_exists():
+                return []
+
             settings = self.config_manager.load_json_settings("shared_utils.json")
             weight_box = settings.get("weight_box", {})
             box_sizes = list(weight_box.keys())
@@ -586,6 +552,12 @@ class ExportModule:
     def load_pallet_sizes(self):
         """Загружает список поддонов из shared_utils.json"""
         try:
+            # Проверка существования виджетов
+            if self.pallet_label is None or not self.pallet_label.winfo_exists():
+                return
+            if self.pallet_num_entry is None or not self.pallet_num_entry.winfo_exists():
+                return
+
             settings = self.config_manager.load_json_settings("shared_utils.json")
             weight_pallet = settings.get("weight_pallet", {})
             pallet_sizes = list(weight_pallet.keys())

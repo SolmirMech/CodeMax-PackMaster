@@ -6,6 +6,7 @@ from tkinter import ttk, messagebox
 import configparser
 from datetime import datetime
 from core.settings.settings_coordinator import SettingsCoordinator
+from main_ui.ecosystem_only_module import EcosystemOnlyModule
 
 def check_demo_mode():
     """Проверяет, не истек ли демо-период"""
@@ -73,6 +74,11 @@ class WeightOrdersApp:
         self.config_manager = None
         self.data_manager = None
         self.settings_manager = None
+
+        self.export_container = None
+        self.export_module_normal = None
+        self.export_module_ecosystem = None
+        self.current_export_module = None
         
         # Инициализация ConfigManager (менеджер настроек)
         from core.config_manager import ConfigManager
@@ -138,25 +144,24 @@ class WeightOrdersApp:
         """Создает объединенный интерфейс для ролика и предпросмотра"""
         container = ttk.Frame(parent)
         container.pack(fill=tk.BOTH, expand=True)
-        
-        # Настраиваем пропорции колонок
-        container.columnconfigure(0, weight=1)  # Левая часть
-        container.columnconfigure(1, weight=1)  # Правая часть
-        container.rowconfigure(0, weight=1)     # Одна строка
+
+        container.columnconfigure(0, weight=1)
+        container.columnconfigure(1, weight=1)
+        container.rowconfigure(0, weight=1)
 
         # Левая часть
         left_frame = ttk.Frame(container)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         left_frame.columnconfigure(0, weight=1)
-        left_frame.rowconfigure(0, weight=0, minsize=550)  # фикс высоты OrderDataController
-        left_frame.rowconfigure(1, weight=1)  # OrderDataProcessor растягивается
+        left_frame.rowconfigure(0, weight=0, minsize=550)
+        left_frame.rowconfigure(1, weight=1)
 
         # Правая часть
         right_frame = ttk.Frame(container)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        right_frame.columnconfigure(0, weight=2)  # Превью
-        right_frame.columnconfigure(1, weight=1)  # Экспорт
-        right_frame.rowconfigure(0, weight=1)     # Одна строка
+        right_frame.columnconfigure(0, weight=2)
+        right_frame.columnconfigure(1, weight=1)
+        right_frame.rowconfigure(0, weight=1)
 
         # Верх - OrderDataController
         roll_frame = ttk.Frame(left_frame)
@@ -167,40 +172,119 @@ class WeightOrdersApp:
         order_data_frame = ttk.Frame(left_frame)
         order_data_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
         self.order_data_module = OrderDetailsController(
-            order_data_frame, 
-            self.coordinator, 
+            order_data_frame,
+            self.coordinator,
             self.data_manager,
             self.config_manager
-)
+        )
 
-        # Правая часть - MainPreview (слева от печати и экспорта)
+        # Правая часть - MainPreview
         preview_frame = ttk.Frame(right_frame)
         preview_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
         self.preview_module = MainPreview(preview_frame, self.coordinator, self.config_manager)
-        
-        # Правая часть - PrintModule и ExportModule (справа от предпросмотра)
+
+        # Правая часть - контейнер для модуля печати и экспорта
         print_export_frame = ttk.Frame(right_frame)
         print_export_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
 
-        # Вертикальное разделение Печать/Экспорт
         print_export_frame.columnconfigure(0, weight=1)
-        print_export_frame.rowconfigure(0, weight=1)  # Печать (верх)
-        print_export_frame.rowconfigure(1, weight=1)  # Экспорт (низ)
+        print_export_frame.rowconfigure(0, weight=1)
+        print_export_frame.rowconfigure(1, weight=1)
 
-        # Модуль Печати (верх)
+        # Модуль Печати
         print_frame = ttk.Frame(print_export_frame)
         print_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
         self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator, self.config_manager)
 
-        # Модуль Экспорта (низ)
-        export_frame = ttk.Frame(print_export_frame)
-        export_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
-        self.export_module = ExportModule(export_frame, self.preview_module, self.coordinator, self.config_manager)
+        # Контейнер для модуля экспорта - используем pack внутри
+        self.export_container = ttk.Frame(print_export_frame)
+        self.export_container.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
+
+        # Создаём оба модуля
+        self.export_module_normal = ExportModule(
+            self.export_container,
+            self.preview_module,
+            self.coordinator,
+            self.config_manager
+        )
+        self.export_module_ecosystem = EcosystemOnlyModule(
+            self.export_container,
+            self.preview_module,
+            self.coordinator,
+            self.config_manager
+        )
+
+        # Используем pack для управления видимостью
+        self.export_module_normal.pack(fill=tk.BOTH, expand=True)
+        self.export_module_ecosystem.pack(fill=tk.BOTH, expand=True)
+
+        # По умолчанию показываем обычный модуль
+        self.current_export_module = self.export_module_normal
+        self.export_module_ecosystem.pack_forget()
 
         self.setup_module_connections()
 
+        # Подписываемся на изменения производителя
+        if self.coordinator and hasattr(self.coordinator, 'subscribe'):
+            self.coordinator.subscribe(self.on_manufacturer_changed)
+        self.root.after(100, lambda: self.on_manufacturer_changed({"type": "manufacturer_changed"}))
+
+    # noinspection PyUnusedLocal
+    def on_manufacturer_changed(self, context=None):
+        """Обработчик изменения производителя — переключает модуль экспорта"""
+        if context and context.get("type") != "manufacturer_changed":
+            return
+
+        if not hasattr(self, 'roll_module') or not self.roll_module:
+            return
+
+        manufacturer = ""
+        if hasattr(self.roll_module, 'manufacturer_var'):
+            manufacturer = self.roll_module.manufacturer_var.get().lower()
+
+        is_ecosystem = "экосистема" in manufacturer
+
+        # ОБНУЛЯЕМ СТАРЫЕ ССЫЛКИ
+        if hasattr(self, 'preview_module') and self.preview_module:
+            self.preview_module.export_module = None
+
+        if hasattr(self, 'order_data_module') and self.order_data_module:
+            self.order_data_module.export_module = None
+
+        # Очищаем контейнер
+        for widget in self.export_container.winfo_children():
+            widget.destroy()
+
+        # Создаём нужный модуль заново
+        if is_ecosystem:
+            from main_ui.ecosystem_only_module import EcosystemOnlyModule
+            self.export_module = EcosystemOnlyModule(
+                self.export_container,
+                self.preview_module,
+                self.coordinator,
+                self.config_manager
+            )
+        else:
+            from main_ui.export_module import ExportModule
+            self.export_module = ExportModule(
+                self.export_container,
+                self.preview_module,
+                self.coordinator,
+                self.config_manager
+            )
+
+        self.export_module.pack(fill=tk.BOTH, expand=True)
+        self.export_module.set_roll_module(self.roll_module)
+
+        # ОБНОВЛЯЕМ ССЫЛКИ НА НОВЫЙ МОДУЛЬ
+        if hasattr(self, 'preview_module') and self.preview_module:
+            self.preview_module.export_module = self.export_module
+
+        if hasattr(self, 'order_data_module') and self.order_data_module:
+            self.order_data_module.export_module = self.export_module
+
     def setup_module_connections(self):
-        """Устанавливает связи между всеми модулями"""        
+        """Устанавливает связи между всеми модулями"""
         # Связи между модулями ролика и данными заказов
         self.order_data_module.set_roll_module(self.roll_module)
         self.roll_module.set_order_data_module(self.order_data_module)
@@ -208,23 +292,27 @@ class WeightOrdersApp:
         # Связь между модулем ролика и предпросмотра
         self.preview_module.set_roll_module(self.roll_module)
         self.roll_module.set_preview_module(self.preview_module)
-        
+
         self.order_data_module.set_preview_module(self.preview_module)
-        
+
         # Связи между новыми модулями и роликом
         self.print_module.set_roll_module(self.roll_module)
-        self.export_module.set_roll_module(self.roll_module)
+        self.export_module_normal.set_roll_module(self.roll_module)
+        self.export_module_ecosystem.set_roll_module(self.roll_module)
 
         # Связи для данных заказов
         self.print_module.set_order_data_module(self.order_data_module)
-        self.export_module.set_order_data_module(self.order_data_module)
-        
+        self.export_module_normal.set_order_data_module(self.order_data_module)
+        # Для экосистемного модуля (если есть метод)
+        if hasattr(self.export_module_ecosystem, 'set_order_data_module'):
+            self.export_module_ecosystem.set_order_data_module(self.order_data_module)
+
         # Связь между preview и print_module для обработки Enter
         self.preview_module.print_module = self.print_module
 
-        # Связи для статусов (разделяем по назначению)
-        self.preview_module.export_module = self.export_module  # только для экспорта
-        self.order_data_module.export_module = self.export_module  # только для экспорта
+        # Связи для статусов (только для обычного модуля экспорта)
+        self.preview_module.export_module = self.export_module_normal
+        self.order_data_module.export_module = self.export_module_normal
 
         # Инициализируем SettingsManager и диалоги сразу
         from core.settings.settings_manager import SettingsManager
@@ -237,7 +325,7 @@ class WeightOrdersApp:
         # Передаем ссылку на roll_module в координатор
         self.coordinator.set_roll_module(self.roll_module)
         self.coordinator.set_settings_manager(self.settings_manager)
-        
+
         # Отложенная инициализация preview_module
         if hasattr(self.preview_module, 'initialize_templates'):
             self.root.after(100, self.preview_module.initialize_templates)
