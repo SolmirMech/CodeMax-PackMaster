@@ -20,6 +20,7 @@ class OrderDataController:
         self.config_manager = config_manager
         self.data_manager = data_manager
         self.coordinator = coordinator
+        self.packing_list_window = None
 
         # ========== ПОДКЛЮЧАЕМЫЕ МОДУЛИ ==========
         self.order_data_module = None
@@ -206,7 +207,7 @@ class OrderDataController:
 
     def on_article_enter_pressed(self, event=None):
         """Обработчик нажатия Enter в поле Артикул — ищет XML и парсит"""
-        from core.parse.xml_parser import EcosystemXMLParser
+        from core.parse.eco_xml_parser import EcosystemXMLParser
 
         article = self.ros_podlo_var.get().strip()
         if not article:
@@ -230,13 +231,20 @@ class OrderDataController:
             self.product_text.delete("1.0", tk.END)
             self.product_text.insert("1.0", equipment_name)
 
-        # ДОБАВИТЬ: Заполняем customer_var
+        # Заполняем customer_var
         customer = data.get("customer", "")
         if customer:
             self.customer_var.set(customer)
 
         # Сохраняем данные для Экосистемы
         self.ecosystem_xml_data = data
+
+        # Если окно упаковочного листа открыто - добавляем строки
+        if hasattr(self, 'packing_list_window') and self.packing_list_window:
+            if 'item_data' in data:
+                self.packing_list_window.add_item_row(data['item_data'])
+            if 'place_data' in data:
+                self.packing_list_window.add_place_row(data['place_data'])
 
     def _apply_mapping(self, *args):
         """Применяет маппинг интерфейса при изменении контекста (заказчик, производитель, галочки)"""

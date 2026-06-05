@@ -283,6 +283,12 @@ class WeightOrdersApp:
         if hasattr(self, 'order_data_module') and self.order_data_module:
             self.order_data_module.export_module = self.export_module
 
+        # СОХРАНЯЕМ ССЫЛКУ НА ОКНО УПАКОВОЧНОГО ЛИСТА В ROLL_MODULE
+        if hasattr(self.export_module, 'packing_list_window'):
+            self.roll_module.packing_list_window = self.export_module.packing_list_window
+        else:
+            self.roll_module.packing_list_window = None
+
     def setup_module_connections(self):
         """Устанавливает связи между всеми модулями"""
         # Связи между модулями ролика и данными заказов

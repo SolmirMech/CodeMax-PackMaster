@@ -16,6 +16,7 @@ class EcosystemOnlyModule(ttk.Frame):
 
         self.connected_roll_module = None
         self.ecosystem_window = None
+        self.packing_list_window = None
 
         self.create_ui()
 
@@ -62,17 +63,32 @@ class EcosystemOnlyModule(ttk.Frame):
         """Открывает окно упаковочного листа Экосистема"""
         from core.packing_list.packing_list_window import PackingListWindow
 
-        self.ecosystem_window = PackingListWindow(
+        # Всегда создаём новое окно
+        self.packing_list_window = PackingListWindow(
             parent=self,
             config_manager=self.config_manager,
             coordinator=self.coordinator
         )
 
-        # Если есть распарсенные данные — заполняем окно
+        # УВЕДОМЛЯЕМ КОНТРОЛЛЕР
+        if self.connected_roll_module:
+            self.connected_roll_module.packing_list_window = self.packing_list_window
+
+        # ОТСЛЕЖИВАЕМ ЗАКРЫТИЕ ОКНА
+        def on_window_close():
+            if self.connected_roll_module:
+                self.connected_roll_module.packing_list_window = None
+            # Вызываем оригинальный метод закрытия
+            self.packing_list_window.on_close()
+            self.packing_list_window = None
+
+        self.packing_list_window.window.protocol("WM_DELETE_WINDOW", on_window_close)
+
+        # Если есть данные из XML — заполняем шапку
         if self.connected_roll_module and hasattr(self.connected_roll_module, 'ecosystem_xml_data'):
             data = self.connected_roll_module.ecosystem_xml_data
-            if data and hasattr(self.ecosystem_window, 'fill_from_xml'):
-                self.after(100, lambda: self.ecosystem_window.fill_from_xml(data))
+            if data and hasattr(self.packing_list_window, 'fill_from_xml'):
+                self.packing_list_window.fill_from_xml(data)
 
     def set_status(self, message, color="green"):
         """Универсальный метод установки статуса"""

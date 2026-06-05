@@ -123,7 +123,7 @@ class PackingListWindow:
         self.window.minsize(1200, 700)
 
         self.window.transient(self.parent)
-        self.window.grab_set()
+        # self.window.grab_set()
 
         # Центрирование
         self.window.update_idletasks()
@@ -335,6 +335,45 @@ class PackingListWindow:
 
         # СРАЗУ ЗАПОЛНЯЕМ ДАННЫМИ
         self._refresh_items_table()
+
+    def add_item_row(self, item_data: dict):
+        """Добавляет новую строку в таблицу товаров"""
+        # Ищем первую пустую строку
+        for i, row in enumerate(self.items_data):
+            if row.get('item_number') == " ":
+                self.items_data[i] = {
+                    "item_number": str(i + 1),
+                    "order_request": item_data.get("order_request", ""),
+                    "article_vn": item_data.get("article_vn", ""),
+                    "name": item_data.get("name", ""),
+                    "unit": item_data.get("unit", ""),
+                    "quantity": item_data.get("quantity", "0"),
+                    "article_vn_product": item_data.get("article_vn_product", ""),
+                    "product": item_data.get("product", ""),
+                }
+                self._refresh_items_table()
+                self.set_status(f"✅ Добавлен товар: {item_data.get('name', '')}", "green")
+                return
+        self.set_status("❌ Все строки таблицы товаров заняты", "red")
+
+    def add_place_row(self, place_data: dict):
+        """Добавляет новую строку в таблицу мест"""
+        # Ищем первую пустую строку
+        for i, row in enumerate(self.places_data):
+            if row.get('place_number') == " ":
+                self.places_data[i] = {
+                    "place_number": str(i + 1),
+                    "net_weight": place_data.get("net_weight", "0"),
+                    "gross_weight": place_data.get("gross_weight", "0"),
+                    "length": place_data.get("length", "0"),
+                    "width": place_data.get("width", "0"),
+                    "height": place_data.get("height", "0"),
+                    "storage_type": place_data.get("storage_type", " "),
+                }
+                self._refresh_places_table()
+                self.set_status(f"✅ Добавлено место №{i + 1}", "green")
+                return
+        self.set_status("❌ Все строки таблицы мест заняты", "red")
 
     def add_to_archive(self):
         """Добавляет текущий упаковочный лист в архив"""

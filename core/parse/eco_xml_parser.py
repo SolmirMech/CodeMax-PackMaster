@@ -1,4 +1,4 @@
-# core/parse/xml_parser.py
+# core/parse/eco_xml_parser.py
 """Парсер XML для заполнения упаковочного листа Экосистема"""
 
 import os
@@ -45,6 +45,31 @@ class EcosystemXMLParser:
             for tag, key in EcosystemXMLParser.TAG_MAPPING.items():
                 element = root.find(tag)
                 result[key] = element.text.strip() if element is not None and element.text else ""
+
+            # Парсим данные товара (одна строка)
+            item_elem = root.find('item')
+            if item_elem is not None:
+                result['item_data'] = {
+                    'order_request': item_elem.findtext('order_request', default=""),
+                    'article_vn': item_elem.findtext('article_vn', default=""),
+                    'name': item_elem.findtext('name', default=""),
+                    'unit': item_elem.findtext('unit', default=""),
+                    'quantity': item_elem.findtext('quantity', default="0"),
+                    'article_vn_product': item_elem.findtext('article_vn_product', default=""),
+                    'product': item_elem.findtext('product', default=""),
+                }
+
+            # Парсим данные места (одна строка)
+            place_elem = root.find('place')
+            if place_elem is not None:
+                result['place_data'] = {
+                    'net_weight': place_elem.findtext('net_weight', default="0"),
+                    'gross_weight': place_elem.findtext('gross_weight', default="0"),
+                    'length': place_elem.findtext('length', default="0"),
+                    'width': place_elem.findtext('width', default="0"),
+                    'height': place_elem.findtext('height', default="0"),
+                    'storage_type': place_elem.findtext('storage_type', default=" "),
+                }
 
             return result
 
