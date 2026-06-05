@@ -169,29 +169,37 @@ class PrintModule:
     def start_batch_print(self):
         """Запускает печать всего тиража из уже распарсенных данных"""
         try:
+            # === Проверка производителя ===
+            is_ecosystem = False
+            if self.connected_roll_module and hasattr(self.connected_roll_module, 'manufacturer_var'):
+                manufacturer = self.connected_roll_module.manufacturer_var.get().lower()
+                is_ecosystem = "экосистема" in manufacturer
+
             # Берем список из order_data_processor через существующие связи
             if self.order_data_module is not None:
                 filtered_data = getattr(self.order_data_module, 'filtered_parsed_data', [])
-                
+
                 if not filtered_data:
                     self.print_status_label.config(text="Нет данных для печати", foreground="red")
                     return
-                
-                # === Проверка необходимых полей ===
-                required_fields = [
-                    (self.connected_roll_module.quantity_var, "Количество"),
-                    (self.connected_roll_module.product_text, "Название продукции", self.connected_roll_module.product_text),
-                    (self.connected_roll_module.customer_var, "Заказчик", None),
-                ]
 
-                empty_fields = self._validate_required_fields(required_fields)
-                if empty_fields:
-                    self.preview_module.status_label.config(
-                        text=f"❌ Заполните поля: {', '.join(empty_fields)}", 
-                        foreground="red"
-                    )
-                    self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
-                    return
+                # === Проверка необходимых полей (только не для экосистемы) ===
+                if not is_ecosystem:
+                    required_fields = [
+                        (self.connected_roll_module.quantity_var, "Количество"),
+                        (self.connected_roll_module.product_text, "Название продукции",
+                         self.connected_roll_module.product_text),
+                        (self.connected_roll_module.customer_var, "Заказчик", None),
+                    ]
+
+                    empty_fields = self._validate_required_fields(required_fields)
+                    if empty_fields:
+                        self.preview_module.status_label.config(
+                            text=f"❌ Заполните поля: {', '.join(empty_fields)}",
+                            foreground="red"
+                        )
+                        self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
+                        return
                 
                 # Сохраняем оригинальное название для восстановления
                 self.original_product_name = self.preview_module.connected_roll_module.product_text.get("1.0", "end-1c")
@@ -321,22 +329,29 @@ class PrintModule:
         """Печатает N копий ролика и одну коробку с N роликами"""
         original_rolls_count = None
         try:
-            # === Проверка полей ===
-            required_fields = [
-                (self.connected_roll_module.quantity_var, "Количество"),
-                (self.connected_roll_module.product_text, "Название продукции",
-                 self.connected_roll_module.product_text),
-                (self.connected_roll_module.customer_var, "Заказчик", None),
-            ]
+            # === Проверка производителя ===
+            is_ecosystem = False
+            if self.connected_roll_module and hasattr(self.connected_roll_module, 'manufacturer_var'):
+                manufacturer = self.connected_roll_module.manufacturer_var.get().lower()
+                is_ecosystem = "экосистема" in manufacturer
 
-            empty_fields = self._validate_required_fields(required_fields)
-            if empty_fields:
-                self.preview_module.status_label.config(
-                    text=f"❌ Заполните поля: {', '.join(empty_fields)}",
-                    foreground="red"
-                )
-                self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
-                return
+            # === Проверка полей (только не для экосистемы) ===
+            if not is_ecosystem:
+                required_fields = [
+                    (self.connected_roll_module.quantity_var, "Количество"),
+                    (self.connected_roll_module.product_text, "Название продукции",
+                     self.connected_roll_module.product_text),
+                    (self.connected_roll_module.customer_var, "Заказчик", None),
+                ]
+
+                empty_fields = self._validate_required_fields(required_fields)
+                if empty_fields:
+                    self.preview_module.status_label.config(
+                        text=f"❌ Заполните поля: {', '.join(empty_fields)}",
+                        foreground="red"
+                    )
+                    self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
+                    return
 
             # === Получение данных ===
             copies_text = self.copies_var.get().strip()
@@ -401,22 +416,29 @@ class PrintModule:
     def print_label(self):
         """Печатает выбранную этикетку с поддержкой автогенерации"""
         try:
-            # === Проверка необходимых полей ===
-            required_fields = [
-                (self.connected_roll_module.quantity_var, "Количество"),
-                (self.connected_roll_module.product_text, "Название продукции",
-                 self.connected_roll_module.product_text),
-                (self.connected_roll_module.customer_var, "Заказчик", None),
-            ]
+            # === Проверка производителя ===
+            is_ecosystem = False
+            if self.connected_roll_module and hasattr(self.connected_roll_module, 'manufacturer_var'):
+                manufacturer = self.connected_roll_module.manufacturer_var.get().lower()
+                is_ecosystem = "экосистема" in manufacturer
 
-            empty_fields = self._validate_required_fields(required_fields)
-            if empty_fields:
-                self.preview_module.status_label.config(
-                    text=f"❌ Заполните поля: {', '.join(empty_fields)}",
-                    foreground="red"
-                )
-                self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
-                return
+            # === Проверка необходимых полей (только не для экосистемы) ===
+            if not is_ecosystem:
+                required_fields = [
+                    (self.connected_roll_module.quantity_var, "Количество"),
+                    (self.connected_roll_module.product_text, "Название продукции",
+                     self.connected_roll_module.product_text),
+                    (self.connected_roll_module.customer_var, "Заказчик", None),
+                ]
+
+                empty_fields = self._validate_required_fields(required_fields)
+                if empty_fields:
+                    self.preview_module.status_label.config(
+                        text=f"❌ Заполните поля: {', '.join(empty_fields)}",
+                        foreground="red"
+                    )
+                    self.parent.after(5000, lambda: self.preview_module.status_label.config(text=""))
+                    return
 
             # Получаем данные из roll_module
             roll_module = self.connected_roll_module

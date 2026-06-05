@@ -61,14 +61,19 @@ class OrderDataController:
         self.rounding_up = tk.BooleanVar(value=True)  # True = вверх, False = вниз
 
         # ========== UI ЭЛЕМЕНТЫ (будут созданы в UIBuilder) ==========
+        self.order_label = None  # ДОБАВИТЬ - лейбл "№ заказа:"
+        self.quantity_label = None  # ДОБАВИТЬ - лейбл "Кол-во этикеток/роликов:"
         self.manufacturer_combo = None
         self.product_combo = None
         self.packer_combo = None
         self.cutter_combo = None
         self.order_combobox = None
         self.order_entry = None
+        self.order_prefix_entry = None
+        self.order_suffix_entry = None
         self.entry_suffix = None
         self.quantity_entry = None
+        self.rolls_count_entry = None
         self.gross_entry = None
         self.sleeve_entry = None
         self.date_entry = None
@@ -224,6 +229,11 @@ class OrderDataController:
         if equipment_name:
             self.product_text.delete("1.0", tk.END)
             self.product_text.insert("1.0", equipment_name)
+
+        # ДОБАВИТЬ: Заполняем customer_var
+        customer = data.get("customer", "")
+        if customer:
+            self.customer_var.set(customer)
 
         # Сохраняем данные для Экосистемы
         self.ecosystem_xml_data = data

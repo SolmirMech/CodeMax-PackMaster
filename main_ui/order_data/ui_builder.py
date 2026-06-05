@@ -154,10 +154,11 @@ class OrderUIBuilder:
         self.controller.podlo_entry.grid_remove()
 
         # Номер заказа
-        ttk.Label(data_frame, text="№ заказа:").grid(row=4, column=0, sticky="w", pady=(5, 5))
-        
-        entry_prefix = ttk.Entry(data_frame, textvariable=self.controller.order_prefix, width=4)
-        entry_prefix.grid(row=4, column=1, padx=(5, 0), pady=(5, 5), sticky="w")
+        self.controller.order_label = ttk.Label(data_frame, text="№ заказа:")
+        self.controller.order_label.grid(row=4, column=0, sticky="w", pady=(5, 5))
+
+        self.controller.order_prefix_entry = ttk.Entry(data_frame, textvariable=self.controller.order_prefix, width=4)
+        self.controller.order_prefix_entry.grid(row=4, column=1, padx=(5, 0), pady=(5, 5), sticky="w")
 
         self.controller.order_entry = ttk.Entry(data_frame, textvariable=self.controller.order_number, width=7)
         self.controller.order_entry.grid(row=4, column=1, padx=(42, 0), pady=(5, 5), sticky="w")
@@ -175,8 +176,8 @@ class OrderUIBuilder:
         self.controller.order_combobox.bind("<<ComboboxSelected>>", self.controller.on_order_selected)
         self.controller.order_combobox.grid_remove()
 
-        self.controller.entry_suffix = ttk.Entry(data_frame, textvariable=self.controller.order_suffix, width=6)
-        self.controller.entry_suffix.grid(row=4, column=1, padx=(95, 0), pady=(5, 5), sticky="w")
+        self.controller.order_suffix_entry = ttk.Entry(data_frame, textvariable=self.controller.order_suffix, width=6)
+        self.controller.order_suffix_entry.grid(row=4, column=1, padx=(95, 0), pady=(5, 5), sticky="w")
 
         # Обновление даты
         date_update_label = tk.Label(
@@ -193,9 +194,8 @@ class OrderUIBuilder:
         self.controller.date_entry.grid(row=4, column=1, padx=(240, 0), pady=(5, 5), sticky="w")
 
         # Количество этикеток/роликов
-        ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green").grid(
-            row=5, column=0, sticky="w", pady=2
-        )
+        self.controller.quantity_label = ttk.Label(data_frame, text="Кол-во этикеток/роликов:", foreground="green")
+        self.controller.quantity_label.grid(row=5, column=0, sticky="w", pady=2)
         
         self.controller.quantity_entry = ttk.Entry(data_frame, textvariable=self.controller.quantity_var, width=15)
         self.controller.quantity_entry.grid(row=5, column=1, padx=5, pady=2, sticky="w")
@@ -203,9 +203,10 @@ class OrderUIBuilder:
         self.controller.quantity_entry.bind("<FocusIn>", lambda e: self.controller.quantity_entry.select_range(0, tk.END))
         self._create_rounding_menu()
 
-        rolls_entry = ttk.Entry(data_frame, textvariable=self.controller.rolls_count_var, width=15)
-        rolls_entry.grid(row=5, column=1, padx=(115, 0), pady=2, sticky="w")
-        rolls_entry.bind("<KeyRelease>", self.controller.calculate_total_quantity)
+        self.controller.rolls_count_entry = ttk.Entry(data_frame, textvariable=self.controller.rolls_count_var,
+                                                      width=15)
+        self.controller.rolls_count_entry.grid(row=5, column=1, padx=(115, 0), pady=2, sticky="w")
+        self.controller.rolls_count_entry.bind("<KeyRelease>", self.controller.calculate_total_quantity)
 
         # Галочка "Вес"
         self.controller.weight_checkbutton = ttk.Checkbutton(
@@ -373,6 +374,14 @@ class OrderUIBuilder:
             ('emission_entry', self.controller.emission_entry),
             ('roll_label', self.controller.roll_label),
             ('roll_entry', self.controller.roll_entry),
+            ('order_entry', self.controller.order_entry),
+            ('order_prefix', self.controller.order_prefix_entry),
+            ('order_suffix', self.controller.order_suffix_entry),
+            ('quantity_entry', self.controller.quantity_entry),
+            ('rolls_count_entry', self.controller.rolls_count_entry),
+            ('order_label', self.controller.order_label),
+            ('quantity_label', self.controller.quantity_label),
+            ('weight_checkbutton', self.controller.weight_checkbutton),
         ]
 
         for key, widget in widgets_to_register:

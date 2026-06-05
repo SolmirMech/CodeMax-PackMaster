@@ -85,9 +85,31 @@ class InterfaceMapper:
                     }
                 },
                 "manufacturer_ekosistema": {
-                    "condition": {"type": "contains", "target": "manufacturer_normalized", "value": ["экосистема"]},
-                    "mapping": {},
-                    "else_mapping": {}
+                    "condition": {
+                        "type": "contains",
+                        "target": "manufacturer_normalized",
+                        "value": ["экосистема"]
+                    },
+                    "mapping": {
+                        "order_label": {"visible": False},
+                        "order_prefix": {"visible": False},
+                        "order_entry": {"visible": False},
+                        "order_suffix": {"visible": False},
+                        "quantity_label": {"visible": False},
+                        "quantity_entry": {"visible": False},
+                        "rolls_count_entry": {"visible": False},
+                        "weight_checkbutton": {"visible": False}
+                    },
+                    "else_mapping": {
+                        "order_label": {"visible": True},
+                        "order_prefix": {"visible": True},
+                        "order_entry": {"visible": True},
+                        "order_suffix": {"visible": True},
+                        "quantity_label": {"visible": True},
+                        "quantity_entry": {"visible": True},
+                        "rolls_count_entry": {"visible": True},
+                        "weight_checkbutton": {"visible": True}
+                    }
                 },
                 "customer_rosinka": {
                     "condition": {"type": "contains", "target": "customer", "value": ["росинка"]},
