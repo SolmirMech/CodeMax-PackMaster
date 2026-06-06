@@ -28,6 +28,15 @@ class PackingListWindow:
         self.current_workshop = coordinator.get_workshop() if coordinator else "1"
         self.archive_manager = ArchiveManager(config_manager, coordinator)
 
+        # Добавить переменную для статуса архивации
+        self.archive_enabled = True  # по умолчанию включено
+
+        # Подписка на координатора для получения статуса архивации
+        if coordinator and hasattr(coordinator, 'subscribe'):
+            coordinator.subscribe(self.on_archive_status_changed)
+            # Получаем текущий статус
+            self.archive_enabled = (coordinator.get_archive_status() == "on")
+
         # Переменные для шапки
         self.list_number_var = StringVar()
         self.supplier_var = StringVar()
@@ -59,6 +68,13 @@ class PackingListWindow:
         self._init_empty_data()
         self.create_window()
         self._load_defaults()
+
+    # noinspection PyUnusedLocal
+    def on_archive_status_changed(self, event_type=None, data=None):
+        """Обработчик изменения статуса архивации"""
+        if self.coordinator and hasattr(self.coordinator, 'get_archive_status'):
+            status = self.coordinator.get_archive_status()
+            self.archive_enabled = (status == "on")
 
     def fill_from_xml(self, data: dict):
         self.supplier_var.set(data.get("supplier", ""))
@@ -216,19 +232,12 @@ class PackingListWindow:
             width=5
         ).pack(side=tk.LEFT, padx=(5, 0))
 
-        ttk.Button(
-            buttons_frame,
-            text="📦 В архив",
-            command=self.add_to_archive,
-            width=16
-        ).pack(pady=(10, 0))
-
         # ✅ ДОБАВИТЬ ПОЛЕ СКАНИРОВАНИЯ ПОСЛЕ КНОПКИ "В АРХИВ"
         scan_container = ttk.Frame(buttons_frame)
         scan_container.pack(pady=(15, 0), fill=tk.X)
 
-        ttk.Label(scan_container, text="Артикул/ШК:", font=("Segoe UI", 9)).pack(anchor="w")
-        self.scan_entry = ttk.Entry(scan_container, width=20, font=("Arial", 9))
+        ttk.Label(scan_container, text="Сканировать или ввести Артикул/Штрих-Код:", font=("Segoe UI", 14)).pack(anchor="w")
+        self.scan_entry = ttk.Entry(scan_container, width=20, font=("Arial", 12))
         self.scan_entry.pack(fill=tk.X, pady=(2, 0))
 
         self.scan_status = ttk.Label(scan_container, text="", foreground="blue", font=("Segoe UI", 8))
@@ -460,6 +469,9 @@ class PackingListWindow:
     def add_to_archive(self):
         """Добавляет текущий упаковочный лист в архив"""
         try:
+            # Даём дополнительное время для освобождения файлов
+            time.sleep(0.5)
+
             # Создаём/обновляем Excel с текущими данными
             work_path = self.config_manager.create_ecosystem_list_work_copy()
             header_data = self._collect_header_data()
@@ -470,6 +482,9 @@ class PackingListWindow:
                 self.places_data,
                 self.items_data
             )
+
+            # Даём время на запись
+            time.sleep(0.5)
 
             # Архивируем этот же файл
             self.set_status("⏳ Добавление в архив...", "blue")
@@ -801,6 +816,9 @@ class PackingListWindow:
                     time.sleep(0.3)
 
             self.window.after(0, lambda: self.set_status("✅ Печать завершена", "green"))
+
+            if self.archive_enabled:
+                self.window.after(100, self.add_to_archive)
 
         except Exception:
             self.window.after(0, lambda: self.set_status(f"❌ Ошибка печати", "red"))
