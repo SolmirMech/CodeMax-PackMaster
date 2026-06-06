@@ -19,6 +19,8 @@ class PackingListWindow:
     """Окно упаковочного листа Экосистема"""
 
     def __init__(self, parent, config_manager, coordinator=None):
+        self.scan_status = None
+        self.scan_entry = None
         self.equipment_text = None
         self.parent = parent
         self.config_manager = config_manager
@@ -119,7 +121,7 @@ class PackingListWindow:
         """Создаёт окно упаковочного листа"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("📋 Упаковочный лист Экосистема")
-        self.window.geometry("1400x900")
+        self.window.geometry("1400x950")
         self.window.minsize(1200, 700)
 
         self.window.transient(self.parent)
@@ -176,13 +178,6 @@ class PackingListWindow:
 
         ttk.Button(
             buttons_frame,
-            text="🔄 Обновить Excel",
-            command=self.export_to_excel,
-            width=16
-        ).pack(pady=(0, 20))
-
-        ttk.Button(
-            buttons_frame,
             text="🖨 Распечатать",
             command=self.print_sheet,
             width=16
@@ -228,6 +223,21 @@ class PackingListWindow:
             width=16
         ).pack(pady=(10, 0))
 
+        # ✅ ДОБАВИТЬ ПОЛЕ СКАНИРОВАНИЯ ПОСЛЕ КНОПКИ "В АРХИВ"
+        scan_container = ttk.Frame(buttons_frame)
+        scan_container.pack(pady=(15, 0), fill=tk.X)
+
+        ttk.Label(scan_container, text="Артикул/ШК:", font=("Segoe UI", 9)).pack(anchor="w")
+        self.scan_entry = ttk.Entry(scan_container, width=20, font=("Arial", 9))
+        self.scan_entry.pack(fill=tk.X, pady=(2, 0))
+
+        self.scan_status = ttk.Label(scan_container, text="", foreground="blue", font=("Segoe UI", 8))
+        self.scan_status.pack(anchor="w", pady=(2, 0))
+
+        self.scan_entry.bind("<Return>", self._on_scan_enter)
+        self.scan_entry.bind("<FocusIn>", self._select_all_scan_text)
+        self.scan_entry.bind("<Button-1>", self._on_scan_click)
+
         # === Таблица 1: Места ===
         places_frame = ttk.LabelFrame(main_frame, text="Грузовые места", padding=10)
         places_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -254,6 +264,78 @@ class PackingListWindow:
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    @staticmethod
+    def _select_all_scan_text(event=None):
+        """Выделяет весь текст в поле сканирования при фокусе"""
+        widget = event.widget
+        widget.after(10, lambda: widget.select_range(0, tk.END))
+        widget.after(10, lambda: widget.icursor(tk.END))
+        return "break"
+
+    @staticmethod
+    def _on_scan_click(event=None):
+        """При клике выделяет весь текст"""
+        widget = event.widget
+        if not widget.selection_present():
+            widget.after(10, lambda: widget.select_range(0, tk.END))
+            widget.after(10, lambda: widget.icursor(tk.END))
+
+    # noinspection PyUnusedLocal
+    def _on_scan_enter(self, event=None):
+        """Обработчик Enter в поле сканирования"""
+        self._process_scan_article()
+
+    def _process_scan_article(self):
+        """Обрабатывает введённый артикул — ищет XML и добавляет данные в таблицы"""
+        from core.parse.eco_xml_parser import EcosystemXMLParser
+        import os
+
+        article = self.scan_entry.get().strip()
+        if not article:
+            self._set_scan_status("Введите артикул", "red")
+            return
+
+        xml_dir = self.config_manager.get_weight_data_base_path()
+        if not xml_dir:
+            self._set_scan_status("Каталог XML не найден", "red")
+            return
+
+        xml_path = EcosystemXMLParser.find_xml(article, xml_dir)
+        if not xml_path:
+            self._set_scan_status(f"Не найден: {article}", "red")
+            return
+
+        # Извлекаем полный артикул из имени файла
+        filename = os.path.basename(xml_path)
+        full_article = filename.replace('.xml', '')
+
+        # Обновляем поле ввода на полный артикул
+        if full_article != article:
+            self.scan_entry.delete(0, tk.END)
+            self.scan_entry.insert(0, full_article)
+
+        # Парсим XML
+        data = EcosystemXMLParser.parse(xml_path)
+        if not data:
+            self._set_scan_status("Ошибка парсинга XML", "red")
+            return
+
+        # Добавляем строки в таблицы
+        if 'item_data' in data and data['item_data']:
+            self.add_item_row(data['item_data'])
+
+        if 'place_data' in data and data['place_data']:
+            self.add_place_row(data['place_data'])
+
+        # Очищаем поле для следующего сканирования
+        self.scan_entry.delete(0, tk.END)
+        self._set_scan_status("Добавлено", "green")
+
+    def _set_scan_status(self, message, color="blue"):
+        """Устанавливает статус сканирования"""
+        self.scan_status.config(text=message, foreground=color)
+        self.window.after(3000, lambda: self.scan_status.config(text=""))
+
     def _create_places_table(self, parent):
         """Создаёт таблицу мест"""
         columns = list(mapping.PLACES_COLUMNS.keys())
@@ -271,7 +353,7 @@ class PackingListWindow:
             tree_frame,
             columns=columns,
             show="headings",
-            height=5,
+            height=4,
             selectmode="browse",
             style="PackingList.Treeview"
         )
@@ -312,7 +394,7 @@ class PackingListWindow:
             tree_frame,
             columns=columns,
             show="headings",
-            height=5,
+            height=4,
             selectmode="browse",
             style="PackingList.Treeview"
         )
@@ -444,7 +526,7 @@ class PackingListWindow:
         """Инициализирует данные для таблиц с нулями вместо пустых строк"""
         # Таблица мест
         self.places_data = []
-        for i in range(5):
+        for i in range(4):
             self.places_data.append({
                 "place_number": " ",
                 "net_weight": "0",
@@ -457,7 +539,7 @@ class PackingListWindow:
 
         # Таблица товаров
         self.items_data = []
-        for i in range(5):
+        for i in range(4):
             self.items_data.append({
                 "item_number": " ",
                 "order_request": " ",

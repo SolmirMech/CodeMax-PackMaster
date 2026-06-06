@@ -221,6 +221,15 @@ class OrderDataController:
         if not xml_path:
             return
 
+        # ✅ ИЗВЛЕКАЕМ ПОЛНЫЙ АРТИКУЛ ИЗ ИМЕНИ ФАЙЛА
+        import os
+        filename = os.path.basename(xml_path)
+        full_article = filename.replace('.xml', '')
+
+        # ✅ ОБНОВЛЯЕМ ПОЛЕ ВВОДА НА ПОЛНЫЙ АРТИКУЛ
+        if full_article != article:
+            self.ros_podlo_var.set(full_article)
+
         data = EcosystemXMLParser.parse(xml_path)
         if not data:
             return

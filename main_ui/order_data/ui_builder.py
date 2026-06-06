@@ -150,6 +150,8 @@ class OrderUIBuilder:
         self.add_context_menu(self.controller.podlo_entry)
         self.controller.podlo_entry.bind("<Return>", self.controller.on_article_enter_pressed)
         self.controller.podlo_entry.bind("<Control-KeyPress>", self.control_key_handler)
+        self.controller.podlo_entry.bind("<FocusIn>", self._select_all_text)
+        self.controller.podlo_entry.bind("<Button-1>", self._on_entry_click)
         self.controller.podlo_label.grid_remove()
         self.controller.podlo_entry.grid_remove()
 
@@ -303,6 +305,23 @@ class OrderUIBuilder:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         self.update_cutter_visibility()
+
+    @staticmethod
+    def _select_all_text(event=None):
+        """Выделяет весь текст в поле ввода при фокусе"""
+        widget = event.widget
+        widget.after(10, lambda: widget.select_range(0, tk.END))
+        widget.after(10, lambda: widget.icursor(tk.END))
+        return "break"
+
+    @staticmethod
+    def _on_entry_click(event=None):
+        """При клике выделяет весь текст, если поле было пустым или клик на пустое место"""
+        widget = event.widget
+        # Если текст не выделен - выделяем всё
+        if not widget.selection_present():
+            widget.after(10, lambda: widget.select_range(0, tk.END))
+            widget.after(10, lambda: widget.icursor(tk.END))
 
     def _create_rounding_menu(self):
         """Создаёт контекстное меню для quantity_entry с выбором округления"""
