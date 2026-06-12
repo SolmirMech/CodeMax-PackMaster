@@ -158,13 +158,14 @@ class PDFTemplateFiller:
         "Заказчик:": "$customer",
         "Дата эмиссии:": "$emission", 
         "Длина ролика:": "$rll_length",
-        "№ съема/№ ролика :": "$batch_num",
         "Брутто:": "$brutto",
         "Нетто:": "$netto",
         "Кол-во этикеток:": "$rol",
         "—": "$roul_num",
-        "№ съема /№ ролика:": "$batch_num",
-        "Деталь:" : "$detail_num"
+        "№ съема:": "$batch_num",
+        "№ ролика:": "$roul_num",
+        "Деталь:" : "$detail_num",
+        "Втулка:": "dia"
     }    
     
     def __init__(self, template_path: str):

@@ -219,7 +219,7 @@ class FontSettingsDialog:
         # Поля ролика
         self.roll_entries = {}
         roll_fields = [
-            ("💼 Заказчик", "customer"),
+            ("💼 Заказчик/ Съёмы", "customer"),
             ("🏷 Изделие", "product"),
             ("📑 ТУ", "tu_number"),
             ("🏠 Адрес", "address"),
