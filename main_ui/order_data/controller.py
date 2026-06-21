@@ -759,3 +759,8 @@ class OrderDataController:
     def on_order_selected(self, event=None):
         """Прокси для auto_filler.on_order_selected"""
         self.auto_filler.on_order_selected(event)
+
+    def trigger_print(self):
+        """Запускает печать через модуль печати"""
+        if self.preview_module and hasattr(self.preview_module, 'print_module'):
+            self.preview_module.print_module.print_label()

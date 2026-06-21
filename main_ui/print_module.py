@@ -16,7 +16,8 @@ def get_default_printer():
 class PrintModule:
     """Модуль управления печатью этикеток"""
     
-    def __init__(self, parent, preview_module, coordinator=None, config_manager=None):
+    def __init__(self, parent, preview_module, coordinator=None, config_manager=None, app=None):
+        self.app = app
         self.original_product_name = None
         self.order_data_module = None
         self._settings_manager = None
@@ -48,6 +49,7 @@ class PrintModule:
         # Переменные
         self.copies_var = tk.StringVar(value="1")
         self.connected_roll_module = None
+        self.auto_export_var = tk.BooleanVar(value=False)
         
         # Переменные для печати тиража
         self.batch_print_data = []
@@ -111,7 +113,14 @@ class PrintModule:
             row2_frame, 
             text="⚙ Настройки", 
             command=self.open_settings_manager
-        ).grid(row=0, column=1, padx=5, sticky="w", pady=5)        
+        ).grid(row=0, column=1, padx=5, sticky="w", pady=5)
+
+        # Галочка "Автоотправка в Эксель"
+        ttk.Checkbutton(
+            row2_frame,
+            text="Автоотправка в Эксель",
+            variable=self.auto_export_var
+        ).grid(row=1, column=0, columnspan=2, padx=(20, 0), sticky="w", pady=5)
         
         # Статус печати
         self.print_status_label = ttk.Label(
@@ -568,6 +577,18 @@ class PrintModule:
 
         for i in range(copies):
             self._print_image_gdi(print_image, printer_name, pdf_filler, printer_dpi)
+
+        # Автоотправка в Excel после печати
+        if self.auto_export_var.get() and self.connected_roll_module:
+            self._auto_export_to_excel()
+
+    def _auto_export_to_excel(self):
+        """Автоматический экспорт в Excel после печати"""
+        try:
+            if self.app and hasattr(self.app, 'export_module'):
+                self.app.export_module.export_to_excel()
+        except Exception as e:
+            print(f"Ошибка автоэкспорта: {e}")
 
     @staticmethod
     def _parse_range(range_str):

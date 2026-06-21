@@ -194,7 +194,7 @@ class WeightOrdersApp:
         # Модуль Печати
         print_frame = ttk.Frame(print_export_frame)
         print_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
-        self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator, self.config_manager)
+        self.print_module = PrintModule(print_frame, self.preview_module, self.coordinator, self.config_manager, self)
 
         # Контейнер для модуля экспорта - используем pack внутри
         self.export_container = ttk.Frame(print_export_frame)

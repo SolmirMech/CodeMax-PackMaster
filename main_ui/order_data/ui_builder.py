@@ -224,6 +224,10 @@ class OrderUIBuilder:
         self.controller.weight_label.grid(row=6, column=0, sticky="w", pady=3)
         self.controller.gross_entry = ttk.Entry(data_frame, textvariable=self.controller.gross_weight_kg_var, width=15)
         self.controller.gross_entry.grid(row=6, column=1, padx=(5, 0), pady=3, sticky="w")
+        self.controller.gross_entry.bind("<Up>",
+                                         lambda e: self._navigate_to_previous_field(self.controller.gross_entry))
+        self.controller.gross_entry.bind("<Down>", lambda e: self._navigate_to_next_field(self.controller.gross_entry))
+        self.controller.gross_entry.bind("<Return>", lambda e: self._trigger_print())
 
         # Вес втулки
         self.controller.sleeve_label = ttk.Label(data_frame, text="Вес втулки, г:")
@@ -242,6 +246,12 @@ class OrderUIBuilder:
         self.controller.batch_label.grid(row=7, column=1, sticky="w", pady=3)
         self.controller.batch_entry = ttk.Entry(data_frame, textvariable=self.controller.batch_num_var, width=6)
         self.controller.batch_entry.grid(row=7, column=1, padx=(115, 0), pady=3, sticky="w")
+        self.controller.batch_entry.bind("<Up>", lambda e: self._navigate_up_from_batch())
+        self.controller.batch_entry.bind("<Down>", lambda e: self._navigate_down_from_batch())
+        self.controller.batch_entry.bind("<Left>",
+                                         lambda e: self._navigate_to_previous_field(self.controller.batch_entry))
+        self.controller.batch_entry.bind("<Right>", lambda e: self._navigate_to_next_field(self.controller.batch_entry))
+        self.controller.batch_entry.bind("<Return>", lambda e: self._trigger_print())
 
         # № ролика
         self.controller.roll_label = ttk.Label(data_frame, text="№ ролика:")
@@ -250,6 +260,12 @@ class OrderUIBuilder:
         self.controller.roll_entry = ttk.Entry(data_frame, textvariable=self.controller.roll_num_var, width=7)
         self.controller.roll_entry.grid(row=7, column=1, padx=(265, 0), pady=3, sticky="w")
         self.controller.roll_entry.grid_remove()
+        self.controller.roll_entry.bind("<Up>", lambda e: self._navigate_up_from_roll())
+        self.controller.roll_entry.bind("<Down>", lambda e: self._navigate_down_from_roll())
+        self.controller.roll_entry.bind("<Left>",
+                                        lambda e: self._navigate_to_previous_field(self.controller.roll_entry))
+        self.controller.roll_entry.bind("<Right>", lambda e: self._navigate_to_next_field(self.controller.roll_entry))
+        self.controller.roll_entry.bind("<Return>", lambda e: self._trigger_print())
 
         # Ширина ручья
         self.controller.stream_width_label = ttk.Label(data_frame, text="Ширина ручья, мм:")
@@ -305,6 +321,65 @@ class OrderUIBuilder:
         self.toggle_weight_visibility()
         self.update_elements_visibility()
         self.update_cutter_visibility()
+
+    def _navigate_to_previous_field(self, current_widget):
+        """Переход к предыдущему полю с выделением текста"""
+        widgets = [
+            self.controller.gross_entry,
+            self.controller.batch_entry,
+            self.controller.roll_entry
+        ]
+        try:
+            idx = widgets.index(current_widget)
+            if idx > 0:
+                next_widget = widgets[idx - 1]
+                next_widget.focus_set()
+                next_widget.select_range(0, tk.END)
+        except ValueError:
+            pass
+        return "break"
+
+    def _navigate_to_next_field(self, current_widget):
+        """Переход к следующему полю с выделением текста"""
+        widgets = [
+            self.controller.gross_entry,
+            self.controller.batch_entry,
+            self.controller.roll_entry
+        ]
+        try:
+            idx = widgets.index(current_widget)
+            if idx < len(widgets) - 1:
+                next_widget = widgets[idx + 1]
+                next_widget.focus_set()
+                next_widget.select_range(0, tk.END)
+        except ValueError:
+            pass
+        return "break"
+
+    def _navigate_up_from_batch(self):
+        """Переход из № съёма вверх к Вес брутто"""
+        self.controller.gross_entry.focus_set()
+        self.controller.gross_entry.select_range(0, tk.END)
+        return "break"
+
+    def _navigate_down_from_batch(self):
+        """Переход из № съёма вниз к № ролика"""
+        if self.controller.roll_entry.winfo_ismapped():
+            self.controller.roll_entry.focus_set()
+            self.controller.roll_entry.select_range(0, tk.END)
+        return "break"
+
+    def _navigate_up_from_roll(self):
+        """Переход из № ролика вверх к № съёма"""
+        self.controller.batch_entry.focus_set()
+        self.controller.batch_entry.select_range(0, tk.END)
+        return "break"
+
+    def _navigate_down_from_roll(self):
+        """Переход из № ролика вниз - возврат к Вес брутто"""
+        self.controller.gross_entry.focus_set()
+        self.controller.gross_entry.select_range(0, tk.END)
+        return "break"
 
     @staticmethod
     def _select_all_text(event=None):
@@ -678,3 +753,9 @@ class OrderUIBuilder:
             self.copy_text_from_text_widget(event.widget)
             return "break"
         return None
+
+    def _trigger_print(self):
+        """Запускает печать"""
+        if self.controller:
+            self.controller.trigger_print()
+        return "break"
