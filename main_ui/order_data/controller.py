@@ -764,3 +764,32 @@ class OrderDataController:
         """Запускает печать через модуль печати"""
         if self.preview_module and hasattr(self.preview_module, 'print_module'):
             self.preview_module.print_module.print_label()
+            # После печати увеличиваем номер съёма
+            self.increment_batch_number()
+
+    def increment_batch_number(self):
+        """
+        Увеличивает номер съёма на 1.
+        Если в поле диапазон (например "1-5"), берёт последнее число.
+        """
+        current_value = self.batch_num_var.get().strip()
+        if not current_value:
+            return
+
+        try:
+            # Проверяем, есть ли дефис (диапазон)
+            if '-' in current_value:
+                # Берём последнее число после дефиса
+                parts = current_value.split('-')
+                last_part = parts[-1].strip()
+                if last_part.isdigit():
+                    next_number = int(last_part) + 1
+                    self.batch_num_var.set(str(next_number))
+            else:
+                # Одиночное число
+                if current_value.isdigit():
+                    next_number = int(current_value) + 1
+                    self.batch_num_var.set(str(next_number))
+        except ValueError:
+            # Если не число - оставляем как есть
+            pass
