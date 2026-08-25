@@ -98,7 +98,9 @@ class WeightOrdersApp:
         
         self.create_ui()
         self.center_window()
-        self.root.after(200, self.data_manager.initial_scan) # Запуск фонового сканирования
+        # сканирование БД (умный запуск)
+        if self.data_manager and hasattr(self.data_manager, 'start_check'):
+            self.root.after(200, self.data_manager.start_check, False)
         # noinspection PyArgumentList,PyTypeChecker
         root.after(100, self.set_initial_focus)
 

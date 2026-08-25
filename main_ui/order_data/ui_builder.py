@@ -21,6 +21,7 @@ class OrderUIBuilder:
             config_manager: ConfigManager
             coordinator: SettingsCoordinator
         """
+        self.date_update_menu = None
         self.parent = parent
         self.controller = controller
         self.config_manager = config_manager
@@ -190,6 +191,32 @@ class OrderUIBuilder:
         )
         date_update_label.grid(row=4, column=1, sticky="w", padx=(200, 0), pady=(5, 5))
         date_update_label.bind("<Button-1>", lambda e: self.update_date_field())
+
+        # Создаем контекстное меню для кнопки
+        self.date_update_menu = tk.Menu(date_update_label, tearoff=0)
+        self.date_update_menu.add_command(
+            label="Обновить базу за 3 дня",
+            command=lambda: self._notify_db_update("update_3days")
+        )
+        self.date_update_menu.add_command(
+            label="Обновить базу за неделю",
+            command=lambda: self._notify_db_update("update_week")
+        )
+        self.date_update_menu.add_command(
+            label="Обновить базу за 2 недели",
+            command=lambda: self._notify_db_update("update_2weeks")
+        )
+        self.date_update_menu.add_command(
+            label="Обновить базу за месяц",
+            command=lambda: self._notify_db_update("update_month")
+        )
+        self.date_update_menu.add_separator()
+        self.date_update_menu.add_command(
+            label="Обновить базу полностью",
+            command=lambda: self._notify_db_update("update_full")
+        )
+
+        date_update_label.bind("<Button-3>", lambda e: self.date_update_menu.tk_popup(e.x_root, e.y_root))
 
         # Дата
         self.controller.date_entry = ttk.Entry(data_frame, textvariable=self.controller.date_var, width=12)
@@ -759,3 +786,20 @@ class OrderUIBuilder:
         if self.controller:
             self.controller.trigger_print()
         return "break"
+
+    def _notify_db_update(self, update_type: str):
+        """
+        Отправляет уведомление координатору о необходимости обновления БД.
+
+        Args:
+            update_type: Тип обновления ('update_3days', 'update_week', 'update_2weeks', 'update_month', 'update_full')
+        """
+        if self.coordinator:
+            context = {
+                "type": "list_changed",
+                "list_name": "db_update",
+                "update_type": update_type
+            }
+            self.coordinator.notify_subscribers(context)
+        else:
+            print("Координатор не доступен")

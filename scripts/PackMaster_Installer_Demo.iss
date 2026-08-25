@@ -1,7 +1,7 @@
 ; CodeMax-PackMaster.iss
 [Setup]
 AppName=CodeMax-PackMaster Demo
-AppVersion=1.0
+AppVersion=1.1
 AppVerName=CodeMax-PackMaster Demo 1.1
 AppPublisher=SolmirMech
 AppCopyright=Copyright © 2026 SolmirMech. Все права защищены.
