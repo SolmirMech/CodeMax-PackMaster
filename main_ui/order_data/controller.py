@@ -4,6 +4,7 @@
 import os
 import tkinter as tk
 from datetime import datetime
+import glob
 
 from .auto_fill import OrderAutoFiller
 from .calculator import OrderCalculator
@@ -156,6 +157,7 @@ class OrderDataController:
         self.date_var = tk.StringVar(value=datetime.now().strftime("%d.%m.%Y"))
         self.date_emission_var = tk.StringVar(value="")
         self.detail_num_var = tk.StringVar(value="")
+        self.last_selected_order = ""
 
         # Производитель и продукт
         self.manufacturer_var = tk.StringVar(value="")
@@ -202,6 +204,8 @@ class OrderDataController:
         # Флаги интерфейса
         self.shorten_text_var = tk.BooleanVar(value=False)
         self.show_weight_var = tk.BooleanVar(value=False)
+        # ===== Фильтр Прошлогодних Заказов =====
+        self.include_old_orders = tk.BooleanVar(value=False)
 
     # ========== ОБРАБОТЧИКИ СОБЫТИЙ (тонкая прослойка) ==========
 
@@ -801,10 +805,61 @@ class OrderDataController:
             label="📂 Перейти к XML",
             command=self.open_xml_folder
         )
+
+        # Галочка "Включить прошлогодние заказы"
+        context_menu.add_checkbutton(
+            label="📅 Включить прошлогодние заказы",
+            variable=self.include_old_orders,
+            command=self.on_include_old_orders_toggle
+        )
+
         try:
             context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             context_menu.grab_release()
+
+    def on_include_old_orders_toggle(self):
+        """
+        Обрабатывает переключение галочки 'Включить прошлогодние заказы'.
+
+        При переключении:
+        - Очищается кэш заказов
+        - Выполняется повторный поиск с новым состоянием фильтра
+        """
+        # Проверяем, что номер заказа введён
+        order_num = self.order_number.get().strip()
+        if not order_num:
+            return
+
+        # Очищаем кэш для принудительного обновления
+        self.cached_order_data = None
+        self.cached_order_number = ""
+        if hasattr(self, 'order_data_module') and self.order_data_module:
+            self.order_data_module.cached_order_data = None
+            self.order_data_module.cached_order_number = ""
+            if hasattr(self.order_data_module, 'multiple_orders_data'):
+                self.order_data_module.multiple_orders_data = None
+            if hasattr(self.order_data_module, 'selected_order_data'):
+                self.order_data_module.selected_order_data = None
+
+        # Скрываем комбобокс (если есть)
+        if hasattr(self, 'order_combobox') and self.order_combobox:
+            self.order_combobox.grid_remove()
+            self.order_combobox.set('')
+            self.order_combobox['values'] = []
+            self.order_combobox_visible = False
+
+        # Показываем обычное поле ввода
+        if hasattr(self, 'order_entry') and self.order_entry:
+            self.order_entry.grid()
+        if hasattr(self, 'order_suffix_entry') and self.order_suffix_entry:
+            self.order_suffix_entry.grid()
+
+        # Выполняем повторный поиск через auto_filler
+        if hasattr(self, 'auto_filler'):
+            # Передаём состояние фильтра в auto_filler
+            self.auto_filler.include_old_orders = self.include_old_orders.get()
+            self.auto_filler.on_order_enter_pressed(None)
 
     def open_xml_folder(self):
         """Открывает проводник с папкой XML, при уникальном совпадении выделяет файл заказа"""
@@ -812,16 +867,29 @@ class OrderDataController:
         if not base_path or not os.path.exists(base_path):
             return
 
-        order_num = self.order_number.get().strip()
+        full_order_num = None
 
-        if not order_num:
+        # 1. Сначала проверяем last_selected_order (выбранный из комбобокса)
+        if hasattr(self, 'last_selected_order') and self.last_selected_order:
+            full_order_num = self.last_selected_order
+
+        # 2. Если нет - берём из cached_order_data
+        if not full_order_num and self.cached_order_data and len(self.cached_order_data) > 0:
+            full_order_num = self.cached_order_data[0].get('order_number', '')
+
+        # 3. Если всё ещё нет - берём из поля ввода
+        if not full_order_num:
+            full_order_num = self.order_number.get().strip()
+
+        if not full_order_num:
             base_path_normalized = base_path.replace('/', '\\')
             os.system(f'explorer "{base_path_normalized}"')
             return
 
-        # Ищем файлы, начинающиеся с номера заказа
-        import glob
-        pattern = os.path.join(base_path, f"*{order_num}_*.xml")
+        # Берём только базовый номер (всё что до /)
+        base_order = full_order_num.split('/')[0] if '/' in full_order_num else full_order_num
+
+        pattern = os.path.join(base_path, f"{base_order}_*.xml")
         matching_files = glob.glob(pattern)
 
         if len(matching_files) != 1:

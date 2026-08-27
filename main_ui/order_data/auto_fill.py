@@ -19,11 +19,14 @@ class OrderAutoFiller:
         self.data_manager = data_manager
         self.config_manager = config_manager
         self.coordinator = coordinator
+        # Флаг для фильтрации (будет синхронизироваться с controller)
+        self.include_old_orders = False
 
     # noinspection PyUnusedLocal
     def on_order_enter_pressed(self, event=None):
         """Запускает поиск заказа в БД при нажатии Enter"""
         # Сброс временных данных
+        self.controller.last_selected_order = ""
         self.controller.xml_tu_number = ""
         self.controller.roll_length.set("")
         self.controller.quantity_var.set("")
@@ -31,44 +34,122 @@ class OrderAutoFiller:
         self.controller.detail_num_var.set("")
         self.controller.rolls_count_var.set("1")
         self.controller.product_text.delete("1.0", tk.END)
-        
+
+        # ===== СБРАСЫВАЕМ ФИЛЬТР ПРИ НОВОМ ПОИСКЕ =====
+        if hasattr(self.controller, 'order_data_module') and self.controller.order_data_module:
+            self.controller.order_data_module.filtered_parsed_data = []
+            self.controller.order_data_module.current_order = None
+
         # Скрываем комбобокс выбора заказа если есть
         if hasattr(self.controller, 'order_combobox'):
             self.controller.order_combobox.set('')
             self.controller.order_combobox['values'] = []
             self.controller.order_combobox.grid_remove()
-        
+            self.controller.order_combobox_visible = False
+
         self.controller.cached_order_data = None
         self.controller.cached_order_number = ""
-        
+
         if self.controller.preview_module is not None:
             self.controller.preview_module.set_product_gtin("")
             self.controller.preview_module.cancel_update_timer()
-        
+
         # Получаем номер заказа
         order_num = self.controller.order_number.get().strip()
         if not order_num:
-            self.controller.order_data_module.parse_status.config(
-                text="Введите номер заказа", 
-                foreground="red"
-            )
+            if self.controller.order_data_module and hasattr(self.controller.order_data_module, 'parse_status'):
+                self.controller.order_data_module.parse_status.config(
+                    text="Введите номер заказа",
+                    foreground="red"
+                )
             return
-        
+
         # Ищем заказы
         results = self.data_manager.search_combined(order_num)
-        
+
         if not results:
-            self.controller.order_data_module.parse_status.config(
-                text="Заказ не найден", 
-                foreground="red"
-            )
+            if self.controller.order_data_module and hasattr(self.controller.order_data_module, 'parse_status'):
+                self.controller.order_data_module.parse_status.config(
+                    text="Заказ не найден",
+                    foreground="red"
+                )
             return
-        
+
+        # ============================================================
+        # === ФИЛЬТРАЦИЯ ПРОШЛОГОДНИХ ЗАКАЗОВ ===
+        # Применяется только если галочка выключена
+        # ============================================================
+        if not self.controller.include_old_orders.get():
+            # Группируем заказы по базовому номеру (без суффикса)
+            groups = {}
+            for order in results:
+                order_number = order.get('order_number', '')
+                # Извлекаем базовый номер (всё что до последнего /)
+                if '/' in order_number:
+                    base = order_number.rsplit('/', 1)[0]
+                else:
+                    base = order_number
+
+                if base not in groups:
+                    groups[base] = []
+                groups[base].append(order)
+
+            # Проверяем наличие дублирующихся заказов
+            has_duplicates = any(len(orders) > 1 for orders in groups.values())
+
+            # Если есть дубли - оставляем только заказ с максимальным суффиксом
+            if has_duplicates:
+                filtered_results = []
+                for base, orders in groups.items():
+                    if len(orders) == 1:
+                        filtered_results.append(orders[0])
+                    else:
+                        # Находим максимальный суффикс
+                        max_suffix = -1
+                        for order in orders:
+                            order_number = order.get('order_number', '')
+                            if '/' in order_number:
+                                try:
+                                    suffix = int(order_number.split('/')[-1])
+                                    if suffix > max_suffix:
+                                        max_suffix = suffix
+                                except ValueError:
+                                    pass
+
+                        # Ищем заказ с максимальным суффиксом
+                        found = False
+                        for order in orders:
+                            order_number = order.get('order_number', '')
+                            if '/' in order_number:
+                                try:
+                                    suffix = int(order_number.split('/')[-1])
+                                    if suffix == max_suffix:
+                                        filtered_results.append(order)
+                                        found = True
+                                        break
+                                except ValueError:
+                                    pass
+
+                        if not found:
+                            # Если ничего не нашли - берём первый
+                            filtered_results.append(orders[0])
+
+                results = filtered_results
+        # === КОНЕЦ ФИЛЬТРАЦИИ ===
+
         if len(results) == 1:
             cached_data = self.auto_fill_from_xml()
-            self.controller.order_data_module.cached_order_data = cached_data
-            self.controller.order_data_module.cached_order_number = order_num
-            self.controller.order_data_module.get_product_name()
+            if self.controller.order_data_module:
+                self.controller.order_data_module.cached_order_data = cached_data
+                self.controller.order_data_module.cached_order_number = order_num
+                self.controller.order_data_module.get_product_name()
+
+                # Обновляем статус
+                if hasattr(self.controller.order_data_module, 'parse_status'):
+                    self.controller.order_data_module.parse_status.config(
+                        text="Заказ загружен",
+                        foreground="green"
+                    )
         else:
             self._show_multiple_orders(results)
 
@@ -81,25 +162,105 @@ class OrderAutoFiller:
         order_number = self.controller.order_number.get().strip()
         if not order_number:
             return None
-        
+
         try:
             results = self.data_manager.search_combined(order_number)
-            
+
             if not results:
                 print(f"Файлы для заказа {order_number} не найдены")
                 return None
-            
+
+            # Применяем фильтрацию если она включена в controller
+            if not self.controller.include_old_orders.get():
+                results = self._filter_old_orders(results)
+
+            if not results:
+                print(f"После фильтрации заказов не осталось")
+                return None
+
             parsed_result = results[0]
             self._fill_technical_fields_only(parsed_result)
-            
+
             self.controller.cached_order_data = results
             self.controller.cached_order_number = order_number
-            
+
             return results
-            
+
         except Exception as e:
             print(f"Ошибка автозаполнения из XML: {e}")
             return None
+
+    @staticmethod
+    def _filter_old_orders(results: list) -> list:
+        """
+        Фильтрует заказы, оставляя только актуальные (с максимальным суффиксом).
+
+        Args:
+            results: Список заказов для фильтрации
+
+        Returns:
+            Отфильтрованный список заказов
+        """
+        if not results:
+            return results
+
+        # Группируем заказы по базовому номеру (без суффикса)
+        groups = {}
+        for order in results:
+            order_number = order.get('order_number', '')
+            # Извлекаем базовый номер (всё что до последнего /)
+            if '/' in order_number:
+                base = order_number.rsplit('/', 1)[0]
+            else:
+                base = order_number
+
+            if base not in groups:
+                groups[base] = []
+            groups[base].append(order)
+
+        # Проверяем наличие дублирующихся заказов
+        has_duplicates = any(len(orders) > 1 for orders in groups.values())
+
+        # Если есть дубли - оставляем только заказ с максимальным суффиксом
+        if has_duplicates:
+            filtered_results = []
+            for base, orders in groups.items():
+                if len(orders) == 1:
+                    filtered_results.append(orders[0])
+                else:
+                    # Находим максимальный суффикс
+                    max_suffix = -1
+                    for order in orders:
+                        order_number = order.get('order_number', '')
+                        if '/' in order_number:
+                            try:
+                                suffix = int(order_number.split('/')[-1])
+                                if suffix > max_suffix:
+                                    max_suffix = suffix
+                            except ValueError:
+                                pass
+
+                    # Ищем заказ с максимальным суффиксом
+                    found = False
+                    for order in orders:
+                        order_number = order.get('order_number', '')
+                        if '/' in order_number:
+                            try:
+                                suffix = int(order_number.split('/')[-1])
+                                if suffix == max_suffix:
+                                    filtered_results.append(order)
+                                    found = True
+                                    break
+                            except ValueError:
+                                pass
+
+                    if not found:
+                        # Если ничего не нашли - берём первый
+                        filtered_results.append(orders[0])
+
+            return filtered_results
+
+        return results
 
     def _fill_technical_fields_only(self, parsed_data: dict):
         """Заполняет только технические поля (НЕ product_text!)"""
@@ -197,26 +358,29 @@ class OrderAutoFiller:
 
     def _show_multiple_orders(self, results: list):
         """Показывает выбор при нескольких найденных заказах"""
-        
+
         self.controller.order_entry.grid_remove()
         self.controller.order_suffix_entry.grid_remove()
-        
+
         self.controller.multiple_orders_data = results
-        
+
         order_options = [order_data.get('order_number', '') for order_data in results]
-        
+
         self.controller.order_combobox['values'] = order_options
         self.controller.order_combobox.set(order_options[0])
         self.controller.order_combobox.grid()
         self.controller.order_combobox_visible = True
-        
+
         self.controller.parent.after(100, lambda: self.controller.order_combobox.focus_set())
         self.controller.parent.after(120, lambda: self.controller.order_combobox.event_generate('<Down>'))
-        
-        self.controller.order_data_module.parse_status.config(
-            text=f"Найдено {len(results)} заказов. Выберите нужный:",
-            foreground="orange"
-        )
+
+        # Показываем статус с информацией о фильтрации
+        filter_status = " (фильтр прошлогодних ВКЛЮЧЁН)" if self.controller.include_old_orders.get() else ""
+        if self.controller.order_data_module and hasattr(self.controller.order_data_module, 'parse_status'):
+            self.controller.order_data_module.parse_status.config(
+                text=f"Найдено {len(results)} заказов. Выберите нужный:{filter_status}",
+                foreground="orange"
+            )
 
     # noinspection PyUnusedLocal
     def on_order_selected(self, event=None):
@@ -224,6 +388,9 @@ class OrderAutoFiller:
         selected_index = self.controller.order_combobox.current()
         if selected_index >= 0 and hasattr(self.controller, 'multiple_orders_data'):
             selected_order_data = self.controller.multiple_orders_data[selected_index]
+
+            # Сохраняем выбранный номер заказа
+            self.controller.last_selected_order = selected_order_data.get('order_number', '')
             
             self.controller.order_combobox.grid_remove()
             self.controller.order_entry.grid()
