@@ -793,3 +793,41 @@ class OrderDataController:
         except ValueError:
             # Если не число - оставляем как есть
             pass
+
+    def show_order_context_menu(self, event):
+        """Показывает контекстное меню для поля номера заказа"""
+        context_menu = tk.Menu(self.parent, tearoff=0)
+        context_menu.add_command(
+            label="📂 Перейти к XML",
+            command=self.open_xml_folder
+        )
+        try:
+            context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            context_menu.grab_release()
+
+    def open_xml_folder(self):
+        """Открывает проводник с папкой XML, при уникальном совпадении выделяет файл заказа"""
+        base_path = self.config_manager.get_weight_data_base_path()
+        if not base_path or not os.path.exists(base_path):
+            return
+
+        order_num = self.order_number.get().strip()
+
+        if not order_num:
+            base_path_normalized = base_path.replace('/', '\\')
+            os.system(f'explorer "{base_path_normalized}"')
+            return
+
+        # Ищем файлы, начинающиеся с номера заказа
+        import glob
+        pattern = os.path.join(base_path, f"*{order_num}_*.xml")
+        matching_files = glob.glob(pattern)
+
+        if len(matching_files) != 1:
+            base_path_normalized = base_path.replace('/', '\\')
+            os.system(f'explorer "{base_path_normalized}"')
+            return
+
+        file_path = matching_files[0].replace('/', '\\')
+        os.system(f'explorer /select, "{file_path}"')

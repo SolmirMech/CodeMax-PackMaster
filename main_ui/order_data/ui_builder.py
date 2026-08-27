@@ -168,6 +168,7 @@ class OrderUIBuilder:
         self.controller.order_entry.bind("<Return>", self.controller.on_order_enter_pressed)
         self.controller.order_entry.bind("<Down>", lambda e: self.controller.quantity_entry.focus_set())
         self.controller.order_entry.bind("<FocusIn>", lambda e: self.controller.order_entry.select_range(0, tk.END))
+        self.controller.order_entry.bind("<Button-3>", self.controller.show_order_context_menu)
 
         # Комбобокс выбора заказа (скрыт)
         self.controller.order_combobox = ttk.Combobox(
