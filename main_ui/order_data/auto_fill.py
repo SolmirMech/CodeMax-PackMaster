@@ -199,7 +199,7 @@ class OrderAutoFiller:
         """Показывает выбор при нескольких найденных заказах"""
         
         self.controller.order_entry.grid_remove()
-        self.controller.entry_suffix.grid_remove()
+        self.controller.order_suffix_entry.grid_remove()
         
         self.controller.multiple_orders_data = results
         
@@ -227,7 +227,7 @@ class OrderAutoFiller:
             
             self.controller.order_combobox.grid_remove()
             self.controller.order_entry.grid()
-            self.controller.entry_suffix.grid()
+            self.controller.order_suffix_entry.grid()
             self.controller.order_combobox_visible = False
             
             self._fill_technical_fields_only(selected_order_data)
