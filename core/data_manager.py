@@ -350,34 +350,19 @@ class XMLDataManager:
 
     def _check_xml_source_available(self) -> bool:
         """
-        Проверяет доступность источника XML с тайм-аутом.
-        
+        Проверяет доступность источника XML.
+        ВЫЗЫВАТЬ ТОЛЬКО ИЗ ФОНОВОГО ПОТОКА!
+
         Returns:
             True если источник доступен, False если недоступен
         """
-        
-        def check_folder():
-            try:
-                # Простая проверка существования папки
-                return self.xml_folder.exists()
-            except:
-                return False
-        
-        # Создаём поток с тайм-аутом
-        result = [None]
-        
-        def run_check():
-            result[0] = check_folder()
-        
-        thread = threading.Thread(target=run_check, daemon=True)
-        thread.start()
-        thread.join(timeout=3)  # Таймаут 3 секунды
-        
-        if thread.is_alive():
-            logging.warning(f"Таймаут проверки источника XML: {self.xml_folder}")
+        try:
+            # Простая проверка существования папки
+            # Теперь вызывается только из фоновых потоков, поэтому безопасно
+            return self.xml_folder.exists()
+        except Exception as e:
+            logging.warning(f"Ошибка проверки источника XML: {e}")
             return False
-        
-        return result[0] if result[0] is not None else False
 
     def search_combined(self, order_query: str, sheet_query: str = None) -> List[Dict[str, Any]]:
         """
@@ -721,19 +706,51 @@ class XMLDataManager:
     def start_fast_check(self, silent=False):
         """
         Публичный метод для запуска быстрой проверки извне.
-
-        Args:
-            silent: Если True - не показывать уведомления в UI
+        Запускается в фоновом потоке, чтобы не блокировать UI.
         """
+        # Проверяем, не запущена ли уже проверка
+        with self._background_lock:
+            if self._background_running:
+                if not silent:
+                    self._notify_status("⏳ Проверка уже выполняется...")
+                return
+
+            self._background_running = True
+
         if not silent and self.status_callback:
             self._notify_status("🔍 Быстрая проверка новых файлов...")
-        self.fast_check_today(silent=silent)
+
+        # Запускаем в фоновом потоке
+        thread = threading.Thread(
+            target=self._fast_check_async,
+            args=(silent,),
+            daemon=True
+        )
+        thread.start()
+
+    def _fast_check_async(self, silent=False):
+        """
+        Асинхронная обёртка для fast_check_today.
+        Выполняется в фоновом потоке.
+        """
+        try:
+            self.fast_check_today(silent=silent)
+        except Exception as e:
+            logging.error(f"Ошибка в фоновой проверке: {e}")
+            if not silent:
+                self._notify_status(f"❌ Ошибка проверки: {e}")
+        finally:
+            # Освобождаем блокировку
+            with self._background_lock:
+                self._background_running = False
 
     def start_check(self, silent=False):
         """
         Умный запуск проверки:
         - если БД пуста - полная проверка (initial_scan)
         - если БД не пуста - быстрая проверка (fast_check)
+
+        ВСЕГДА в фоновом потоке.
 
         Args:
             silent: Если True - не показывать уведомления в UI
@@ -745,6 +762,7 @@ class XMLDataManager:
             # База пуста - полная проверка
             if not silent:
                 self._notify_status("🔄 Первичное создание базы данных...")
+            # initial_scan уже работает в фоновом потоке
             self.initial_scan()
         else:
             # База не пуста - быстрая проверка
