@@ -31,3 +31,6 @@ six==1.17.0
 tzdata==2026.1
 
 tkinterweb
+pylibdmtx
+segno
+django-qrcode
