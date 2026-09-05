@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-# noinspection PyUnboundLocalVariable,PyTypeChecker, SpellCheckingInspection
+# noinspection PyUnboundLocalVariable,PyTypeChecker, SpellCheckingInspection,PyUnresolvedReferences
 class ExcelPreviewModule:
     """Модуль предпросмотра Excel файла"""
     
@@ -381,70 +381,76 @@ class ExcelPreviewModule:
 
     # noinspection PyPackageRequirements,PyUnusedLocal
     def _get_print_area_pixel_bounds(self, excel, worksheet, excel_hwnd):
-        """Возвращает границы области печати в пикселях экрана"""
+        """Возвращает границы области печати в пикселях экрана с учетом DPI"""
         try:
             import win32com.client
             import win32gui
             import win32print
             import win32con
-            
+            import ctypes
+
+            # Устанавливаем DPI awareness для процесса
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            except:
+                pass
+
             # Получаем область печати
             print_area_str = worksheet.PageSetup.PrintArea
             if not print_area_str:
                 print_area = worksheet.Range("A1:I45")
             else:
                 print_area = worksheet.Range(print_area_str)
-            
-            # Получаем DPI экрана
+
+            # Получаем DPI экрана с учетом масштабирования
             hdc = win32gui.GetDC(0)
-            dpi_x = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSX)  # DPI по горизонтали
-            dpi_y = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSY)  # DPI по вертикали
+            dpi_x = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSX)
+            dpi_y = win32print.GetDeviceCaps(hdc, win32con.LOGPIXELSY)
             win32gui.ReleaseDC(0, hdc)
-            
-            # Конвертируем точки в пиксели
-            # В Excel: 1 point = 1/72 дюйма
-            # Пиксели = (points / 72) * DPI
-            
-            left_points = print_area.Left
-            top_points = print_area.Top
-            width_points = print_area.Width
-            height_points = print_area.Height
-            
-            # Конвертация
-            left_px = int((left_points / 72) * dpi_x)
-            top_px = int((top_points / 72) * dpi_y)
-            width_px = int((width_points / 72) * dpi_x)
-            height_px = int((height_points / 72) * dpi_y)         
-            
+
+            # Получаем масштабирование системы
+            scaling = dpi_x / 96.0
+
+            # Конвертируем точки в пиксели с учетом масштабирования
+            left_px = int((print_area.Left / 72) * dpi_x / scaling)
+            top_px = int((print_area.Top / 72) * dpi_y / scaling)
+            width_px = int((print_area.Width / 72) * dpi_x / scaling)
+            height_px = int((print_area.Height / 72) * dpi_y / scaling)
+
             # Получаем положение окна Excel
             screen_rect = win32gui.GetWindowRect(excel_hwnd)
             client_rect = win32gui.GetClientRect(excel_hwnd)
-            
+
             # Рассчитываем рамки
             frame_width = (screen_rect[2] - screen_rect[0] - client_rect[2]) // 2
             title_height = (screen_rect[3] - screen_rect[1] - client_rect[3]) - frame_width
-            
+
             # Получаем отступ из настроек
             settings = self.config_manager.load_json_settings("shared_utils.json")
             preview_settings = settings.get("preview_settings", {})
-            top_offset = preview_settings.get("top_offset", 0)
-            
-            # Рассчитываем абсолютные координаты на экране
-            # Сейчас координаты relative to client area
-            # Нужно добавить сдвиг ленты Excel (около 150px)
-            excel_ribbon_height = 150  # Приблизительная высота ленты Excel
-            
+            top_offset = preview_settings.get("top_offset", 160)
+
+            # Получаем высоту ленты Excel (может варьироваться в разных версиях)
+            excel_ribbon_height = 150
+            # Можно попытаться определить автоматически
+            if hasattr(excel, 'CommandBars'):
+                try:
+                    ribbon = excel.CommandBars("Ribbon")
+                    if ribbon:
+                        excel_ribbon_height = ribbon.Height
+                except:
+                    pass
+
+            # Абсолютные координаты
             table_left = screen_rect[0] + frame_width + left_px
             table_top = screen_rect[1] + title_height + top_offset + top_px + excel_ribbon_height
             table_right = table_left + width_px
-            table_bottom = table_top + height_px         
-            
+            table_bottom = table_top + height_px
+
             return table_left, table_top, table_right, table_bottom
-            
+
         except Exception as e:
             print(f"Ошибка расчета границ области печати: {e}")
-            import traceback
-            traceback.print_exc()
             return None
 
     # noinspection PyPackageRequirements
@@ -646,7 +652,7 @@ class ExcelPreviewModule:
         
         # ======== Размеры ========
         window_width = 670
-        window_height = 900
+        window_height = 800
         
         # Центрирование окна на экране
         screen_width = self.preview_window.winfo_screenwidth()
@@ -655,7 +661,7 @@ class ExcelPreviewModule:
         center_y = int((screen_height - window_height) / 2)
         
         self.preview_window.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
-        self.preview_window.minsize(600, 400)  # Минимальный размер
+        self.preview_window.minsize(600, 500)  # Минимальный размер
         
         # Фрейм с прокруткой
         main_frame = ttk.Frame(self.preview_window, padding=10)
@@ -681,6 +687,8 @@ class ExcelPreviewModule:
         self.preview_canvas.grid(row=0, column=0, sticky='nsew')
         v_scrollbar.grid(row=0, column=1, sticky='ns')
         h_scrollbar.grid(row=1, column=0, sticky='ew')
+
+        self.preview_canvas.bind("<MouseWheel>", self._on_mousewheel)
         
         canvas_container.grid_rowconfigure(0, weight=1)
         canvas_container.grid_columnconfigure(0, weight=1)
@@ -808,6 +816,10 @@ class ExcelPreviewModule:
             self.preview_window.lift(), 
             self.preview_window.focus_force()
         ])
+
+    def _on_mousewheel(self, event):
+        """Прокрутка колесиком мыши"""
+        self.preview_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
         
     def archive_current_sheet(self):
         """Архивирует текущий лист"""
