@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, StringVar
+from tkinter import ttk, StringVar, Menu
 
 import win32print
 import win32ui
@@ -55,6 +55,9 @@ class PrintModule:
         self.batch_print_data = []
         self.current_batch_index = 0
         self.is_batch_printing = False
+        # Переменная для обратного порядка печати тиража
+        self.reverse_order_var = tk.BooleanVar(value=False)
+        self.batch_print_btn = None
         
         self.create_print_ui()
         if self.coordinator and hasattr(self.coordinator, 'subscribe'):
@@ -100,14 +103,18 @@ class PrintModule:
         row2_frame = ttk.Frame(frame)
         row2_frame.grid(row=1, column=0, sticky="ew", pady=7)
         row2_frame.grid_columnconfigure(0, weight=1, uniform="row2")
-        row2_frame.grid_columnconfigure(1, weight=1, uniform="row2")      
-        
-        # Печать тиража
-        ttk.Button(
-            row2_frame, 
-            text="📋 Печать тиража", 
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="row2")
+
+        # Печать тиража с контекстным меню
+        self.batch_print_btn = ttk.Button(
+            row2_frame,
+            text="📋 Печать тиража",
             command=self.start_batch_print
-        ).grid(row=0, column=0, sticky="w", pady=5)
+        )
+        self.batch_print_btn.grid(row=0, column=0, sticky="w", pady=5)
+
+        # Привязываем правую кнопку мыши для контекстного меню
+        self.batch_print_btn.bind('<Button-3>', self.show_batch_context_menu)
         
         ttk.Button(
             row2_frame, 
@@ -131,6 +138,15 @@ class PrintModule:
             font=("Arial", 12)
         )
         self.print_status_label.grid(row=2, column=0, sticky="w", pady=(7, 0))
+
+    def show_batch_context_menu(self, event):
+        """Показывает контекстное меню для кнопки Печать тиража"""
+        menu = Menu(self.parent, tearoff=0)
+        menu.add_checkbutton(
+            label="Обратный порядок",
+            variable=self.reverse_order_var
+        )
+        menu.post(event.x_root, event.y_root)
         
     def update_preview_displays(self):
         """Обновляет превью в preview_module"""
@@ -192,6 +208,10 @@ class PrintModule:
                     self.print_status_label.config(text="Нет данных для печати", foreground="red")
                     return
 
+                # Если включен обратный порядок - реверсируем список
+                if self.reverse_order_var.get():
+                    filtered_data = filtered_data[::-1]
+
                 # === Проверка необходимых полей (только не для экосистемы) ===
                 if not is_ecosystem:
                     required_fields = [
@@ -232,8 +252,7 @@ class PrintModule:
             if self.original_product_name is not None:
                 self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
                 self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)          
-            
-            self.copies_var.set("1")
+
             self.is_batch_printing = False
             self.set_status(f"Печать завершена ({self.current_batch_index} шт)", "green")
             return
