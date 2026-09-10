@@ -116,6 +116,9 @@ class XMLDataManager:
                 elif update_type == "update_month":
                     self.start_check_with_days(30, silent=False)
 
+                elif update_type == "restart_db":
+                    self.restart_database(silent=False)
+
             # Существующая логика для смены папки
             if context.get("type") == "xml_folder_changed":
                 new_path = self.config.get_weight_data_base_path()
@@ -922,3 +925,58 @@ class XMLDataManager:
                         self._background_lock.release()
                     except:
                         pass
+
+    def restart_database(self, silent=False):
+        """Удаляет файлы БД и запускает полное сканирование заново."""
+        with self._background_lock:
+            if self._background_running:
+                if not silent:
+                    self._notify_status("⏳ Дождитесь завершения текущей операции")
+                return
+            self._background_running = True
+
+        if not silent:
+            self._notify_status("🔄 Перезапуск базы данных...")
+
+        def worker():
+            try:
+                # Закрываем соединение с БД
+                try:
+                    self.repository.close()  # Если такого метода нет — см. п.2
+                except Exception:
+                    pass
+
+                # Удаляем файлы
+                db_path = self.config.data_dir / "orders_cache.db"
+                for p in [db_path, Path(str(db_path) + "-wal"), Path(str(db_path) + "-shm")]:
+                    try:
+                        if p.exists():
+                            p.unlink()
+                    except Exception as e:
+                        logging.error(f"Не удалось удалить {p}: {e}")
+
+                try:
+                    if self.log_file.exists():
+                        self.log_file.unlink()
+                except Exception:
+                    pass
+
+                # Пересоздаём БД
+                self.repository.init_database()
+                self._stats.clear()
+
+                # Полный скан
+                self._background_running = False
+                self.initial_scan()
+            except Exception as e:
+                logging.error(f"Ошибка перезапуска БД: {e}")
+                if not silent:
+                    self._notify_status(f"❌ Ошибка перезапуска: {e}")
+                self._background_running = False
+            finally:
+                try:
+                    self._background_lock.release()
+                except Exception:
+                    pass
+
+        threading.Thread(target=worker, daemon=True).start()

@@ -35,8 +35,10 @@ class OrderRepository:
         Args:
             db_path: Путь к файлу базы данных SQLite
         """
+
         self.db_path = db_path
         self._logger = logging.getLogger(__name__)
+        self._conn = None
 
     @contextmanager
     def _connection(self):
@@ -156,22 +158,25 @@ class OrderRepository:
         except sqlite3.Error as e:
             self._logger.error(f"Ошибка инициализации БД: {e}")
             self.recreate_database()
-    
+
     def recreate_database(self) -> None:
-        """
-        Пересоздание базы данных в случае повреждения.
-        Создает бэкап поврежденной БД.
-        """
         try:
+            # Удаляем WAL/SHM перед бэкапом, иначе они «прилипнут» к новому .db
+            for suffix in ("-wal", "-shm"):
+                p = Path(str(self.db_path) + suffix)
+                try:
+                    if p.exists():
+                        p.unlink()
+                except Exception:
+                    pass
+
             if self.db_path.exists():
-                backup_path = self.db_path.with_suffix('.db_cut.bak')
+                backup_path = self.db_path.with_suffix('.db.bak')
                 self.db_path.rename(backup_path)
                 self._logger.warning(f"БД повреждена. Создан бэкап: {backup_path}")
-            
-            # Пересоздаём с нуля
+
             self.init_database()
             self._logger.info("База данных пересоздана")
-            
         except Exception as e:
             self._logger.error(f"Критическая ошибка восстановления БД: {e}")
             raise
@@ -531,3 +536,12 @@ class OrderRepository:
         except sqlite3.Error as e:
             self._logger.error(f"Ошибка обновления метаданных {file_name}: {e}")
             return False
+
+    def close(self):
+        """Закрывает активные соединения (заглушка, если соединения открываются по вызову)."""
+        try:
+            if hasattr(self, '_conn') and self._conn:
+                self._conn.close()
+                self._conn = None
+        except Exception:
+            pass

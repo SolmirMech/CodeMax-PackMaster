@@ -217,6 +217,12 @@ class OrderUIBuilder:
             command=lambda: self._notify_db_update("update_full")
         )
 
+        self.date_update_menu.add_separator()
+        self.date_update_menu.add_command(
+            label="⚠ Перезапустить базу",
+            command=lambda: self._notify_db_update("restart_db")
+        )
+
         date_update_label.bind("<Button-3>", lambda e: self.date_update_menu.tk_popup(e.x_root, e.y_root))
 
         # Дата
