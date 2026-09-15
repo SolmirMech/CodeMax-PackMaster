@@ -317,6 +317,9 @@ class PrintModule:
             for i in range(total_copies):
                 self._print_image_gdi(print_image, printer_name, pdf_filler, printer_dpi)
 
+            # Печатаем ярлык на коробку для этого вида
+            self.parent.after(100, lambda: self.print_box_for_current_item(total_copies))
+
             # Следующий вид
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
@@ -324,6 +327,60 @@ class PrintModule:
         except Exception as e:
             self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}",
                                            foreground="red")
+            self.current_batch_index += 1
+            self.parent.after(100, self.print_next_in_batch)
+
+    def print_box_for_current_item(self, total_copies):
+        """Печатает ярлык на коробку для текущего вида тиража"""
+        try:
+            if not self.connected_roll_module:
+                self.current_batch_index += 1
+                self.parent.after(100, self.print_next_in_batch)
+                return
+
+            # Получаем принтер для коробки
+            box_printer = self._get_printer("box")
+            if not box_printer:
+                self.print_status_label.config(text="Принтер для коробки не найден!", foreground="red")
+                self.current_batch_index += 1
+                self.parent.after(100, self.print_next_in_batch)
+                return
+
+            box_printer_dpi = self._get_printer_dpi(box_printer)
+
+            # Сохраняем оригинальное количество роликов
+            original_rolls_count = self.connected_roll_module.rolls_count_var.get()
+
+            try:
+                # Временно устанавливаем количество роликов = total_copies
+                self.connected_roll_module.rolls_count_var.set(str(total_copies))
+                self.connected_roll_module.force_recalculate_total()
+                self.preview_module.update_from_connected_roll_module()
+
+                # Генерируем и печатаем ярлык коробки
+                box_data_map = self.preview_module._prepare_box_data_map()
+                box_print_image = self.preview_module.box_pdf_filler.generate_print_image(
+                    box_data_map, printer_dpi=box_printer_dpi
+                )
+                self._print_image_gdi(
+                    box_print_image, box_printer,
+                    self.preview_module.box_pdf_filler, box_printer_dpi
+                )
+            finally:
+                # Восстанавливаем оригинальное значение
+                self.connected_roll_module.rolls_count_var.set(original_rolls_count)
+                self.connected_roll_module.calculate_total_quantity()
+                self.preview_module.update_from_connected_roll_module()
+
+            # Переходим к следующему виду
+            self.current_batch_index += 1
+            self.parent.after(100, self.print_next_in_batch)
+
+        except Exception as e:
+            self.print_status_label.config(
+                text=f"Ошибка печати коробки для вида {self.current_batch_index + 1}: {str(e)}",
+                foreground="red"
+            )
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
 
