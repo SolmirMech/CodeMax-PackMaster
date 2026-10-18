@@ -579,7 +579,7 @@ class SettingsDialog:
             self.coordinator.set_workshop(workshop)
 
             # Сохраняем пути к папкам
-            shared_settings["weight_data_base"] = self.xml_folder_path.get()
+            shared_settings["data_base"] = self.xml_folder_path.get()
             if self.excel_folder_path:
                 shared_settings["weight_orders_xlsx"] = self.excel_folder_path
 
@@ -611,7 +611,7 @@ class SettingsDialog:
             settings = self.config_manager.load_json_settings("shared_utils.json")
 
             # Путь для XML - если есть в настройках, используем его, иначе data_dir (как строку)
-            xml_path = settings.get("weight_data_base", "")
+            xml_path = settings.get("data_base", "")
             if not xml_path:
                 xml_path = str(self.config_manager.data_dir)  # конвертируем Path в строку
             self.xml_folder_path.set(xml_path)
@@ -635,7 +635,7 @@ class SettingsDialog:
         if folder:
             self.xml_folder_path.set(folder)
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            settings["weight_data_base"] = folder
+            settings["data_base"] = folder
             self.config_manager.save_json_settings("shared_utils.json", settings)
             self.update_folder_status()
 

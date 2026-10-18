@@ -217,7 +217,7 @@ class OrderDataController:
         if not article:
             return
 
-        xml_dir = self.config_manager.get_weight_data_base_path()
+        xml_dir = self.config_manager.get_data_base_path()
         if not xml_dir:
             return
 
@@ -863,7 +863,7 @@ class OrderDataController:
 
     def open_xml_folder(self):
         """Открывает проводник с папкой XML, при уникальном совпадении выделяет файл заказа"""
-        base_path = self.config_manager.get_weight_data_base_path()
+        base_path = self.config_manager.get_data_base_path()
         if not base_path or not os.path.exists(base_path):
             return
 

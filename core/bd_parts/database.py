@@ -1,6 +1,7 @@
 """
 Модуль database.py - DAO слой для работы с SQLite базой данных заказов.
 Содержит класс OrderRepository для всех операций с БД.
+Версия резки
 """
 
 import json
@@ -74,6 +75,124 @@ class OrderRepository:
         finally:
             if conn:
                 conn.close()
+
+    def search_products_by_detail(self, detail_query: str) -> List[Dict[str, Any]]:
+        """
+        Прямой поиск продуктов по номеру детали/оттиска, без привязки к заказу.
+        Ищет по detail_number, sheet_number, sheet_full_name (OR).
+        Возвращает плоский список продуктов с данными родительского заказа,
+        отсортированный по свежести заказа (last_modified DESC).
+
+        Args:
+            detail_query: Номер детали или оттиска (или его часть)
+
+        Returns:
+            Список словарей:
+            [
+                {
+                    "order_number": "...",
+                    "customer": "...",
+                    "order_manager": "...",
+                    "last_modified": 1234567890.0,
+                    "order_data": {...},   # полный parsed_data заказа
+                    "product": {...}       # сырой продукт из таблицы products
+                },
+                ...
+            ]
+        """
+        if not detail_query or not detail_query.strip():
+            return []
+
+        query_str = detail_query.strip()
+
+        try:
+            with self._connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                sql = """
+                    SELECT
+                        o.file_name,
+                        o.order_number,
+                        o.customer,
+                        o.order_manager,
+                        o.last_modified,
+                        o.parsed_data,
+                        p.detail_number,
+                        p.product_name,
+                        p.short_name,
+                        p.gtin,
+                        p.date_emission,
+                        p.quantity,
+                        p.sheet_number,
+                        p.sheet_full_name,
+                        p.stream,
+                        p.sleeve_diameter,
+                        p.winding_scheme,
+                        p.stream_width,
+                        p.max_labels_per_roll,
+                        p.diameter_mm
+                    FROM products p
+                    JOIN orders o ON o.file_name = p.order_file
+                    WHERE p.detail_number LIKE ?
+                       OR p.sheet_number LIKE ?
+                       OR p.sheet_full_name LIKE ?
+                    ORDER BY o.last_modified DESC
+                """
+                pattern = f'%{query_str}%'
+                cursor.execute(sql, (pattern, pattern, pattern))
+                rows = cursor.fetchall()
+
+                if not rows:
+                    return []
+
+                # Кэшируем parsed_data по file_name, чтобы не парсить JSON многократно
+                parsed_cache: Dict[str, Dict[str, Any]] = {}
+                results: List[Dict[str, Any]] = []
+
+                for row in rows:
+                    file_name = row['file_name']
+
+                    if file_name not in parsed_cache:
+                        try:
+                            parsed_cache[file_name] = json.loads(row['parsed_data'])
+                        except json.JSONDecodeError as e:
+                            self._logger.error(
+                                f"Ошибка декодирования JSON для {file_name}: {e}"
+                            )
+                            parsed_cache[file_name] = {}
+
+                    product = {
+                        'detail_number': row['detail_number'],
+                        'product_name': row['product_name'],
+                        'full_name': row['short_name'],
+                        'gtin': row['gtin'],
+                        'date_emission': row['date_emission'],
+                        'quantity': row['quantity'],
+                        'sheet_number': row['sheet_number'],
+                        'sheet_full_name': row['sheet_full_name'],
+                        'stream': row['stream'],
+                        'sleeve_diameter': row['sleeve_diameter'],
+                        'winding_scheme': row['winding_scheme'],
+                        'stream_width': row['stream_width'],
+                        'max_labels_per_roll': row['max_labels_per_roll'],
+                        'diameter_mm': row['diameter_mm'],
+                    }
+
+                    results.append({
+                        'order_number': row['order_number'],
+                        'customer': row['customer'],
+                        'order_manager': row['order_manager'],
+                        'last_modified': row['last_modified'],
+                        'order_data': parsed_cache[file_name],
+                        'product': product,
+                    })
+
+                return results
+
+        except sqlite3.Error as e:
+            self._logger.error(f"Ошибка поиска по детали '{detail_query}': {e}")
+            raise
     
     def init_database(self) -> None:
         """
@@ -118,6 +237,11 @@ class OrderRepository:
                         sheet_number TEXT,
                         sheet_full_name TEXT,
                         stream TEXT,
+                        sleeve_diameter TEXT,
+                        winding_scheme TEXT,
+                        stream_width TEXT,
+                        max_labels_per_roll TEXT,
+                        diameter_mm TEXT,
                         FOREIGN KEY (order_file) REFERENCES orders(file_name)
                     )
                 """)
@@ -146,6 +270,16 @@ class OrderRepository:
                 if 'sheet_full_name' not in columns:
                     cursor.execute("ALTER TABLE products ADD COLUMN sheet_full_name TEXT")
                     self._logger.info("Добавлена колонка sheet_full_name в таблицу products")
+
+                # Проверяем наличие технических колонок оттиска
+                cursor.execute("PRAGMA table_info(products)")
+                columns = [col[1] for col in cursor.fetchall()]
+
+                for col_name in ('sleeve_diameter', 'winding_scheme', 'stream_width',
+                                 'max_labels_per_roll', 'diameter_mm'):
+                    if col_name not in columns:
+                        cursor.execute(f"ALTER TABLE products ADD COLUMN {col_name} TEXT")
+                        self._logger.info(f"Добавлена колонка {col_name} в таблицу products")
                 
                 # Проверяем наличие колонки order_name
                 cursor.execute("PRAGMA table_info(orders)")
@@ -171,7 +305,7 @@ class OrderRepository:
                     pass
 
             if self.db_path.exists():
-                backup_path = self.db_path.with_suffix('.db.bak')
+                backup_path = self.db_path.with_suffix('.db_cut.bak')
                 self.db_path.rename(backup_path)
                 self._logger.warning(f"БД повреждена. Создан бэкап: {backup_path}")
 
@@ -245,13 +379,20 @@ class OrderRepository:
                         product.get('quantity', ''),
                         product.get('sheet_number', ''),
                         product.get('sheet_full_name', ''),
-                        product.get('stream', '')
+                        product.get('stream', ''),
+                        product.get('sleeve_diameter', ''),
+                        product.get('winding_scheme', ''),
+                        product.get('stream_width', ''),
+                        product.get('max_labels_per_roll', ''),
+                        product.get('diameter_mm', ''),
                     )
                     cursor.execute("""
                         INSERT INTO products 
                         (order_file, detail_number, product_name, short_name, gtin, 
-                         date_emission, quantity, sheet_number, sheet_full_name, stream)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         date_emission, quantity, sheet_number, sheet_full_name, stream,
+                         sleeve_diameter, winding_scheme, stream_width,
+                         max_labels_per_roll, diameter_mm)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, product_data)
                 
                 # Сохраняем оттиски в таблицу sheets

@@ -332,10 +332,10 @@ class ConfigManager:
         settings["packers"] = packers_list
         return self.save_json_settings("shared_utils.json", settings)
         
-    def get_weight_data_base_path(self):
+    def get_data_base_path(self):
         """Возвращает путь к базе данных из настроек"""
         settings = self.load_json_settings("shared_utils.json")
-        return settings.get("weight_data_base", "")        
+        return settings.get("data_base", "")
 
     def save_data_base_path(self, path):
         """Сохраняет путь к базе данных в настройки"""

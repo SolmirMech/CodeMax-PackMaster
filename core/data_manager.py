@@ -1,6 +1,7 @@
 """
 Модуль data_manager.py - кэширующий слой для работы с XML-файлами заказов.
 Ускоряет поиск за счет использования SQLite базы данных.
+Версия резки
 """
 
 import hashlib
@@ -41,7 +42,7 @@ class XMLDataManager:
         self.root = root
         
         # Получаем путь к XML заказам
-        xml_path = config_manager.get_weight_data_base_path()
+        xml_path = config_manager.get_data_base_path()
         self.xml_folder = Path(xml_path)
         
         self._stats = OrderStatistics()
@@ -54,7 +55,7 @@ class XMLDataManager:
         self._update_scheduled = False       # Флаг отложенного обновления
         
         # Настройка логгирования
-        self.log_file = config_manager.data_dir / "data_manager.log"
+        self.log_file = config_manager.data_dir / "data_manager_cut.log"
         self._setup_logging()
         
         # Проверяем доступность
@@ -66,7 +67,7 @@ class XMLDataManager:
         self._background_lock = threading.Lock()
         
         # Создаем репозиторий
-        db_path = config_manager.data_dir / "orders_cache.db"
+        db_path = config_manager.data_dir / "orders_cache_cut.db"
         self.repository = OrderRepository(db_path)
 
         # Инициализация БД через репозиторий
@@ -97,7 +98,6 @@ class XMLDataManager:
     def on_settings_changed(self, context=None):
         """Обработчик уведомлений от координатора"""
         if context and isinstance(context, dict):
-            # Существующая логика для обновления даты
             if context.get("type") == "list_changed" and context.get("list_name") == "update_date_request":
                 self.start_fast_check(silent=False)
 
@@ -119,17 +119,17 @@ class XMLDataManager:
                 elif update_type == "restart_db":
                     self.restart_database(silent=False)
 
-            # Существующая логика для смены папки
             if context.get("type") == "xml_folder_changed":
-                new_path = self.config.get_weight_data_base_path()
+                new_path = self.config.get_data_base_path()
                 new_path = Path(new_path)
 
+                # ✅ Добавить проверку
                 if new_path != self.xml_folder:
                     self.xml_folder = new_path
                     self.start_background_check(silent=False)
                 else:
                     logging.debug("Папка не изменилась, пропускаем")
-
+            
     def _start_periodic_check(self):
         """Запускает периодическую проверку каждые 15 минут"""
         if self._periodic_check_running:
@@ -361,7 +361,6 @@ class XMLDataManager:
         """
         try:
             # Простая проверка существования папки
-            # Теперь вызывается только из фоновых потоков, поэтому безопасно
             return self.xml_folder.exists()
         except Exception as e:
             logging.warning(f"Ошибка проверки источника XML: {e}")
@@ -481,9 +480,7 @@ class XMLDataManager:
                     self._notify_status("⚠️ Источник XML недоступен")
                     return
 
-                # ← ИСПОЛЬЗУЕМ РЕПОЗИТОРИЙ
                 db_files = self.repository.get_all_files_metadata()
-
                 new_stats = OrderStatistics()
                 processed_files = 0
 
@@ -513,7 +510,6 @@ class XMLDataManager:
                             if not parsed_data:
                                 continue
 
-                            # ← ИСПОЛЬЗУЕМ РЕПОЗИТОРИЙ
                             if self.repository.save_order(file_path, parsed_data, file_hash):
                                 logging.info(f"Добавлен новый заказ: {file_name}")
                                 processed_files += 1
@@ -525,31 +521,14 @@ class XMLDataManager:
                         logging.error(f"Ошибка обработки {file_name}: {e}")
                         continue
 
+                # Обновляем статистику (в лог)
                 if processed_files > 0:
                     self._stats.merge(new_stats)
                     self._log_collected_statistics("обновление")
 
+                    # УПРОЩЕННОЕ СООБЩЕНИЕ В UI
                     if not silent:
-                        status_parts = []
-                        if new_stats.emission_orders:
-                            status_parts.append(f"📅 {len(new_stats.emission_orders)} с датой эмиссии")
-                        if new_stats.solmark_orders:
-                            status_parts.append(f"🖨 {len(new_stats.solmark_orders)} Solmark")
-                        if new_stats.multi_customer_orders:
-                            status_parts.append(f"👥 {len(new_stats.multi_customer_orders)} с многими заказчиками")
-                        if new_stats.diameter_orders:
-                            status_parts.append(f"📏 {len(new_stats.diameter_orders)} с diameter_mm")
-                        if new_stats.labels_per_roll_orders:
-                            status_parts.append(f"🏷 {len(new_stats.labels_per_roll_orders)} с labels_per_roll")
-                        if new_stats.aggregation_orders:
-                            status_parts.append(f"📦 {len(new_stats.aggregation_orders)} с агрегацией")
-
-                        if status_parts:
-                            status_msg = f"Обновлено {processed_files} файлов ({', '.join(status_parts)})"
-                        else:
-                            status_msg = f"Обновлено {processed_files} файлов"
-
-                        self._notify_status(status_msg)
+                        self._notify_status(f"✅ Обновлено {processed_files} файлов")
 
             except sqlite3.Error as e:
                 logging.error(f"SQLite ошибка в background_check: {e}")
@@ -593,9 +572,9 @@ class XMLDataManager:
                     self._notify_status("⚠️ Источник XML недоступен")
                     return 0
 
-                    # Проверяем за последние 2 дня (на случай задержки)
+                # Проверяем за последние 2 дня (на случай задержки)
                 today = datetime.now().date()
-                date_from = today - timedelta(days=2)  # ← используем timedelta
+                date_from = today - timedelta(days=2)
 
                 changed_files = []
                 for file_path in self.xml_folder.glob("*.xml"):
@@ -603,7 +582,6 @@ class XMLDataManager:
                         mtime = file_path.stat().st_mtime
                         file_date = datetime.fromtimestamp(mtime).date()
 
-                        # Если файл изменен в период от date_from до today
                         if date_from <= file_date <= today:
                             changed_files.append(file_path)
 
@@ -634,11 +612,9 @@ class XMLDataManager:
                         needs_processing = False
 
                         if file_name not in db_files:
-                            # Новый файл
                             needs_processing = True
                         else:
                             db_hash, db_mtime = db_files[file_name]
-                            # Сравниваем хэш или дату изменения
                             if file_hash != db_hash or abs(last_modified - db_mtime) > 1:
                                 needs_processing = True
                             else:
@@ -656,34 +632,17 @@ class XMLDataManager:
                         logging.error(f"Ошибка быстрой обработки {file_name}: {e}")
                         continue
 
-                # Обновляем статистику
+                # Обновляем статистику (в лог)
                 if processed_files > 0:
                     self._stats.merge(new_stats)
                     self._log_collected_statistics("быстрое обновление")
 
+                    # УПРОЩЕННОЕ СООБЩЕНИЕ В UI
                     if not silent:
-                        status_parts = []
-                        if new_stats.emission_orders:
-                            status_parts.append(f"📅 {len(new_stats.emission_orders)} с датой эмиссии")
-                        if new_stats.solmark_orders:
-                            status_parts.append(f"🖨 {len(new_stats.solmark_orders)} Solmark")
-                        if new_stats.multi_customer_orders:
-                            status_parts.append(f"👥 {len(new_stats.multi_customer_orders)} с многими заказчиками")
-                        if new_stats.diameter_orders:
-                            status_parts.append(f"📏 {len(new_stats.diameter_orders)} с diameter_mm")
-                        if new_stats.labels_per_roll_orders:
-                            status_parts.append(f"🏷 {len(new_stats.labels_per_roll_orders)} с labels_per_roll")
-                        if new_stats.aggregation_orders:
-                            status_parts.append(f"📦 {len(new_stats.aggregation_orders)} с агрегацией")
-
-                        if status_parts:
-                            status_msg = f"✅ Обновлено {processed_files} файлов ({', '.join(status_parts)})"
+                        if unchanged_files > 0:
+                            status_msg = f"✅ Обновлено {processed_files} файлов (еще {unchanged_files} без изменений)"
                         else:
                             status_msg = f"✅ Обновлено {processed_files} файлов"
-
-                        if unchanged_files > 0:
-                            status_msg += f" (еще {unchanged_files} без изменений)"
-
                         self._notify_status(status_msg)
                 else:
                     if not silent:
@@ -947,7 +906,7 @@ class XMLDataManager:
                     pass
 
                 # Удаляем файлы
-                db_path = self.config.data_dir / "orders_cache.db"
+                db_path = self.config.data_dir / "orders_cache_cut.db"
                 for p in [db_path, Path(str(db_path) + "-wal"), Path(str(db_path) + "-shm")]:
                     try:
                         if p.exists():

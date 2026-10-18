@@ -87,7 +87,7 @@ class OrderDetailsController:
             
         try:
             settings = self.config_manager.load_json_settings("shared_utils.json")
-            new_folder_path = settings.get("weight_data_base", "")
+            new_folder_path = settings.get("data_base", "")
             if new_folder_path != self.folder_path.get():
                 self.folder_path.set(new_folder_path)
                 # Сбрасываем статус папки
@@ -104,7 +104,7 @@ class OrderDetailsController:
         """Загружает начальные настройки"""
         try:
             saved_settings = self.config_manager.load_json_settings("shared_utils.json")
-            self.folder_path.set(saved_settings.get("weight_data_base", ""))
+            self.folder_path.set(saved_settings.get("data_base", ""))
             self.load_excel_folder_path()
         except Exception as e:
             print(f"Ошибка загрузки настроек: {e}")

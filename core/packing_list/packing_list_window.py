@@ -304,7 +304,7 @@ class PackingListWindow:
             self._set_scan_status("Введите артикул", "red")
             return
 
-        xml_dir = self.config_manager.get_weight_data_base_path()
+        xml_dir = self.config_manager.get_data_base_path()
         if not xml_dir:
             self._set_scan_status("Каталог XML не найден", "red")
             return

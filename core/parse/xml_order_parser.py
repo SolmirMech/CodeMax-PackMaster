@@ -1,13 +1,17 @@
 """
 Модуль парсинга XML заказов.
 Поддерживает новый формат (с <ОперацииЗаказа>)
+Версия резки
 """
 
-import xml.etree.ElementTree as ET
 import re
-from typing import Dict, List, Optional, Any
+# noinspection PyPep8Naming
+import xml.etree.ElementTree as ET
+# noinspection PyUnusedImports
+from typing import Dict, Optional, Any, List
 
 
+# noinspection SpellCheckingInspection
 class XMLOrderParser:
     """Парсер XML файлов заказов."""   
     
@@ -26,9 +30,10 @@ class XMLOrderParser:
     COMMENT_PROPERTY_CODE = '65000'    
     
     def __init__(self, custom_replacements=None):
-        pass
+        self.custom_replacements = custom_replacements
         
-    def _is_old_format(self, root: ET.Element) -> bool:
+    @staticmethod
+    def _is_old_format(root: ET.Element) -> bool:
         """Определяет, является ли XML старым форматом (с parent_sheet внутри order)."""
         # Старый формат имеет структуру: export/order/parent_sheet
         order = root.find('.//order')
@@ -38,7 +43,8 @@ class XMLOrderParser:
                 return True
         return False
 
-    def _is_new_format(self, root: ET.Element) -> bool:
+    @staticmethod
+    def _is_new_format(root: ET.Element) -> bool:
         """Определяет, является ли XML новым внешним форматом."""
         # Проверяем характерные теги нового формата
         if root.tag == 'ExportOrder':  # или другой корневой тег
@@ -92,7 +98,6 @@ class XMLOrderParser:
         # 2. Создаем parent_sheet и product
         # Собираем маппинг ID -> название оттиска и ID -> продукты
         sheet_name_map = {}
-        products_by_sheet = {}
         
         for sheet_elem in new_root.findall('.//PrintSheet'):
             sheet_id = sheet_elem.get('InternalId')
@@ -159,14 +164,16 @@ class XMLOrderParser:
         old_xml_string = ET.tostring(old_style_root, encoding='unicode')
         return self._parse_old_format(old_xml_string)
         
-    def _copy_element(self, source: ET.Element, source_tag: str, 
+    @staticmethod
+    def _copy_element(source: ET.Element, source_tag: str,
                       target: ET.Element, target_tag: str) -> None:
         """Копирует текст из одного элемента в другой."""
         src_elem = source.find(source_tag)
         if src_elem is not None and src_elem.text:
             ET.SubElement(target, target_tag).text = src_elem.text.strip()
 
-    def _add_property(self, parent: ET.Element, code: str, value: str) -> None:
+    @staticmethod
+    def _add_property(parent: ET.Element, code: str, value: str) -> None:
         """Добавляет свойство с указанным кодом."""
         if value:  # Добавляем только если значение не пустое
             prop = ET.SubElement(parent, 'Свойство')
@@ -205,7 +212,7 @@ class XMLOrderParser:
                 if prefix_match:
                     order_prefix = prefix_match.group(1)
                 
-                suffix_match = re.search(r'(\/\d+)$', order_number)
+                suffix_match = re.search(r'(/\d+)$', order_number)
                 if suffix_match:
                     order_suffix = suffix_match.group(1)
             
@@ -226,7 +233,7 @@ class XMLOrderParser:
                     sheet_full_name_mapping[sheet_id] = sheet_full_name
                     
                     # Извлекаем цифры из названия оттиска
-                    # Пытаемся найти номер оттиска (обычно в конце или после дефиса)
+                    # пытаемся найти номер оттиска (обычно в конце или после дефиса)
                     match = re.search(r'[-\s](\d{4,6})(?:\D|$)', sheet_full_name)
                     if match:
                         sheet_mapping[sheet_id] = match.group(1)  # Только цифры
@@ -253,7 +260,7 @@ class XMLOrderParser:
                     continue
                 
                 # Ищем, к какому sheet_id относится эта операция
-                # Сравниваем с полным названием оттиска
+                # сравниваем с полным названием оттиска
                 for sheet_id, sheet_full_name in sheet_full_name_mapping.items():
                     # Проверяем, содержит ли название операции название оттиска
                     # или наоборот, название оттиска содержит часть операции
@@ -267,29 +274,36 @@ class XMLOrderParser:
                             except ValueError:
                                 pass
                         break
+
+            # 3. Собираем операции резки, привязанные к оттискам
+            operations_by_sheet = self._collect_operations_by_sheet(
+                root, sheet_full_name_mapping
+            )
             
-            # 3. Парсим продукты
+            # 4. Парсим продукты
             products = []
             for product_elem in root.findall('.//product'):
                 # Получаем id_order_sheet этого продукта
                 sheet_id_elem = product_elem.find('id_order_sheet')
+                sheet_id = ""
                 sheet_number = ""
                 sheet_full_name = ""
                 order_metrage = ""
-                
+
                 if sheet_id_elem is not None and sheet_id_elem.text:
                     sheet_id = sheet_id_elem.text.strip()
-                    sheet_number = sheet_mapping.get(sheet_id, "")  # Только цифры
-                    sheet_full_name = sheet_full_name_mapping.get(sheet_id, "")  # Полное название
+                    sheet_number = sheet_mapping.get(sheet_id, "")
+                    sheet_full_name = sheet_full_name_mapping.get(sheet_id, "")
                     order_metrage = sheet_metrage_mapping.get(sheet_id, "")
                 
                 product = self._parse_product(
                     product_elem=product_elem,
                     parent_sheet_date=parent_sheet_date,
-                    root=root,
-                    sheet_number=sheet_number,        # ← Только цифры (для совместимости)
-                    sheet_full_name=sheet_full_name,   # ← Новое поле: полное название
-                    order_metrage=order_metrage
+                    sheet_number=sheet_number,
+                    sheet_full_name=sheet_full_name,
+                    order_metrage=order_metrage,
+                    sheet_id=sheet_id,
+                    operations_by_sheet=operations_by_sheet
                 )
                 if product:
                     products.append(product)
@@ -310,6 +324,7 @@ class XMLOrderParser:
                 'order_manager': order_manager,
                 'products': products,
                 'operations': operations,
+                'operations_by_sheet': operations_by_sheet,
                 'comments': comments,
                 'has_solmark': has_solmark
             }
@@ -319,7 +334,8 @@ class XMLOrderParser:
         except Exception as e:
             raise ValueError(f"Ошибка обработки XML: {e}")
             
-    def _normalize_customer(self, raw_customer: str, order_name: str) -> Dict:
+    @staticmethod
+    def _normalize_customer(raw_customer: str, order_name: str) -> Dict:
         """
         Возвращает словарь с заказчиком(-ами) и информацией для статистики.
         
@@ -397,70 +413,62 @@ class XMLOrderParser:
     def _parse_operations_and_comments(self, root: ET.Element) -> tuple[Dict[str, str], Dict[str, str], bool]:
         """
         Единый метод для парсинга операций, комментариев и выявления Solmark заказов.
-        
+
+        Плоский dict `operations` собирается по принципу «последняя операция побеждает»
+        и сохранён для обратной совместимости с UI. Привязка свойств резки
+        к конкретным оттискам делается отдельно — в `_collect_operations_by_sheet`.
+
         Returns:
             tuple: (operations_dict, comments_dict, has_solmark)
         """
         operations = {}
         comments = {}
-        has_solmark = False  # Флаг для определения Solmark заказов
-        
+        has_solmark = False
+
         try:
-            # Ищем операции с нужными идентификаторами (цех 1 и цех 2)
             for operation in root.findall('.//ОперацииЗаказа//Операция'):
                 op_id = operation.get('ВнутреннийИдентификатор', '')
-                
-                # Проверяем на Solmark (ID 321 - Струйная печать DM (Solmark))
+
+                # Solmark — операция струйной печати DM
                 if op_id == '321':
                     has_solmark = True
-                
-                # Определяем тип операции по ID
-                is_cutting = op_id in ['31', '230']       # Резка (цех 1 и цех 2)
-                is_packaging = op_id in ['62', '220']     # Упаковка (цех 1 и цех 2)
-                
-                if not (is_cutting or is_packaging):
-                    continue  # Пропускаем нерелевантные операции
-                
-                # 1. Парсим комментарии (свойство 65000)
+
+                # Определяем тип операции
+                is_cutting = op_id in ('31', '230')      # Резка (цех 1 / цех 2)
+                is_packaging = op_id in ('62', '220')    # Упаковка (цех 1 / цех 2)
+                is_gallus_print = op_id == '3'           # Печать Gallus
+
+                if not (is_cutting or is_packaging or is_gallus_print):
+                    continue
+
+                # 1. Комментарии (свойство 65000) — для всех трёх типов
                 if is_cutting:
                     comment_key = 'cutting_comment'
                 elif is_packaging:
                     comment_key = 'packaging_comment'
-                
-                comment_prop = operation.find(f'.//Свойство[@Код="{self.COMMENT_PROPERTY_CODE}"]')
+                else:  # is_gallus_print
+                    comment_key = 'gallus_comment'
+
+                comment_prop = operation.find(
+                    f'.//Свойство[@Код="{self.COMMENT_PROPERTY_CODE}"]'
+                )
                 if comment_prop is not None:
                     comment = comment_prop.get('Значение', '')
                     if comment:
                         comments[comment_key] = comment
-                
-                # 2. Парсим технические свойства (только для операций резки)
-                if is_cutting:
-                    for prop in operation.findall('.//Свойство'):
-                        code = prop.get('Код', '')
-                        value = prop.get('Значение', '')
-                        
-                        # Обработка диаметра ролика
-                        if code == '8519':  # Внешн. диаметр ролика
-                            # Ищем единицу измерения
-                            unit_prop = operation.find('.//Свойство[@Код="8522"]')
-                            unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
 
-                            if unit == 'шт.':
-                                operations['max_labels_per_roll'] = value  # Кол-во в штуках
-                            else:
-                                operations['diameter_mm'] = value  # Диаметр в мм
-                                operations['diameter_unit'] = unit
-                        
-                        # Остальные свойства
-                        elif code in self.OPERATION_PROPERTIES and value:
-                            operations[self.OPERATION_PROPERTIES[code]] = value
-        
+                # 2. Технические свойства резки — в плоский operations
+                if is_cutting:
+                    props = self._extract_cutting_properties(operation)
+                    for k, v in props.items():
+                        if k == 'has_solmark':
+                            continue
+                        operations[k] = v
+
         except Exception as e:
             print(f"Ошибка парсинга операций и комментариев: {e}")
-        
-        # Добавляем флаг Solmark в operations для удобства
+
         operations['has_solmark'] = str(has_solmark)
-        
         return operations, comments, has_solmark
         
     @staticmethod
@@ -496,12 +504,16 @@ class XMLOrderParser:
         if match_with_boundaries:
             return match_with_boundaries.group(1)
         
-        return ""        
-    
+        return ""
+
+    # noinspection PyUnusedLocal
     def _parse_product(self, product_elem: ET.Element, parent_sheet_date: str = "",
-                       root: ET.Element = None, sheet_number: str = "",
+                       root: ET.Element = None,
+                       sheet_number: str = "",
                        sheet_full_name: str = "",
-                       order_metrage: Any = None) -> Optional[Dict[str, Any]]:
+                       order_metrage: Any = None,
+                       sheet_id: str = "",
+                       operations_by_sheet: Optional[Dict[str, Dict[str, str]]] = None) -> Optional[Dict[str, Any]]:
         """Парсит элемент <product>."""
         try:
             detail_number = self._get_text(product_elem, 'НомерДетали')
@@ -530,23 +542,18 @@ class XMLOrderParser:
             full_name = product_name
 
             # В _parse_product, после получения sheet_full_name:
+            # Технические поля оттиска (втулка, схема, ширина ручья, макс. этикеток)
+            sleeve_diameter = ""
+            winding_scheme = ""
+            stream_width = ""
             max_labels_per_roll = ""
-            if sheet_full_name and root:
-                for operation in root.findall('.//ОперацииЗаказа//Операция'):
-                    op_id = operation.get('ВнутреннийИдентификатор', '')
-                    if op_id not in ['31', '230']:
-                        continue
 
-                    op_sheet_name = operation.get('НаименованиеЭлементаОперации', '')
-                    if sheet_full_name in op_sheet_name or op_sheet_name in sheet_full_name:
-                        for prop in operation.findall('.//Свойство'):
-                            if prop.get('Код', '') == '8519':
-                                unit_prop = operation.find('.//Свойство[@Код="8522"]')
-                                unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
-                                if unit == 'шт.':
-                                    max_labels_per_roll = prop.get('Значение', '')
-                                break
-                        break
+            if operations_by_sheet and sheet_id:
+                op = operations_by_sheet.get(sheet_id, {})
+                sleeve_diameter = op.get('sleeve_diameter', '')
+                winding_scheme = op.get('winding_scheme', '')
+                stream_width = op.get('stream_width', '')
+                max_labels_per_roll = op.get('max_labels_per_roll', '')
             
             # Создаём словарь продукта
             product_dict = {
@@ -556,11 +563,14 @@ class XMLOrderParser:
                 'gtin': gtin,
                 'date_emission': date_emission,
                 'quantity': quantity,
-                'sheet_number': sheet_number,        # ← Только цифры (для совместимости)
-                'sheet_full_name': sheet_full_name,  # ← Полное название оттиска
+                'sheet_number': sheet_number,
+                'sheet_full_name': sheet_full_name,
                 'stream': stream,
                 'order_metrage': order_metrage,
-                'max_labels_per_roll': max_labels_per_roll
+                'max_labels_per_roll': max_labels_per_roll,
+                'sleeve_diameter': sleeve_diameter,
+                'winding_scheme': winding_scheme,
+                'stream_width': stream_width
             }          
             
             return product_dict
@@ -569,7 +579,8 @@ class XMLOrderParser:
             print(f"Ошибка парсинга продукта: {e}")
             return None
     
-    def _get_text(self, elem: ET.Element, xpath: str = None, default: str = "") -> str:
+    @staticmethod
+    def _get_text(elem: ET.Element, xpath: str = None, default: str = "") -> str:
         """Безопасно получает текст из элемента."""
         try:
             if xpath:
@@ -580,7 +591,111 @@ class XMLOrderParser:
                 return elem.text.strip()
         except Exception:
             pass
-        return default   
+        return default
+
+    def _collect_operations_by_sheet(self, root, sheet_full_name_mapping):
+        """
+        Собирает свойства операций резки, привязанные к конкретному оттиску.
+
+        Args:
+            root: корень XML
+            sheet_full_name_mapping: {sheet_id: sheet_full_name}
+
+        Returns:
+            {sheet_id: {prop_name: value}}
+        """
+        operations_by_sheet = {}
+
+        # Инвертируем маппинг для быстрого поиска: name -> id
+        # (на случай, если два оттиска имеют одинаковое имя — берём первый)
+        name_to_id = {}
+        for sheet_id, full_name in sheet_full_name_mapping.items():
+            if full_name and full_name not in name_to_id:
+                name_to_id[full_name] = sheet_id
+
+        for operation in root.findall('.//ОперацииЗаказа//Операция'):
+            op_id = operation.get('ВнутреннийИдентификатор', '')
+            if op_id not in ('31', '230'):  # только резка
+                continue
+
+            op_sheet_name = operation.get('НаименованиеЭлементаОперации', '').strip()
+            if not op_sheet_name:
+                continue
+
+            # --- Сопоставление операции с оттиском ---
+            sheet_id = self._match_sheet_id(op_sheet_name, name_to_id)
+            if not sheet_id:
+                continue
+
+            # --- Извлекаем свойства ---
+            props = self._extract_cutting_properties(operation)
+
+            # --- Мержим (если на один оттиск несколько операций — первая побеждает) ---
+            if sheet_id not in operations_by_sheet:
+                operations_by_sheet[sheet_id] = props
+            else:
+                for k, v in props.items():
+                    if k not in operations_by_sheet[sheet_id]:
+                        operations_by_sheet[sheet_id][k] = v
+
+        return operations_by_sheet
+
+    @staticmethod
+    def _match_sheet_id(op_sheet_name, name_to_id):
+        """
+        Возвращает sheet_id, к которому относится операция.
+        Порядок проверок: точное совпадение → вхождение → обрезка по 30 символов.
+        """
+        # 1) Точное совпадение
+        if op_sheet_name in name_to_id:
+            return name_to_id[op_sheet_name]
+
+        # 2) Одностороннее вхождение (операция короче/длиннее оттиска)
+        for full_name, sheet_id in name_to_id.items():
+            if op_sheet_name in full_name or full_name in op_sheet_name:
+                return sheet_id
+
+        # 3) Fallback: обрезка по 30 символов (как было в _parse_product)
+        op_prefix = op_sheet_name[:30]
+        for full_name, sheet_id in name_to_id.items():
+            full_prefix = full_name[:30]
+            if op_prefix and full_prefix and (op_prefix in full_prefix or full_prefix in op_prefix):
+                return sheet_id
+
+        return None
+
+    def _extract_cutting_properties(self, operation):
+        """Возвращает {prop_name: value} для одной операции резки."""
+        props = {}
+
+        for prop in operation.findall('.//Свойство'):
+            code = prop.get('Код', '')
+            value = prop.get('Значение', '')
+            if not value:
+                continue
+
+            if code == '8519':
+                unit_prop = operation.find('.//Свойство[@Код="8522"]')
+                unit = unit_prop.get('Значение', '') if unit_prop is not None else ''
+                if unit == 'шт.':
+                    props['max_labels_per_roll'] = value
+                else:
+                    props['diameter_mm'] = value
+                    props['diameter_unit'] = unit
+            elif code in self.OPERATION_PROPERTIES:
+                props[self.OPERATION_PROPERTIES[code]] = value
+
+        # Комментарий резки
+        comment_prop = operation.find(
+            f'.//Свойство[@Код="{self.COMMENT_PROPERTY_CODE}"]'
+        )
+        if comment_prop is not None:
+            comment = comment_prop.get('Значение', '')
+            if comment:
+                props['cutting_comment'] = comment
+
+        props['has_solmark'] = 'False'
+        return props
         
 # Фабричная функция для удобства использования
 def parse_xml(xml_content: str) -> Dict[str, Any]:
