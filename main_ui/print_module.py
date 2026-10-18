@@ -55,6 +55,9 @@ class PrintModule:
         self.batch_print_data = []
         self.current_batch_index = 0
         self.is_batch_printing = False
+        # Оригиналы для восстановления после печати тиража
+        self._original_winding_scheme = None
+        self._original_sleeve_diameter = None
         # Переменная для обратного порядка печати тиража
         self.reverse_order_var = tk.BooleanVar(value=False)
         self.batch_print_btn = None
@@ -251,34 +254,57 @@ class PrintModule:
             # Завершение печати
             if self.original_product_name is not None:
                 self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
-                self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)          
+                self.preview_module.connected_roll_module.product_text.insert("1.0", self.original_product_name)
+
+            # Восстанавливаем втулку и схему намотки
+            if self._original_winding_scheme is not None:
+                self.preview_module.connected_roll_module.winding_scheme_var.set(self._original_winding_scheme)
+                self._original_winding_scheme = None
+            if self._original_sleeve_diameter is not None:
+                self.preview_module.connected_roll_module.sleeve_diameter_var.set(self._original_sleeve_diameter)
+                self._original_sleeve_diameter = None
 
             self.is_batch_printing = False
             self.set_status(f"Печать завершена ({self.current_batch_index} шт)", "green")
             return
-            
+
         try:
             current_product_data = self.batch_print_data[self.current_batch_index]
             current_product_name = current_product_data['name']
             stream_count = int(current_product_data.get('stream', 1))
             date_emission = current_product_data.get('date_emission', '')
-            
+
+            # При первом виде сохраняем оригинальные значения для восстановления
+            if self.current_batch_index == 0:
+                self._original_winding_scheme = self.preview_module.connected_roll_module.winding_scheme_var.get()
+                self._original_sleeve_diameter = self.preview_module.connected_roll_module.sleeve_diameter_var.get()
+
             # Временно подменяем название продукции
             self.preview_module.connected_roll_module.product_text.delete("1.0", tk.END)
             self.preview_module.connected_roll_module.product_text.insert("1.0", current_product_name)
-            
+
             # Устанавливаем дату эмиссии (если есть)
             if date_emission:
                 self.preview_module.connected_roll_module.date_emission_var.set(date_emission)
             else:
                 # Если у вида нет даты - очищаем поле
-                self.preview_module.connected_roll_module.date_emission_var.set("")          
-            
+                self.preview_module.connected_roll_module.date_emission_var.set("")
+
+            # Подменяем схему намотки и диаметр втулки под текущий вид
+            winding = current_product_data.get('winding_scheme', '')
+            if winding:
+                self.preview_module.connected_roll_module.winding_scheme_var.set(winding)
+
+            sleeve = current_product_data.get('sleeve_diameter', '')
+            if sleeve:
+                self.preview_module.connected_roll_module.sleeve_diameter_var.set(sleeve)
+
             # Ждем обновления данных перед печатью
             self.parent.after(100, lambda: self.print_current_item(stream_count))
-            
+
         except Exception as e:
-            self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}", foreground="red")
+            self.print_status_label.config(text=f"Ошибка печати вида {self.current_batch_index + 1}: {str(e)}",
+                                           foreground="red")
             self.current_batch_index += 1
             self.parent.after(100, self.print_next_in_batch)
 
