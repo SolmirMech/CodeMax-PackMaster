@@ -482,17 +482,19 @@ class OrderDetailsController:
         self.filtered_parsed_data = []
         
         for product in products:
+            detail_num = product.get('detail_number', '')
             name = product.get('full_name', product.get('product_name', ''))
-            names_list.append(name)
             product_dict = {
                 'name': name,
-                'detail_num': product.get('detail_number', ''),
+                'display_name': f"{detail_num} {name}".strip() if detail_num else name,  # с префиксом
+                'detail_num': detail_num,
                 'sheet_number': product.get('sheet_number', ''),
                 'date_emission': product.get('date_emission', ''),
                 'gtin': product.get('gtin', ''),
                 'tirazh': product.get('quantity', ''),
                 'stream': product.get('stream', '1')
             }
+            names_list.append(product_dict['display_name'])
             self.filtered_parsed_data.append(product_dict)
         
         if names_list:
@@ -641,7 +643,7 @@ class OrderDetailsController:
         self.detail_num_search.set("")
 
         # Отправляем найденный продукт напрямую
-        self.selected_name.set(found_product['name'])
+        self.selected_name.set(found_product['display_name'])
         self.send_to_roll_module(found_product)
         self.parse_status.config(text=f"Найден по GTIN", foreground="green")
         self.parent.after(5000, lambda: self.parse_status.config(text=""))
@@ -782,10 +784,10 @@ class OrderDetailsController:
             if found_products:
                 # Сохраняем отфильтрованные данные
                 self.filtered_parsed_data = found_products
-                self.parsed_names_list = [item['name'] for item in found_products]
-                
+                self.parsed_names_list = [item['display_name'] for item in found_products]
+
                 # Всегда заполняем комбобокс
-                names_list = [item['name'] for item in found_products]
+                names_list = [item['display_name'] for item in found_products]
                 self.name_combobox['values'] = names_list
 
                 if len(found_products) == 1:
@@ -806,7 +808,7 @@ class OrderDetailsController:
             else:
                 self.parse_status.config(text=f"Код {search_digits} не найден", foreground="red")
                 # Показываем все варианты для выбора
-                names_list = [item['name'] for item in self.parsed_data]
+                names_list = [item['display_name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
                 self.parse_status.config(
                     text=f"Выберите название из списка. Всего: {len(names_list)} видов", 
@@ -824,7 +826,7 @@ class OrderDetailsController:
                 self.send_to_roll_module(selected_data)
             else:
                 # Если несколько - показываем выбор
-                names_list = [item['name'] for item in self.parsed_data]
+                names_list = [item['display_name'] for item in self.parsed_data]
                 self.name_combobox['values'] = names_list
                 self.parse_status.config(
                     text=f"Выберите из списка. Всего: {len(names_list)} видов", 
@@ -922,15 +924,21 @@ class OrderDetailsController:
                     display_name = self._add_gtin_suffix(display_name, gtin)
 
                 order_manager = order.get('order_manager', '')
+
+                detail_num = product.get('detail_number', '')
                 
                 product_dict = {
                     'name': display_name,  # ← Сокращенное или оригинальное имя
-                    'detail_num': product.get('detail_number', ''),
+                    'display_name': f"{detail_num} {display_name}".strip() if detail_num else display_name,
+                    # ← с префиксом
+                    'detail_num': detail_num,
                     'sheet_number': product.get('sheet_number', ''),
                     'sheet_full_name': product.get('sheet_full_name', ''),
                     'customer': order.get('customer', ''),
-                    'winding_scheme': order.get('operations', {}).get('winding_scheme', ''),
-                    'sleeve_diameter': order.get('operations', {}).get('sleeve_diameter', ''),
+                    'winding_scheme': product.get('winding_scheme', '') or order.get('operations', {}).get(
+                        'winding_scheme', ''),
+                    'sleeve_diameter': product.get('sleeve_diameter', '') or order.get('operations', {}).get(
+                        'sleeve_diameter', ''),
                     'date_emission': product.get('date_emission', ''),
                     'gtin': gtin,
                     'tirazh': product.get('quantity', ''),
@@ -962,7 +970,7 @@ class OrderDetailsController:
         # Находим полные данные по выбранному названию
         selected_data = None
         for item in source_data:
-            if item['name'] == selected_name:
+            if item['display_name'] == selected_name:
                 selected_data = item
                 break
 
@@ -996,6 +1004,12 @@ class OrderDetailsController:
                 # устанавливаем дату эмиссии если она есть в данных
                 if 'date_emission' in product_data and product_data['date_emission']:
                     self.roll_module.date_emission_var.set(product_data['date_emission'])
+
+                # После установки date_emission
+                if product_data.get('winding_scheme'):
+                    self.roll_module.winding_scheme_var.set(product_data['winding_scheme'])
+                if product_data.get('sleeve_diameter'):
+                    self.roll_module.sleeve_diameter_var.set(product_data['sleeve_diameter'])
                     
                 # Отправляем тираж в preview_module
                 tirazh_value = product_data.get('tirazh')
