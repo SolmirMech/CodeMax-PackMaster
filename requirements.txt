@@ -34,3 +34,4 @@ tkinterweb
 pylibdmtx
 segno
 django-qrcode
+win32gui
