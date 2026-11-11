@@ -61,7 +61,6 @@ class WeightOrdersApp:
     def __init__(self, parent):
         self.root = parent
         self.root.title("Мастер упаковки CodeMax-PackMaster")
-        self.root.geometry("1500x950")
 
         # Объявляем все атрибуты модулей
         self.roll_module = None
@@ -339,12 +338,11 @@ class WeightOrdersApp:
             self.root.after(100, self.preview_module.initialize_templates)
 
     def center_window(self):
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
+        width = 1500
+        height = 950
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f"+{x}+{y}")
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
 
 if __name__ == "__main__":
     # Проверяем демо-режим перед запуском
@@ -358,5 +356,9 @@ if __name__ == "__main__":
     from main_ui.export_module import ExportModule
 
     root = tk.Tk()
+    root.withdraw()
     app = WeightOrdersApp(root)
+    root.deiconify()
+    root.lift()
+    root.focus_force()
     root.mainloop()
