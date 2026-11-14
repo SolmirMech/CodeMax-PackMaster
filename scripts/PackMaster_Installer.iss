@@ -13,7 +13,6 @@ SolidCompression=yes
 UninstallDisplayIcon={app}\CodeMax-PackMaster.exe
 SetupIconFile=M:\Tests\PackMaster_Installer\CodeMax-PackMaster\_internal\assets\icons\icon.ico
 OutputDir=M:\Tests
-LicenseFile=M:\Tests\на продажу\Public_Offer.txt
 ; Язык по умолчанию
 DefaultDialogFontName=Segoe UI
 WizardStyle=modern
@@ -51,7 +50,6 @@ Name: "desktopicon"; Description: "Создать значок на рабоче
 
 [Files]
 Source: "M:\Tests\PackMaster_Installer\CodeMax-PackMaster\CodeMax-PackMaster.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "M:\Tests\на продажу\Public_Offer.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "M:\Tests\PackMaster_Installer\CodeMax-PackMaster\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs
 
 [Icons]

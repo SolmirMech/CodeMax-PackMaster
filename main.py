@@ -1,59 +1,9 @@
 # main.py
-import os
-import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
-import configparser
-from datetime import datetime
+from tkinter import ttk
+
 from core.settings.settings_coordinator import SettingsCoordinator
 from main_ui.ecosystem_only_module import EcosystemOnlyModule
-
-def check_demo_mode():
-    """Проверяет, не истек ли демо-период"""
-    if getattr(sys, 'frozen', False):
-        # Если программа собрана в EXE
-        application_path = os.path.dirname(sys.executable)
-        demo_file = os.path.join(application_path, '_internal', '_tkinter.ini')
-    else:
-        # Если запуск из Python
-        application_path = os.path.dirname(__file__)
-        demo_file = os.path.join(application_path, '_internal', '_tkinter.ini')
-    
-    # Если файла нет - это полная версия
-    if not os.path.exists(demo_file):
-        return True
-    
-    try:
-        config = configparser.ConfigParser()
-        config.read(demo_file, encoding='utf-8')
-        
-        if 'Demo' not in config:
-            return True
-            
-        install_date = datetime.strptime(config['Demo']['InstallDate'], '%Y-%m-%d')
-        expire_days = int(config['Demo']['ExpireDays'])
-        
-        days_passed = (datetime.now() - install_date).days
-        if days_passed > expire_days:
-            messagebox.showerror(
-                "Демо-период истек", 
-                f"Демо-версия активна {days_passed} из {expire_days} дней.\n\n"
-                "Для приобретения полной версии обратитесь к разработчику."
-            )
-            return False
-        else:
-            days_left = expire_days - days_passed
-            if days_left <= 1:
-                messagebox.showwarning(
-                    "Скоро истекает демо", 
-                    f"Демо-период истекает через {days_left} день!\n"
-                    "Свяжитесь с разработчиком для покупки."
-                )
-    except Exception as e:
-        messagebox.showerror("Ошибка демо-режима", f"Невозможно проверить лицензию: {str(e)}")
-        return False
-    
-    return True
 
 
 # noinspection PyTypeChecker
@@ -345,9 +295,6 @@ class WeightOrdersApp:
         self.root.geometry(f"{width}x{height}+{x}+{y}")
 
 if __name__ == "__main__":
-    # Проверяем демо-режим перед запуском
-    if not check_demo_mode():
-        sys.exit(1)
         
     from main_ui.order_data_processor import OrderDetailsController
     from main_ui.order_data.controller import OrderDataController
